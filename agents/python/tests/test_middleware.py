@@ -20,7 +20,6 @@ from shared.middleware import (
     default_middleware_stack,
 )
 
-
 # ─────────────────────── Helpers ───────────────────────
 
 
@@ -100,6 +99,28 @@ async def test_tool_audit_captures_name_and_timing() -> None:
     assert rec["tool"] == "get_weather"
     assert isinstance(rec["elapsed_ms"], (int, float))
     assert rec["error"] is None
+
+
+@pytest.mark.asyncio
+async def test_business_rejection_is_distinct_from_successful_tool_transport() -> None:
+    from shared.agent_observability import StepRecorderMiddleware
+    from shared.context import current_steps
+
+    ctx = _function_context("initiate_return")
+    ctx.result = {"success": False, "outcome": "REJECTED", "error_code": "RETURN_WINDOW_EXPIRED"}
+    audit = ToolAuditMiddleware()
+    await audit.process(ctx, _noop)
+    assert audit.audited[0]["error"] is None
+    assert audit.audited[0]["business_success"] is False
+    assert audit.audited[0]["business_outcome"] == "REJECTED"
+    token = current_steps.set([])
+    try:
+        await StepRecorderMiddleware().process(ctx, _noop)
+        assert current_steps.get()[0]["status"] == "success"
+        assert current_steps.get()[0]["business_outcome"] == "REJECTED"
+        assert current_steps.get()[0]["business_success"] is False
+    finally:
+        current_steps.reset(token)
 
 
 @pytest.mark.asyncio

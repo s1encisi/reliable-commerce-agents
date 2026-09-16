@@ -52,7 +52,7 @@ export function toastOrderModified() {
 
 export function toastReturnInitiated(returnId: string) {
   toast.success("Return initiated", {
-    description: `Return #${returnId.slice(0, 8)} created. Check your email for the label.`,
+    description: `Return #${returnId.slice(0, 8)} created. View the label in your order details.`,
   });
 }
 

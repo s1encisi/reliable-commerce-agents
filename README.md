@@ -1,98 +1,96 @@
-# E-Commerce Agents：中文学习与售后可靠性改进
+# Reliable Commerce Agents
 
-[上游英文说明](README.en.md) · [中文文档导航](docs/zh-CN/README.md) · [Python 教程导航](tutorials/README.zh-CN.md) · [售后可靠性技术方案](docs/zh-CN/after-sales-reliability-plan.md)
+**电商多智能体平台中的可靠售后执行：从“调用工具”到“审批、提交、核实结果”。**
 
-这是基于 Microsoft Agent Framework（MAF）的开源电商多智能体项目。本地学习副本面向 Python 开发者，重点理解工具调用、业务规则、人工审批、执行恢复和评估。
+基于 [Microsoft Agent Framework 电商开源项目](https://github.com/nitin27may/e-commerce-agents)构建。本分支聚焦 Python 退货申请：统一业务规则、把审批放到写入之前，并在进程退出、网络断连和重复请求后恢复可确认的结果。
 
-**本地当前交付的是中文文档和技术方案。售后可靠性改造、故障实验和性能提升尚未实现或验证。** 源码沿用上游，不把上游功能或历史实验算作个人贡献。
+[三分钟演示](docs/portfolio-demo.md) · [执行与恢复架构](docs/after-sales-architecture.md) · [验证记录](docs/verification.md) · [面试问答](docs/interview-qa.md) · [对照数据](docs/evaluation/after-sales-results.json)
 
-## 项目版本与工作目录
+## 解决什么问题
 
-| 对象 | 位置或标识 |
-|---|---|
-| 当前工作目录 | 本仓库根目录 |
-| 当前分支 | main |
-| 上游源码基线 | 26f47c494dd6b371312593e82f066713f6f56e9c |
-| 中文文档整理日期 | 2026-09-07 |
+普通聊天回答可以重试，改变订单状态的工具调用需要更严格的边界：
 
-仓库采用经过保密检查的当前快照作为独立初始版本。原始本地历史保留在本机备份中，不随此版本上传；上游作者、许可证和英文说明继续保留。
+- 资格查询、普通提交、管理员审批曾使用不同规则，缺少签收证据也可能被判为可退。
+- 审批节点位于写入之后时，“等待批准”不能保证此前没有副作用。
+- 数据库已提交但响应丢失时，单独的幂等缓存可能留下“正在处理”，无法确认已经成功的申请。
+- 界面必须区分申请成功、业务拒绝、等待审批和结果未知，避免没有依据的成功提示。
 
-后续在仓库根目录阅读和开发。目录与版本说明见 [工作目录说明](docs/zh-CN/workspace.md)，上传范围见 [本地数据与上传边界](docs/local-privacy.md)。
+本项目把这些约束放在可信 Python 服务与 PostgreSQL 中；模型继续承担意图理解和工具选择。
 
-## 这个项目做什么
+## 已实现的增量
 
-一个协调智能体接收用户请求，通过 A2A HTTP 接口调用五个专业智能体。两套后端分别使用 Python 和 .NET / C#，共用 Next.js 前端、数据库和提示词资源。
+| 改进 | 实现及证据 |
+| --- | --- |
+| 统一规则 | `returns-v1` 精确期限、签收证据、归属、状态、原因长度校验，接入工具、REST、审批与工作流 |
+| 审批前置 | 绑定用户、规范化参数、订单证据、政策版本和有效期；恢复后再校验 |
+| 持久操作标识 | 浏览器请求前保存 UUID，服务端按用户隔离；同标识不同参数明确冲突 |
+| 原子结果 | 退货申请、订单状态和操作回执同事务提交；唯一索引限制每单一份退货 |
+| 未知结果核实 | 新连接等待在途写锁后查询结果；不能核实时保持 `UNKNOWN` |
+| 受控恢复 | 共享请求预算、有界重试、审批恢复锁、检查点重放复用已提交结果 |
+| 可复验评估 | 真 PostgreSQL、子进程退出、真实 TCP COMMIT 回执丢失、冻结基线和三个消融版本 |
 
-| 智能体 | 主要职责 | Python 模块 |
-|---|---|---|
-| 协调器 | 意图分发、会话、API 与多种编排入口 | agents/python/orchestrator |
-| 商品发现 | 商品查询、语义检索、比较和推荐 | agents/python/product_discovery |
-| 订单管理 | 订单查询、修改、取消与售后工具 | agents/python/order_management |
-| 价格与促销 | 定价、优惠、会员与促销查询 | agents/python/pricing_promotions |
-| 评价与情感 | 商品评价汇总与情感分析 | agents/python/review_sentiment |
-| 库存与履约 | 库存、仓库和配送信息 | agents/python/inventory_fulfillment |
+这些是已知工程技术在智能体业务链路中的组合与验证，不宣称发明了新的模型或通用算法。
 
-主要组件是 Python 3.12+、MAF、FastAPI、asyncpg、PostgreSQL + pgvector、Redis、OpenTelemetry，以及 Next.js 前端。具体版本以各目录的 pyproject.toml、package.json 和锁文件为准。
+## 看一次完整流程
 
-## 建议从哪里开始
+![审批前的退货申请](docs/images/reliable-commerce-pending.png)
 
-| 当前目的 | 阅读入口 |
-|---|---|
-| 只会 Python，希望先看懂一个智能体 | [Python 学习指南](docs/zh-CN/learning-guide.md) |
-| 配置环境并运行一个小示例 | [中文快速开始](docs/zh-CN/quick-start.md) |
-| 理解整条请求链路 | [架构导读](docs/zh-CN/architecture.md) |
-| 找到售后相关代码 | [售后代码导航](docs/zh-CN/after-sales-code-map.md) |
-| 理解已经有的防护及边界 | [安全与可靠性说明](docs/zh-CN/security-and-reliability.md) |
-| 区分单元测试、回放和真实模型评估 | [评估说明](docs/zh-CN/evaluation.md) |
-| 确定个人改进及验收方法 | [售后可靠性技术方案](docs/zh-CN/after-sales-reliability-plan.md) |
+![审批确认后的订单与退货回执](docs/images/reliable-commerce-completed.png)
 
-学习采用“老师 + 编程搭档”方式，从现有代码出发。每次只推进一个小阶段；修改前说明问题、文件和输入输出，修改后解释关键代码与验证结果。学习者参与需求、规则、结果和方案判断，不要求从空白手写函数。
+页面及数据均来自本项目的本地合成演示。没有真实客户数据，也没有真实退款。
 
-## 最小 Python 运行方式
+## 快速运行
 
-以下为后续执行命令，本轮文档整理没有安装依赖或调用模型。先确保 Python 3.12+ 与 uv 可用，在 Demo 根目录执行：
+需要 Python 3.12、uv、Node.js 22、pnpm 10 和 Docker。完整 .NET/教程开发环境另有安装选项。
 
-    uv sync --project tutorials --extra dev
+```bash
+git clone https://github.com/s1encisi/reliable-commerce-agents.git
+cd reliable-commerce-agents
+bash scripts/install-deps.sh --core --images
+bash scripts/demo.sh --reset
+```
 
-使用已录制的模型响应运行第 02 章，避免真实模型调用：
+打开 **http://localhost:3010**。用 `customer@example.test` 或 `admin@example.test` 登录，演示密码均为 `DemoPass123!`。
 
-    $env:LLM_PROVIDER = "replay"
-    $env:RECORD = "false"
-    uv run --project tutorials python tutorials/02-add-tools/python/main.py
-    uv run --project tutorials pytest tutorials/02-add-tools/python/tests -m "not integration" -v
+演示使用独立数据库、卷和端口，不复用普通开发栈。可演示订单申请、人工审批、结果核实及 MAF 固定工作流。
+**自由文本模型聊天需要另外配置模型服务；离线演示和回放不等于实时模型推理。** 详见[演示步骤](docs/portfolio-demo.md)与[账号配置](docs/zh-CN/environment-setup.md)。
 
-回放只适用于已有录制内容；换问题或提示词可能找不到录制记录。回放通过不代表真实模型对新问题也可靠。
+## 验证与对照
 
-## 完整平台运行方式
+评估覆盖 22 类固定场景，每类重复 3 次。比较上游退货工具基线 B0、M2 规则统一版本 B1、当前 B2，以及关闭提交前复核、结果确认、重试预算的消融版本。
 
-完整平台需要 Docker。配置本地模型服务或已授权使用的模型 API 后，在 Demo 根目录从源码启动：
+[原始结果](docs/evaluation/after-sales-results.json)保留逐场景判定、实际数据库记录数、故障触发次数和源码散列。另有并发 1/3/5、各 100 请求的本地服务负载观察。
 
-    ./scripts/dev.ps1
+```bash
+OPENAI_API_KEY= AZURE_OPENAI_KEY= AZURE_OPENAI_API_KEY= RECORD=false uv run --project agents/python --no-sync pytest agents/python/tests -q
+uv run --project agents/python python -m evals.after_sales --output docs/evaluation/after-sales-results.json
+pnpm --dir web exec vitest run --maxWorkers=1
+```
 
-预构建镜像体验可以使用 ./scripts/dev.ps1 -Demo，但该方式运行已发布镜像，不能验证本地 Python 修改。
+这些数字是预定义条件的工程回归证据，不是生产成功率、真实用户样本或模型泛化准确率。没有把未运行的真实模型实验、生产容量或成本节省写成成果。
 
-| 入口 | 默认地址 |
-|---|---|
-| 网页 | http://localhost:3000 |
-| 协调器 API | http://localhost:8080 |
-| Aspire 观测面板 | http://localhost:18888 |
+## 架构与技术
 
-完整启动会创建容器、准备数据库并可能调用外部模型。先阅读 [快速开始](docs/zh-CN/quick-start.md)。多个副本不要直接共用同一套容器、端口或测试数据库。
+浏览器 → Next.js 同源代理 → FastAPI 协调器 → MAF 工具/工作流与 A2A 专业智能体 → 统一售后服务 → PostgreSQL。
 
-## 当前已有能力与个人改进边界
+- Python、MAF、FastAPI、asyncpg、PostgreSQL/pgvector、Redis。
+- Next.js、React、TypeScript、Playwright、Vitest。
+- 继承 OpenTelemetry、JWT/OAuth、检索与事实核验基础设施。
+- `.NET` 后端和教程保留上游学习价值；本轮售后恢复协议升级以 **Python** 为范围。
 
-上游已有五类编排模式、人工审批、检查点、角色权限、工具输入校验、HTTP 重试与熔断、幂等防重、限流、事实核验、成本记录和评估框架。代码存在不等于所有异常组合均已可靠处理。
+## 来源与贡献边界
 
-个人改进聚焦一条退货申请流程：
+| 上游已有 | 本分支改进 |
+| --- | --- |
+| 六智能体、A2A、五类编排、前端与商城业务 | 统一售后政策、审批绑定与写入前置 |
+| 基础幂等、行锁、重试、检查点 | 持久操作回执、提交确认不明时核实、审批中断恢复 |
+| JWT/OAuth、RAG、遥测和测试框架 | 退货故障矩阵、对照与消融、独立演示及面试材料 |
 
-    识别请求 → 确认订单 → 校验资格 → 必要审批 → 执行前复核 → 提交 → 核实最终状态
+保留上游作者、[MIT 许可证](LICENSE)和[原始英文说明](README.en.md)。本分支开发使用了 AI 辅助；简历应按本人实际参与、理解和复验的范围描述，不写“从零独立实现整个框架”。
 
-技术方案提出统一业务规则、按失败类型恢复、请求幂等与故障回归评估。每项改进都先建立原版反例，再给出对照与消融；当前不宣称已产生任何提升。
+## 已知边界
 
-## 中文化范围
+本轮没有接入真实支付、物流或邮件系统；本地事务不能保证跨系统恰好一次。真实模型保留集、模型费用与生产负载尚未验证。
+已有数据采用[增量迁移](docs/after-sales-architecture.md#升级已有数据库)，遇到重复退货会停止并要求审查，不自动删除数据。
 
-本轮中文化覆盖核心阅读入口及 Python 第 01、02、24、26 章。其余章节在中文总目录中有主题导航，详细原文仍为英文。接口字段、标识符、提示词、数据库内容和前端文案没有翻译，以免文档任务改变模型行为或 API 契约。
-
-## 来源与许可
-
-原项目来自 [nitin27may/e-commerce-agents](https://github.com/nitin27may/e-commerce-agents)，许可证见 [LICENSE](LICENSE)。保留上游作者、许可证及英文原文。本仓库用于保留代码、经过检查的项目文档和合成测试样例，个人记录与真实数据保留在本机。
+私有配置、数据、日志、登录文件和历史备份留在本地并排除版本控制。公开范围与审查方式见[发布与隐私](docs/local-privacy.md)。

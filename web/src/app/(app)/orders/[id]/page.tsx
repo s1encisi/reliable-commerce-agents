@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { api, apiUrl } from "@/lib/api";
+import { api, apiUrl, ApiError } from "@/lib/api";
 import { toastOrderCancelled, toastReturnInitiated } from "@/lib/toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +46,8 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { productImageUrl } from "@/lib/images";
+import { getReturnIntent, currentReturnIntent, clearReturnIntent } from "@/lib/return-intent";
+import type { ReturnOperation } from "@/lib/return-operation";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -321,6 +323,8 @@ export default function OrderDetailPage() {
   const [returnReason, setReturnReason] = useState("");
   const [refundMethod, setRefundMethod] = useState<"original_payment" | "store_credit">("original_payment");
   const [returning, setReturning] = useState(false);
+  const [returnFeedback, setReturnFeedback] = useState("");
+  const [returnOutcome, setReturnOutcome] = useState<string | undefined>();
 
   const orderId = params.id as string;
 
@@ -359,21 +363,41 @@ export default function OrderDetailPage() {
     }
   };
 
+  const showReturnResult = async (result: ReturnOperation) => {
+    setReturnOutcome(result.outcome);
+    setReturnFeedback(result.message ?? result.status ?? "Request status received.");
+    if (result.success !== false && result.return_id && (result.outcome === "SUCCEEDED" || result.status === "requested")) {
+      toastReturnInitiated(result.return_id);
+      setReturnOpen(false);
+      await loadOrder();
+    }
+  };
+
   const handleReturnOrder = async () => {
-    if (!returnReason.trim()) return;
+    if (!returnReason.trim() || !user) return;
     try {
       setReturning(true);
-      const result = await api.initiateReturn(orderId, returnReason, refundMethod);
-      setReturnOpen(false);
-      setReturnReason("");
-      setRefundMethod("original_payment");
-      toastReturnInitiated(result?.return_id ?? orderId);
-      await loadOrder();
+      setReturnFeedback("");
+      const id = await getReturnIntent(user.email, orderId, returnReason, refundMethod);
+      await showReturnResult(await api.initiateReturn(orderId, returnReason, refundMethod, id));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to initiate return");
+      setReturnFeedback(err instanceof Error ? err.message : "Result not confirmed. Check request status before retrying.");
+      if (err instanceof ApiError) setReturnOutcome(String(err.data.outcome ?? "UNKNOWN"));
     } finally {
       setReturning(false);
     }
+  };
+
+  const checkReturnStatus = async () => {
+    if (!user) return;
+    const id = currentReturnIntent(user.email, orderId);
+    if (!id) { setReturnFeedback("No saved return request for this order."); return; }
+    try {
+      setReturning(true);
+      await showReturnResult(await api.returnOperation(id));
+    } catch (err) {
+      setReturnFeedback(err instanceof Error ? err.message : "Status could not be confirmed. Please try again.");
+    } finally { setReturning(false); }
   };
 
   if (authLoading || !user) return null;
@@ -478,6 +502,7 @@ export default function OrderDetailPage() {
                           <Label htmlFor="return-reason">Reason for return</Label>
                           <Textarea
                             id="return-reason"
+                            maxLength={255}
                             placeholder="Tell us why you want to return this order..."
                             value={returnReason}
                             onChange={(e) => setReturnReason(e.target.value)}
@@ -515,6 +540,17 @@ export default function OrderDetailPage() {
                           {returning && <Loader2 className="mr-2 size-4 animate-spin" />}
                           Submit Return
                         </Button>
+                        <Button variant="outline" disabled={returning} onClick={checkReturnStatus}>
+                          Check request status
+                        </Button>
+                        {returnFeedback && <p role="status" className="text-sm text-muted-foreground">{returnFeedback}</p>}
+                        {returnOutcome === "REJECTED" && (
+                          <Button variant="ghost" disabled={returning} onClick={() => {
+                            if (user) clearReturnIntent(user.email, orderId);
+                            setReturnOutcome(undefined);
+                            setReturnFeedback("A new request will re-check the current order and policy.");
+                          }}>Start a new request</Button>
+                        )}
                       </div>
                     </DialogContent>
                   </Dialog>

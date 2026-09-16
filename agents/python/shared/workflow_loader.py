@@ -46,12 +46,10 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-
 from agent_framework._workflows._executor import Executor, handler
 from agent_framework._workflows._workflow import Workflow
 from agent_framework._workflows._workflow_builder import WorkflowBuilder
 from agent_framework._workflows._workflow_context import WorkflowContext
-
 
 # ─────────────────────── Op registry ───────────────────────
 
@@ -132,10 +130,7 @@ class DeclarativeExecutor(Executor):
     def __init__(self, executor_id: str, op: str, config: dict[str, Any]) -> None:
         super().__init__(id=executor_id)
         if op not in _OPS:
-            raise ValueError(
-                f"Unknown op {op!r} for executor {executor_id!r}. "
-                f"Registered: {sorted(_OPS)}"
-            )
+            raise ValueError(f"Unknown op {op!r} for executor {executor_id!r}. Registered: {sorted(_OPS)}")
         self._op = _OPS[op](config)
 
     @handler
@@ -185,9 +180,7 @@ def load_workflow(spec_path: str | Path) -> Workflow:
         eid = raw.get("id")
         op = raw.get("op")
         if not eid or not op:
-            raise WorkflowSpecError(
-                f"{path}: executor entries need both 'id' and 'op', got {raw!r}"
-            )
+            raise WorkflowSpecError(f"{path}: executor entries need both 'id' and 'op', got {raw!r}")
         if eid in executors_by_id:
             raise WorkflowSpecError(f"{path}: duplicate executor id {eid!r}")
         config = {k: v for k, v in raw.items() if k not in {"id", "op"}}
@@ -197,8 +190,7 @@ def load_workflow(spec_path: str | Path) -> Workflow:
     start_id = spec["start"]
     if start_id not in executors_by_id:
         raise WorkflowSpecError(
-            f"{path}: start={start_id!r} is not among declared executor ids "
-            f"({sorted(executors_by_id)})"
+            f"{path}: start={start_id!r} is not among declared executor ids ({sorted(executors_by_id)})"
         )
 
     builder = WorkflowBuilder(
@@ -213,9 +205,7 @@ def load_workflow(spec_path: str | Path) -> Workflow:
 
     for edge in edges:
         if not isinstance(edge, dict) or "from" not in edge or "to" not in edge:
-            raise WorkflowSpecError(
-                f"{path}: each edge needs 'from' and 'to', got {edge!r}"
-            )
+            raise WorkflowSpecError(f"{path}: each edge needs 'from' and 'to', got {edge!r}")
         source_id = edge["from"]
         target_id = edge["to"]
         if source_id not in executors_by_id:

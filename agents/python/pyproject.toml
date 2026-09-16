@@ -32,7 +32,7 @@ dependencies = [
     "PyJWT>=2.9",
     "bcrypt>=4.2",
     # HTTP & LLM
-    "httpx>=0.28",
+    "httpx[socks]>=0.28",
     "openai>=1.60",
     "tiktoken>=0.8",
     # Telemetry (from day 1)
@@ -77,6 +77,7 @@ packages = ["shared", "orchestrator", "product_discovery", "order_management", "
 [tool.ruff]
 target-version = "py312"
 line-length = 120
+extend-exclude = ["evals/after_sales_baselines"] # Immutable historical evaluation inputs.
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]

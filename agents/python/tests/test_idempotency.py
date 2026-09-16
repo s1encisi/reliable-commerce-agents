@@ -45,7 +45,12 @@ pytestmark = pytest.mark.asyncio
 async def db_pool(clean_db: asyncpg.Pool, monkeypatch: pytest.MonkeyPatch) -> asyncpg.Pool:
     import shared.db as shared_db
 
+    # Config-loader tests reload shared.config. Patch the singleton actually
+    # held by the return service, even when the module attribute was replaced.
+    from shared.after_sales.service import settings
+
     monkeypatch.setattr(shared_db, "_pool", clean_db)
+    monkeypatch.setattr(settings, "HITL_ENABLED", False)
     current_user_email.set(None)
     current_user_role.set(None)
     return clean_db
@@ -67,13 +72,19 @@ async def _seed_order(
 ) -> uuid.UUID:
     order_id = uuid.uuid4()
     await pool.execute(
-        """INSERT INTO orders (id, user_id, status, total, shipping_address)
-           VALUES ($1, $2, $3, $4, '{}'::jsonb)""",
+        """INSERT INTO orders (id, user_id, status, total, shipping_address, created_at)
+           VALUES ($1, $2, $3, $4, '{}'::jsonb, NOW() - INTERVAL '10 days')""",
         order_id,
         user_id,
         status,
         total,
     )
+    if status == "delivered":
+        await pool.execute(
+            """INSERT INTO order_status_history (order_id, status, timestamp)
+               VALUES ($1, 'delivered', NOW() - INTERVAL '5 days')""",
+            order_id,
+        )
     return order_id
 
 
@@ -375,41 +386,31 @@ async def test_execute_approved_action_process_refund_is_guarded_against_double_
 
 
 async def test_execute_approved_action_initiate_return_does_not_create_a_duplicate_row(db_pool: asyncpg.Pool) -> None:
-    from shared.hitl import execute_approved_action
-
-    user_id = await _seed_user(db_pool, email="admin-initiate@example.com")
-    order_id = await _seed_order(db_pool, user_id, status="delivered", total=30.0)
-
-    first = await execute_approved_action(
-        tool_name="initiate_return",
-        tool_input={"order_id": str(order_id), "reason": "damaged"},
-        user_email="admin-initiate@example.com",
-    )
-    assert first["success"] is True
-
+    from shared.hitl import _create_hitl_request, claim_hitl_request, execute_approved_action
     from shared.idempotency import _canonical_key
 
-    key = _canonical_key(
-        "hitl_execute",
-        "admin-initiate@example.com",
-        {
-            "tool_name": "initiate_return",
-            "tool_input": {"order_id": str(order_id), "reason": "damaged"},
-            "user_email": "admin-initiate@example.com",
-        },
+    email = "admin-initiate@example.com"
+    user_id = await _seed_user(db_pool, email=email)
+    order_id = await _seed_order(db_pool, user_id, status="delivered", total=30.0)
+    request_id = str(
+        await _create_hitl_request(
+            email, None, "test", "initiate_return", {"order_id": str(order_id), "reason": "damaged"}
+        )
     )
+    req = await claim_hitl_request(request_id)
+    args = {
+        "tool_name": "initiate_return",
+        "tool_input": req["tool_input"],
+        "user_email": email,
+        "approval_id": request_id,
+    }
+    first = await execute_approved_action(**args)
+    assert first["success"] is True
+    key = _canonical_key("hitl_execute:returns-v1", email, args)
     await db_pool.execute("DELETE FROM idempotency_keys WHERE key = $1", key)
-
-    second = await execute_approved_action(
-        tool_name="initiate_return",
-        tool_input={"order_id": str(order_id), "reason": "damaged"},
-        user_email="admin-initiate@example.com",
-    )
-    assert second["success"] is False
-    assert second.get("return_id") == first["return_id"]
-
-    count = await db_pool.fetchval("SELECT COUNT(*) FROM returns WHERE order_id = $1", order_id)
-    assert count == 1
+    second = await execute_approved_action(**args)
+    assert second == first, "the durable operation result survives removal of the legacy cache"
+    assert await db_pool.fetchval("SELECT COUNT(*) FROM returns WHERE order_id = $1", order_id) == 1
 
 
 # ─────────────────────── 5. claim_hitl_request TOCTOU fix ─────────────────

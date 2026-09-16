@@ -12,9 +12,9 @@ from pathlib import Path
 import pytest
 
 from shared.workflow_loader import (
+    _OPS,
     DeclarativeExecutor,
     WorkflowSpecError,
-    _OPS,
     load_workflow,
     load_workflows_directory,
     register_op,

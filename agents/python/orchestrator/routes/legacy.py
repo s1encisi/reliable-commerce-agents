@@ -21,8 +21,10 @@ from typing import Any
 import httpx
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from shared.after_sales.http import operation_scope
 from shared.config import settings
 from shared.context import current_session_id, current_user_email, current_user_role
 from shared.db import get_pool
@@ -861,14 +863,25 @@ async def approve_hitl_request(
         existing = await get_hitl_request(request_id)
         if not existing:
             raise HTTPException(status_code=404, detail="HITL request not found")
-        raise HTTPException(status_code=400, detail=f"Request is already {existing['status']}")
+        if existing["tool_name"] == "initiate_return" and existing["status"] == "processing":
+            req = existing  # the durable operation lock makes crash recovery safe
+        else:
+            raise HTTPException(status_code=400, detail=f"Request is already {existing['status']}")
 
     admin_email = admin.get("sub", "admin")
+    if req["tool_name"] == "initiate_return":
+        await get_pool().execute(
+            "UPDATE tool_approval_requests SET approved_by = COALESCE(approved_by, $2), admin_note = $3 WHERE id = $1",
+            request_id,
+            admin_email,
+            body.note,
+        )
     try:
         result = await execute_approved_action(
             tool_name=req["tool_name"],
             tool_input=req["tool_input"],
             user_email=req["user_email"],
+            approval_id=request_id,
         )
     except Exception:
         # The claim above already moved this row out of 'pending' — if we
@@ -881,6 +894,18 @@ async def approve_hitl_request(
             request_id,
         )
         raise
+
+    if req["tool_name"] == "initiate_return":
+        # The return, operation result and approval execution result commit together.
+        if result.get("outcome") not in {"UNKNOWN", "RETRYABLE_FAILURE"}:
+            # Conflicting parameters reject before touching the original operation.
+            await get_pool().execute(
+                """UPDATE tool_approval_requests SET status = 'approved', execution_result = $2::jsonb,
+                   resolved_at = clock_timestamp() WHERE id = $1 AND status = 'processing'""",
+                request_id,
+                json.dumps(result),
+            )
+        return {"status": "approved", "execution_result": result}
 
     updated = await resolve_hitl_request(
         request_id=request_id,
@@ -1448,7 +1473,10 @@ async def get_order(order_id: str, user: dict = Depends(require_auth)):
     )
 
     ret = await pool.fetchrow(
-        "SELECT id, reason, status, refund_method, refund_amount, return_label_url, created_at, resolved_at FROM returns WHERE order_id = $1",
+        (
+            "SELECT id, reason, status, refund_method, refund_amount, return_label_ur"
+            "l, created_at, resolved_at FROM returns WHERE order_id = $1"
+        ),
         order_id,
     )
 
@@ -1527,7 +1555,10 @@ async def cancel_order(order_id: str, body: CancelOrderRequest, user: dict = Dep
     if order["status"] not in ("placed", "confirmed"):
         raise HTTPException(
             status_code=400,
-            detail=f"Cannot cancel order with status '{order['status']}'. Only placed or confirmed orders can be cancelled.",
+            detail=(
+                f"Cannot cancel order with status '{order['status']}'. "
+                "Only placed or confirmed orders can be cancelled."
+            ),
         )
 
     async with pool.acquire() as conn:
@@ -1550,71 +1581,36 @@ async def cancel_order(order_id: str, body: CancelOrderRequest, user: dict = Dep
     }
 
 
-@router.post("/api/orders/{order_id}/return")
-async def return_order(order_id: str, body: ReturnOrderRequest, user: dict = Depends(require_auth)):
-    """Request a return for a delivered order."""
-    pool = get_pool()
-    email = current_user_email.get()
+@router.post("/api/orders/{order_id}/return", dependencies=[Depends(operation_scope)])
+async def return_order(order_id: str, body: ReturnOrderRequest, user: dict = Depends(require_auth)) -> JSONResponse:
+    """Use the same validation, approval gate and locked write as the tool."""
+    from shared.after_sales.service import request_return
 
-    order = await pool.fetchrow(
-        """SELECT o.id, o.status, o.total, o.user_id
-           FROM orders o
-           JOIN users u ON o.user_id = u.id
-           WHERE o.id = $1 AND u.email = $2""",
-        order_id,
-        email,
+    result = await request_return(order_id, body.reason, body.refund_method)
+    if result.get("status") == "pending_approval":
+        # The existing order page treats every 2xx as a created return. Keep
+        # pending approval on its message path until it has a distinct UI state.
+        return JSONResponse(status_code=409, content={"detail": result["message"], **result})
+    if result.get("success") is not True:
+        code = result.get("error_code")
+        status = 404 if code == "ORDER_NOT_FOUND" else 409 if code in {"RETURN_EXISTS", "APPROVAL_STALE"} else 400
+        return JSONResponse(status_code=status, content={"detail": result["message"], **result})
+    return JSONResponse(content=result)
+
+
+@router.get("/api/returns/operations/{operation_id}")
+async def return_operation_status(operation_id: str, user: dict = Depends(require_auth)) -> JSONResponse:
+    from shared.after_sales.service import get_operation
+
+    result = await get_operation(operation_id)
+    status = (
+        404
+        if result.get("error_code") == "OPERATION_NOT_FOUND"
+        else 400
+        if result.get("error_code") == "VALIDATION_ERROR"
+        else 200
     )
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-
-    if order["status"] != "delivered":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot return order with status '{order['status']}'. Only delivered orders can be returned.",
-        )
-
-    existing_return = await pool.fetchrow(
-        "SELECT id FROM returns WHERE order_id = $1",
-        order_id,
-    )
-    if existing_return:
-        raise HTTPException(status_code=409, detail="A return has already been requested for this order")
-
-    label_token = uuid.uuid4().hex[:12]
-    return_label_url = f"/api/returns/{label_token}/label"
-
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            ret = await conn.fetchrow(
-                """INSERT INTO returns (order_id, user_id, reason, status, return_label_url, refund_method, refund_amount)
-                   VALUES ($1, $2, $3, 'requested', $4, $5, $6)
-                   RETURNING id""",
-                order_id,
-                str(order["user_id"]),
-                body.reason,
-                return_label_url,
-                body.refund_method,
-                float(order["total"]),
-            )
-            await conn.execute(
-                "UPDATE orders SET status = 'returned' WHERE id = $1",
-                order_id,
-            )
-            await conn.execute(
-                """INSERT INTO order_status_history (order_id, status, notes)
-                   VALUES ($1, 'returned', $2)""",
-                order_id,
-                body.reason,
-            )
-
-    return {
-        "return_id": str(ret["id"]),
-        "order_id": str(order["id"]),
-        "status": "requested",
-        "return_label_url": return_label_url,
-        "refund_amount": float(order["total"]),
-        "refund_method": body.refund_method,
-    }
+    return JSONResponse(status_code=status, content=result)
 
 
 # ── Return Label PDF ─────────────────────────────────────────
@@ -1706,9 +1702,6 @@ def _build_return_label_pdf(
     def pdf_str(s: str) -> str:
         return s.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
-    from_addr = f"{pdf_str(user_name)}\\n{pdf_str(addr_street)}\\n{pdf_str(addr_city)}, {pdf_str(addr_state)} {pdf_str(addr_zip)}"
-    to_addr = "E-Commerce Agents Returns Center\\n1200 Returns Blvd, Suite 400\\nMemphis, TN 38118"
-
     # Build PDF objects
     objects = []
 
@@ -1742,7 +1735,7 @@ def _build_return_label_pdf(
         "30 680 552 50 re f",
         "0 0 0 rg",
         f"BT /F2 16 Tf 180 700 Td ({pdf_str(barcode)}) Tj ET",
-        f"BT /F1 9 Tf 30 685 Td (Scan or enter this code at drop-off) Tj ET",
+        "BT /F1 9 Tf 30 685 Td (Scan or enter this code at drop-off) Tj ET",
         # --- Carrier ---
         "0 0 0 rg",
         f"BT /F2 12 Tf 30 655 Td (Carrier: {pdf_str(carrier)}) Tj ET",
@@ -1769,14 +1762,14 @@ def _build_return_label_pdf(
         "0.97 0.97 0.97 rg",
         "30 460 552 75 re f",
         "0 0 0 rg",
-        f"BT /F2 10 Tf 40 520 Td (Order ID:) Tj ET",
+        "BT /F2 10 Tf 40 520 Td (Order ID:) Tj ET",
         f"BT /F1 10 Tf 140 520 Td (#{pdf_str(order_id)}...) Tj ET",
-        f"BT /F2 10 Tf 40 504 Td (Return ID:) Tj ET",
+        "BT /F2 10 Tf 40 504 Td (Return ID:) Tj ET",
         f"BT /F1 10 Tf 140 504 Td (#{pdf_str(return_id)}...) Tj ET",
-        f"BT /F2 10 Tf 40 488 Td (Reason:) Tj ET",
+        "BT /F2 10 Tf 40 488 Td (Reason:) Tj ET",
         f"BT /F1 10 Tf 140 488 Td ({pdf_str(reason[:60])}) Tj ET",
-        f"BT /F2 10 Tf 40 472 Td (Status:) Tj ET",
-        f"BT /F1 10 Tf 140 472 Td (Return Requested) Tj ET",
+        "BT /F2 10 Tf 40 472 Td (Status:) Tj ET",
+        "BT /F1 10 Tf 140 472 Td (Return Requested) Tj ET",
         # --- Instructions Box ---
         "0.05 0.58 0.55 rg",  # Teal
         "30 380 552 60 re f",
@@ -1791,8 +1784,14 @@ def _build_return_label_pdf(
         "BT /F1 10 Tf 40 332 Td (5. Your refund will be processed after we receive and inspect the items.) Tj ET",
         # --- Footer ---
         "0.6 0.6 0.6 rg",
-        "BT /F1 8 Tf 30 50 Td (Generated by E-Commerce Agents | This label is valid for 30 days from the return request date.) Tj ET",
-        f"BT /F1 8 Tf 30 38 Td (Label ID: {pdf_str(barcode)} | For support, contact support@ecommerce-agents.com) Tj ET",
+        (
+            "BT /F1 8 Tf 30 50 Td (Generated by E-Commerce Agents | This label is val"
+            "id for 30 days from the return request date.) Tj ET"
+        ),
+        (
+            f"BT /F1 8 Tf 30 38 Td (Label ID: {pdf_str(barcode)} | "
+            "For support, contact support@ecommerce-agents.com) Tj ET"
+        ),
     ]
 
     stream = "\n".join(stream_lines)
@@ -1852,13 +1851,14 @@ async def get_cart(user: dict = Depends(require_auth)):
 
     # Fetch items with product details and stock
     items = await pool.fetch(
-        """SELECT ci.id, ci.product_id, ci.quantity,
-                  p.name, p.brand, p.category, p.price, p.original_price, p.image_url,
-                  COALESCE((SELECT SUM(wi.quantity) FROM warehouse_inventory wi WHERE wi.product_id = ci.product_id), 0) as available_qty
-           FROM cart_items ci
-           JOIN products p ON ci.product_id = p.id
-           WHERE ci.cart_id = $1
-           ORDER BY ci.added_at""",
+        (
+            "SELECT ci.id, ci.product_id, ci.quantity,\n                  p.name, p.br"
+            "and, p.category, p.price, p.original_price, p.image_url,\n               "
+            "   COALESCE((SELECT SUM(wi.quantity) FROM warehouse_inventory wi WHERE w"
+            "i.product_id = ci.product_id), 0) as available_qty\n           FROM cart_"
+            "items ci\n           JOIN products p ON ci.product_id = p.id\n           W"
+            "HERE ci.cart_id = $1\n           ORDER BY ci.added_at"
+        ),
         cart_id,
     )
 
@@ -2192,7 +2192,10 @@ async def _do_checkout(user_id: str, body: CheckoutRequest) -> dict:
                 if stock < item["quantity"]:
                     raise HTTPException(
                         status_code=400,
-                        detail=f"Insufficient stock for '{item['name']}'. Available: {stock}, requested: {item['quantity']}",
+                        detail=(
+                            f"Insufficient stock for '{item['name']}'. "
+                            f"Available: {stock}, requested: {item['quantity']}"
+                        ),
                     )
 
             # 5. Calculate subtotal
@@ -2319,7 +2322,10 @@ async def _do_checkout(user_id: str, body: CheckoutRequest) -> dict:
                         break
                     deduct = min(remaining, wh["quantity"])
                     await conn.execute(
-                        "UPDATE warehouse_inventory SET quantity = quantity - $1 WHERE warehouse_id = $2 AND product_id = $3",
+                        (
+                            "UPDATE warehouse_inventory SET quantity = quantity - $1 WHERE warehouse_"
+                            "id = $2 AND product_id = $3"
+                        ),
                         deduct,
                         wh["warehouse_id"],
                         wh["product_id"],

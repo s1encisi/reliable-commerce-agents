@@ -26,6 +26,7 @@ from shared.tools.cart_tools import (
 )
 from shared.tools.return_tools import (
     check_return_eligibility,
+    get_return_operation_status,
     get_return_status,
     initiate_return,
     process_refund,
@@ -42,6 +43,7 @@ AGENT_TOOLS = [
     initiate_return,
     process_refund,
     get_return_status,
+    get_return_operation_status,
     get_user_profile,
     add_to_cart,
     get_cart,

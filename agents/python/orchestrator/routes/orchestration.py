@@ -173,6 +173,17 @@ class ResumeRequest(BaseModel):
 
 @router.post("/{run_id}/resume")
 async def resume_run(run_id: str, body: ResumeRequest, user: dict[str, Any] = Depends(require_auth)) -> dict[str, Any]:
+    from shared.after_sales.locks import workflow_resume_lock
+
+    async with workflow_resume_lock(run_id) as acquired:
+        if not acquired:
+            raise HTTPException(404, "This workflow is already being resumed")
+        return await _resume_run_locked(run_id, body, user)
+
+
+async def _resume_run_locked(
+    run_id: str, body: ResumeRequest, user: dict[str, Any] = Depends(require_auth)
+) -> dict[str, Any]:
     """Resume a workflow paused on in-workflow HITL, from committed checkpoint state.
 
     Looks up the most recent *pending* ``hitl_requests`` row for
@@ -191,14 +202,14 @@ async def resume_run(run_id: str, body: ResumeRequest, user: dict[str, Any] = De
     if role == "admin":
         hitl = await pool.fetchrow(
             """SELECT * FROM hitl_requests
-               WHERE workflow_run_id = $1 AND status = 'pending'
+               WHERE workflow_run_id = $1 AND status IN ('pending', 'processing')
                ORDER BY created_at DESC LIMIT 1""",
             run_id,
         )
     else:
         hitl = await pool.fetchrow(
             """SELECT * FROM hitl_requests
-               WHERE workflow_run_id = $1 AND status = 'pending' AND user_email = $2
+               WHERE workflow_run_id = $1 AND status IN ('pending', 'processing') AND user_email = $2
                ORDER BY created_at DESC LIMIT 1""",
             run_id,
             email,
@@ -210,22 +221,49 @@ async def resume_run(run_id: str, body: ResumeRequest, user: dict[str, Any] = De
     if not hitl["request_id"] or not hitl["checkpoint_id"]:
         raise HTTPException(status_code=409, detail="This pending request predates checkpoint-based resume")
 
-    from orchestrator.modes.workflow_mode import ReturnReplaceMode
+    if hitl["status"] == "processing":
+        recorded = json.loads(hitl["response"]) if isinstance(hitl["response"], str) else hitl["response"]
+        if not recorded or recorded.get("approved") != body.approved:
+            raise HTTPException(409, "Recovery must preserve the recorded approval decision")
+    else:
+        claimed = await pool.fetchval(
+            """UPDATE hitl_requests SET status = 'processing', response = $2::jsonb
+               WHERE id = $1 AND status = 'pending' RETURNING id""",
+            hitl["id"],
+            json.dumps({"approved": body.approved}),
+        )
+        if claimed is None:
+            raise HTTPException(status_code=404, detail="No pending approval found for this run")
 
-    mode = ReturnReplaceMode()
+    from orchestrator.modes import get_mode
+
+    mode = get_mode("workflow:return-replace")
     final_payload: dict[str, Any] = {}
-    async for event in mode.resume(
-        checkpoint_id=str(hitl["checkpoint_id"]), request_id=hitl["request_id"], approved=body.approved
-    ):
-        if event.kind == "run_completed":
-            final_payload = event.payload
+    owner_role = await pool.fetchval("SELECT role FROM users WHERE email = $1", hitl["user_email"])
+    owner_token = current_user_email.set(hitl["user_email"])
+    role_token = current_user_role.set(owner_role or "customer")
+    try:
+        async for event in mode.resume(
+            checkpoint_id=str(hitl["checkpoint_id"]), request_id=hitl["request_id"], approved=body.approved
+        ):
+            if event.kind == "run_completed":
+                final_payload = event.payload
+    finally:
+        current_user_email.reset(owner_token)
+        current_user_role.reset(role_token)
 
     await pool.execute(
         """UPDATE hitl_requests
            SET status = $1, responded_at = NOW(), response = $2::jsonb
            WHERE id = $3""",
         "approved" if body.approved else "rejected",
-        json.dumps({"approved": body.approved}),
+        json.dumps(
+            {
+                "approved": body.approved,
+                "outcome": final_payload.get("outcome"),
+                "operation_id": final_payload.get("operation_id"),
+            }
+        ),
         hitl["id"],
     )
     new_checkpoint_id = final_payload.get("latest_checkpoint_id")
@@ -239,6 +277,8 @@ async def resume_run(run_id: str, body: ResumeRequest, user: dict[str, Any] = De
     return {
         "run_id": run_id,
         "approved": body.approved,
+        "outcome": final_payload.get("outcome"),
+        "operation_id": final_payload.get("operation_id"),
         "text": final_payload.get("text", ""),
         "agents_involved": final_payload.get("agents_involved", []),
     }

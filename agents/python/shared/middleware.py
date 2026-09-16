@@ -61,14 +61,18 @@ class AgentRunLogger(AgentMiddleware):
             elapsed = (time.perf_counter() - start) * 1000
             logger.exception(
                 "agent.fail agent=%s run_id=%s elapsed_ms=%.1f",
-                agent_name, run_id, elapsed,
+                agent_name,
+                run_id,
+                elapsed,
             )
             raise
         else:
             elapsed = (time.perf_counter() - start) * 1000
             logger.info(
                 "agent.finish agent=%s run_id=%s elapsed_ms=%.1f",
-                agent_name, run_id, elapsed,
+                agent_name,
+                run_id,
+                elapsed,
             )
 
 
@@ -108,14 +112,27 @@ class ToolAuditMiddleware(FunctionMiddleware):
                 "elapsed_ms": round(elapsed, 2),
                 "error": error,
             }
+            from shared.after_sales.contracts import Outcome
+
+            result = getattr(context, "result", None)
+            if isinstance(result, dict):
+                outcome = result.get("outcome")
+                record["business_outcome"] = (
+                    outcome if isinstance(outcome, str) and outcome in {s.value for s in Outcome} else None
+                )
+                record["business_success"] = result.get("success") if isinstance(result.get("success"), bool) else None
             if self.capture_arguments:
                 args = getattr(context, "arguments", None)
                 if isinstance(args, dict):
                     record["arguments"] = dict(args)
             self.audited.append(record)
             logger.info(
-                "tool.invoked name=%s elapsed_ms=%.1f error=%s",
-                name, elapsed, error or "-",
+                "tool.invoked name=%s elapsed_ms=%.1f error=%s business_outcome=%s business_success=%s",
+                name,
+                elapsed,
+                error or "-",
+                record.get("business_outcome"),
+                record.get("business_success"),
             )
 
 

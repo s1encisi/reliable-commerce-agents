@@ -99,5 +99,3 @@ def test_test_environment_also_permits_weak_defaults(monkeypatch: pytest.MonkeyP
     """`ENVIRONMENT=test` (pytest) must not fail startup."""
     config_mod = _prepare_env(monkeypatch, environment="test")
     config_mod.Settings(_env_file=None)  # type: ignore[call-arg]  # must not raise
-
-

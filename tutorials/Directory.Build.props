@@ -1,0 +1,9 @@
+<Project>
+  <ItemGroup>
+    <!-- The workflow SDK pulls OpenTelemetry.Api 1.13.1 transitively.
+         Pin the patched version already used by the main .NET application:
+         https://github.com/open-telemetry/opentelemetry-dotnet/security/advisories/GHSA-g94r-2vxg-569j
+         Keep NuGet auditing enabled for all tutorial projects. -->
+    <PackageReference Include="OpenTelemetry.Api" Version="1.17.0" />
+  </ItemGroup>
+</Project>

@@ -143,6 +143,7 @@ def idempotent(
     scope: str,
     *,
     identity_fn: Callable[..., str] | None = None,
+    cache_result: Callable[[dict[str, Any]], bool] | None = None,
 ) -> Callable[[Callable[P, Awaitable[R]]], Callable[P, Awaitable[R]]]:
     """Make an async, dict-returning DB-mutating function idempotent per (identity, scope, args).
 
@@ -187,7 +188,11 @@ def idempotent(
                 await _release(pool, key)
                 raise
 
-            if isinstance(result, dict):
+            if isinstance(result, dict) and cache_result is not None and not cache_result(result):
+                # Some business results need fresh evidence or approval on retry.
+                # Callers opt in; existing non-return tools retain their protocol.
+                await _release(pool, key)
+            elif isinstance(result, dict):
                 await _complete(pool, key, result)
             else:
                 # Every current call site returns a dict; a non-dict result

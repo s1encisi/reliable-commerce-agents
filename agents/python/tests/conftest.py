@@ -14,7 +14,6 @@ Policy:
 
 from __future__ import annotations
 
-import asyncio
 import os
 from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
@@ -60,6 +59,7 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 # ─────────────────────── Postgres fixture ───────────────────────
+
 
 @pytest.fixture(scope="session")
 def postgres_container() -> Generator[PostgresContainer, None, None]:
@@ -156,6 +156,7 @@ async def redis_client(redis_container: RedisContainer) -> AsyncGenerator[redis_
 
 # ─────────────────────── Fake LLM fixtures ──────────────────────
 
+
 class FakeChatClient:
     """
     Deterministic stand-in for the MAF ChatClient. Queue canned responses and
@@ -167,7 +168,7 @@ class FakeChatClient:
         self.call_count: int = 0
         self.received_prompts: list[list[dict[str, Any]]] = []
 
-    def enqueue(self, *responses: str) -> "FakeChatClient":
+    def enqueue(self, *responses: str) -> FakeChatClient:
         self._responses.extend(responses)
         return self
 
@@ -175,10 +176,7 @@ class FakeChatClient:
         self.call_count += 1
         self.received_prompts.append(messages)
         if not self._responses:
-            raise RuntimeError(
-                "FakeChatClient has no enqueued responses. "
-                "Call enqueue(...) before invoking."
-            )
+            raise RuntimeError("FakeChatClient has no enqueued responses. Call enqueue(...) before invoking.")
         return self._responses.pop(0)
 
 
@@ -188,6 +186,7 @@ def fake_chat_client() -> FakeChatClient:
 
 
 # ─────────────────────── Canary fixture ─────────────────────────
+
 
 @pytest.fixture
 def sample_env(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:

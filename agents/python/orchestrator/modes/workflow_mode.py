@@ -11,7 +11,7 @@ both were only ever driven by a hand-built dataclass in tests. Each mode
 here resolves a product_id / order_id out of the chat message before
 building that initial state: a UUID literal in the message if present,
 else a lightweight lookup (``search_products`` for pre-purchase, the
-current user's most recent order for return-replace).
+current user's unambiguous order for return-replace).
 
 HITL + checkpoints (Phase 1.5): every ``.run()`` call on the built MAF
 workflow attaches a checkpoint storage backend (``shared.factory.get_checkpoint_storage``,
@@ -70,7 +70,10 @@ async def _resolve_order(message: str) -> tuple[str | None, float | None, str | 
     """Returns ``(order_id, order_total, error_message)``."""
     import order_management.tools as order_tools
 
-    uid = _extract_uuid(message)
+    candidates = list(dict.fromkeys(uid.lower() for uid in _UUID_RE.findall(message)))
+    if len(candidates) > 1:
+        return None, None, "Please choose one order ID for this return."
+    uid = candidates[0] if candidates else None
     if uid:
         details_fn = getattr(order_tools.get_order_details, "func", order_tools.get_order_details)
         details = await details_fn(order_id=uid)
@@ -79,9 +82,11 @@ async def _resolve_order(message: str) -> tuple[str | None, float | None, str | 
         return uid, details["total"], None
 
     list_fn = getattr(order_tools.get_user_orders, "func", order_tools.get_user_orders)
-    orders = await list_fn(limit=1)
+    orders = await list_fn(limit=2)
     if not orders or "error" in orders[0]:
         return None, None, "No recent order found for this account."
+    if len(orders) > 1:
+        return None, None, "More than one order matches. Please provide the order ID you want to return."
     return orders[0]["order_id"], orders[0]["total"], None
 
 
@@ -221,7 +226,9 @@ class ReturnReplaceMode:
         order_id, order_total, error = await _resolve_order(message)
         if error:
             yield OrchestrationEvent(kind="error", payload={"message": error})
-            yield OrchestrationEvent(kind="run_completed", payload={"text": error, "agents_involved": []})
+            yield OrchestrationEvent(
+                kind="run_completed", payload={"text": error, "agents_involved": [], "outcome": "NEEDS_INPUT"}
+            )
             return
 
         state = WorkflowState(user_email=email, order_id=order_id, order_total=order_total or 0.0, reason=message)
@@ -256,9 +263,9 @@ class ReturnReplaceMode:
         latest_checkpoint_id = recorder.saved[-1] if recorder and recorder.saved else None
 
         if final_state.hitl_requested and final_state.hitl_approved is None:
-            text = (
+            text = (final_state.existing_operation or {}).get("message") or (
                 f"Return for order {order_id} needs approval — refund "
-                f"${final_state.refund_amount:.2f} exceeds the auto-approval threshold."
+                f"estimate ${final_state.refund_amount:.2f}. No return has been created yet."
             )
             yield OrchestrationEvent(
                 kind="run_completed",
@@ -266,6 +273,17 @@ class ReturnReplaceMode:
                     "text": text,
                     "agents_involved": agents_involved,
                     "pending_approval": True,
+                    "outcome": "AWAITING_APPROVAL",
+                    "operation_id": final_state.operation_id,
+                    "return_intent": (
+                        {
+                            "order_id": order_id,
+                            "reason": final_state.reason or "Customer requested replacement",
+                            "refund_method": "store_credit",
+                        }
+                        if final_state.order_revision
+                        else None
+                    ),
                     "request_id": pending_request_id,
                     "latest_checkpoint_id": latest_checkpoint_id,
                 },
@@ -275,7 +293,11 @@ class ReturnReplaceMode:
         if final_state.errors:
             text = "; ".join(final_state.errors)
         elif final_state.return_id:
-            text = f"Return {final_state.return_id} initiated for order {order_id}."
+            text = (
+                f"Existing return {final_state.return_id} confirmed for order {order_id}."
+                if final_state.existing_operation
+                else f"Return {final_state.return_id} initiated for order {order_id}."
+            )
             if final_state.applied_discount:
                 text += f" Loyalty discount applied: {final_state.applied_discount}."
         else:
@@ -287,6 +309,8 @@ class ReturnReplaceMode:
                 "text": text,
                 "agents_involved": agents_involved,
                 "pending_approval": False,
+                "outcome": final_state.outcome if final_state else "FAILED_FINAL",
+                "operation_id": final_state.operation_id if final_state else None,
                 "latest_checkpoint_id": latest_checkpoint_id,
             },
         )
@@ -338,18 +362,13 @@ class ReturnReplaceMode:
         if final_state is None:
             text = "Resume did not produce a terminal state."
             agents_involved: list[str] = []
+        elif final_state.existing_operation and final_state.outcome == "SUCCEEDED":
+            text = f"Existing return {final_state.return_id} was already created; this decision did not reverse it."
+            agents_involved = list(final_state.completed_steps)
         elif final_state.errors:
             text = "; ".join(final_state.errors)
             agents_involved = list(final_state.completed_steps)
-        elif final_state.hitl_approved and "finalize" in final_state.completed_steps:
-            # Not final_state.return_id: _HitlGateExecutor.on_approval()
-            # (workflows/return_replace.py) deliberately rebuilds a minimal
-            # WorkflowState from the ReturnApprovalRequest snapshot on
-            # resume — order_id/order_total/refund_amount only, not
-            # return_id or replacement_products from the paused run. That's
-            # correct for return_replace.py's own executors (apply-discount
-            # and finalize only need the refund context), but it means text
-            # here can't reference the original return_id.
+        elif final_state.hitl_approved and final_state.return_id and "finalize" in final_state.completed_steps:
             text = f"Return for order {final_state.order_id} approved and finalized."
             if final_state.applied_discount:
                 text += f" Loyalty discount applied: {final_state.applied_discount}."
@@ -364,6 +383,8 @@ class ReturnReplaceMode:
                 "text": text,
                 "agents_involved": agents_involved or ["return-replace"],
                 "pending_approval": False,
+                "outcome": final_state.outcome if final_state else "FAILED_FINAL",
+                "operation_id": final_state.operation_id if final_state else None,
                 "latest_checkpoint_id": recorder.saved[-1] if recorder and recorder.saved else None,
             },
         )
@@ -373,9 +394,9 @@ class ReturnReplaceMode:
         # graph_mermaid() — see its comment.
         return (
             "graph LR\n"
-            "  check_eligibility[check-eligibility] --> initiate_return[initiate-return]\n"
+            "  check_eligibility[check-eligibility] --> hitl_gate[hitl-gate]\n"
+            "  hitl_gate --> initiate_return[initiate-return]\n"
             "  initiate_return --> search_replacements[search-replacements]\n"
-            "  search_replacements --> hitl_gate[hitl-gate]\n"
-            "  hitl_gate --> apply_discount[apply-discount]\n"
+            "  search_replacements --> apply_discount[apply-discount]\n"
             "  apply_discount --> finalize\n"
         )

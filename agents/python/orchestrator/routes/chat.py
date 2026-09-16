@@ -54,6 +54,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from starlette.responses import StreamingResponse
 
+from shared.after_sales.http import operation_scope
 from shared.agent_observability import get_steps, reset_steps
 from shared.context import current_session_id
 from shared.db import get_pool
@@ -237,19 +238,67 @@ async def _link_run_artifacts(pool: Any, usage_log_id: Any, user_email: str, run
             checkpoint_id,
         )
     if run_payload.get("pending_approval") and run_payload.get("request_id"):
-        await pool.execute(
-            """INSERT INTO hitl_requests
-                   (workflow_run_id, request_id, checkpoint_id, user_email, kind, payload, status)
-               VALUES ($1, $2, $3, $4, 'return_approval', $5::jsonb, 'pending')""",
-            usage_log_id,
-            run_payload["request_id"],
-            checkpoint_id,
-            user_email,
-            json.dumps({"text": run_payload.get("text", "")}, default=str),
-        )
+        from uuid import UUID
+
+        from shared.after_sales import operations
+        from shared.after_sales.approval import payload_hash
+        from shared.after_sales.policy import POLICY_VERSION
+        from shared.tool_inputs import InitiateReturnInput
+
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                intent_data = run_payload.get("return_intent")
+                op_id = run_payload.get("operation_id")
+                op = None
+                if intent_data and op_id:
+                    intent = InitiateReturnInput.model_validate(intent_data)
+                    await operations.reserve_on(conn, intent, UUID(op_id))
+                    op = await operations.load(conn, UUID(op_id), lock="update")
+                    if op is None:
+                        raise ValueError("Workflow order is no longer accessible")
+                    if op["payload_hash"] != payload_hash(intent):
+                        run_payload.update(
+                            pending_approval=False,
+                            outcome="REJECTED",
+                            text="This operation ID belongs to different parameters.",
+                        )
+                        return
+                    if op["status"] in {"SUCCEEDED", "REJECTED", "AWAITING_APPROVAL"}:
+                        existing = operations.decode(op["result"])
+                        run_payload.update(
+                            text=existing["message"],
+                            outcome=existing["outcome"],
+                            pending_approval=existing["outcome"] == "AWAITING_APPROVAL",
+                        )
+                        return
+                await conn.execute(
+                    """INSERT INTO hitl_requests
+                       (workflow_run_id, request_id, checkpoint_id, user_email, kind, payload, status)
+                       VALUES ($1, $2, $3, $4, 'return_approval', $5::jsonb, 'pending')""",
+                    usage_log_id,
+                    run_payload["request_id"],
+                    checkpoint_id,
+                    user_email,
+                    json.dumps({"text": run_payload.get("text", ""), "operation_id": op_id}, default=str),
+                )
+                if op is not None:
+                    await operations.save_result(
+                        conn,
+                        op,
+                        {
+                            "success": False,
+                            "outcome": "AWAITING_APPROVAL",
+                            "status": "pending_approval",
+                            "policy_version": POLICY_VERSION,
+                            "workflow_run_id": str(usage_log_id),
+                            "message": (
+                                f"Return request is awaiting workflow approval. Resume the original run {usage_log_id}."
+                            ),
+                        },
+                    )
 
 
-@router.post("/api/chat", response_model=ChatResponse)
+@router.post("/api/chat", response_model=ChatResponse, dependencies=[Depends(operation_scope)])
 async def chat(
     body: ChatRequest,
     user: dict[str, Any] = Depends(optional_auth),
@@ -356,9 +405,9 @@ async def chat(
 
     if not is_anon:
         # Save assistant message + update conversation + usage (authed only)
-        await pool.execute(
+        assistant_message_id = await pool.fetchval(
             """INSERT INTO messages (conversation_id, role, content, agent_name, agents_involved)
-               VALUES ($1, 'assistant', $2, 'orchestrator', $3)""",
+               VALUES ($1, 'assistant', $2, 'orchestrator', $3) RETURNING id""",
             conversation_id,
             response_text,
             agents_involved,
@@ -378,6 +427,9 @@ async def chat(
             tokens_out=usage.get("output_token_count") or 0,
         )
         await _link_run_artifacts(pool, usage_log_id, user_email, run_payload)
+        if run_payload.get("text") and run_payload["text"] != response_text:
+            response_text = run_payload["text"]
+            await pool.execute("UPDATE messages SET content = $2 WHERE id = $1", assistant_message_id, response_text)
 
     return ChatResponse(
         response=response_text,
@@ -387,7 +439,7 @@ async def chat(
     )
 
 
-@router.post("/api/chat/stream")
+@router.post("/api/chat/stream", dependencies=[Depends(operation_scope)])
 async def chat_stream(
     body: ChatRequest,
     request: Request,
@@ -520,7 +572,10 @@ async def chat_stream(
                 with agent_run_span("orchestrator"):
                     try:
                         async for chunk in _run_agent_native_stream(
-                            agent, body.message, history=history, metadata_box=run_metadata,
+                            agent,
+                            body.message,
+                            history=history,
+                            metadata_box=run_metadata,
                         ):
                             await queue.put(("text", chunk))
                         if "grounding" in run_metadata:
@@ -638,7 +693,7 @@ async def chat_stream(
 
                     try:
                         item = await _asyncio.wait_for(queue.get(), timeout=0.1)
-                    except _asyncio.TimeoutError:
+                    except TimeoutError:
                         continue
 
                     if item is None:
@@ -747,7 +802,8 @@ async def chat_stream(
             steps = []
             stream_usage = {}
 
-        yield f"event: metadata\ndata: {json.dumps({'conversation_id': conversation_id, 'agents_involved': agents_involved})}\n\n"
+        metadata = json.dumps({"conversation_id": conversation_id, "agents_involved": agents_involved})
+        yield f"event: metadata\ndata: {metadata}\n\n"
 
         # Persist assistant message + timeline — authed only (anonymous
         # storefront chat has no conversation to write to).

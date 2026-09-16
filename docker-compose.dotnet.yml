@@ -64,12 +64,8 @@ services:
       - "18890:18889"
     environment:
       DASHBOARD__FRONTEND__AUTHMODE: Unsecured
-    healthcheck:
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/18889 && echo ok || exit 1"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-      start_period: 5s
+    # The dashboard image has no shell; probe the published HTTP port from
+    # the host instead of using an always-failing CMD-SHELL healthcheck.
 
   # ── Seeder (reuses the Python script; single source of truth) ──
 
