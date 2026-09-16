@@ -1,12 +1,13 @@
 """Return and Replace Workflow — MAF Sequential orchestration with HITL gate.
 
-Step chain: check-eligibility → initiate-return → search-replacements →
-hitl-gate → apply-discount → finalize.
+Step chain: check-eligibility → hitl-gate → initiate-return →
+search-replacements → apply-discount → finalize.
 
-The HITL gate pauses the workflow above ``settings.RETURN_HITL_THRESHOLD``
-and emits a ``ReturnApprovalRequest`` via ``ctx.request_info`` so an
-external system (UI, Slack, on-call human) can approve or reject before
-the discount is applied and the return is finalized.
+The eligibility service supplies the common approval policy: approval is
+required when HITL is enabled or the trusted order total exceeds
+``settings.RETURN_HITL_THRESHOLD``. The gate emits a bound snapshot through
+``ctx.request_info`` before any return is created. Resume restores the owner
+and exact parameters; the shared service checks current eligibility again.
 
 Refactored from a custom sequential state machine to a MAF
 ``WorkflowBuilder`` per ``plans/refactor/09-return-replace-sequential-hitl.md``.
@@ -19,6 +20,7 @@ at import time; stringified annotations break that resolution.
 """
 
 import logging
+import math
 from dataclasses import dataclass, field
 
 from agent_framework._workflows._executor import Executor, handler
@@ -26,7 +28,13 @@ from agent_framework._workflows._request_info_mixin import response_handler
 from agent_framework._workflows._workflow_builder import WorkflowBuilder
 from agent_framework._workflows._workflow_context import WorkflowContext
 
+from shared.after_sales.approval import ReturnApproval, current_return_approval, payload_hash
+from shared.after_sales.operations import current_operation_id, operation_id_for
+from shared.after_sales.policy import APPROVAL_TTL, POLICY_VERSION
+from shared.after_sales.service import utc_now
 from shared.config import settings
+from shared.context import current_user_email, current_user_role
+from shared.tool_inputs import InitiateReturnInput
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +47,12 @@ class WorkflowState:
     order_id: str
     order_total: float = 0.0
     reason: str = ""
+    order_revision: str = ""
+    requires_approval: "bool | None" = None
+    approval: "dict | None" = None
+    outcome: str = "READY"
+    operation_id: "str | None" = None
+    existing_operation: "dict | None" = None
 
     # Populated along the chain
     return_eligible: bool = False
@@ -64,6 +78,10 @@ class ReturnApprovalRequest:
     order_total: float
     refund_amount: float
     replacement_count: int
+    user_email: str = ""
+    reason: str = ""
+    approval: "dict | None" = None
+    operation_id: "str | None" = None
 
 
 # ─────────────────────── Executors ───────────────────────
@@ -83,15 +101,61 @@ class _CheckEligibilityExecutor(Executor):
             return
         try:
             result = await fn(order_id=state.order_id)
-        except Exception as exc:
-            state.errors.append(f"check_eligibility: {exc}")
+        except Exception:
+            logger.exception("Return eligibility lookup failed")
+            state.outcome = "NEEDS_REVIEW"
+            state.errors.append("Return eligibility could not be verified. Please try again later.")
             await ctx.yield_output(state)
             return
 
+        if not isinstance(result, dict) or not isinstance(result.get("eligible", False), bool):
+            state.outcome = "FAILED_FINAL"
+            state.errors.append("Eligibility tool returned an invalid result; no return was submitted.")
+            await ctx.yield_output(state)
+            return
         state.return_eligible = bool(result.get("eligible"))
+        try:
+            intent = InitiateReturnInput(
+                order_id=state.order_id,
+                reason=state.reason or "Customer requested replacement",
+                refund_method="store_credit",
+            )
+            state.operation_id = str(operation_id_for(intent))
+        except ValueError:
+            state.operation_id = None
+            if result.get("policy_version"):
+                state.outcome = "NEEDS_INPUT"
+                state.errors.append("Provide a valid order and a return reason of 1–255 characters.")
+                await ctx.yield_output(state)
+                return
+        state.order_total = float(result.get("total", state.order_total))
+        state.refund_amount = state.order_total  # estimate, not an issued refund
+        state.order_revision = result.get("order_revision", "")
+        state.requires_approval = result.get("requires_approval")
+        state.outcome = result.get("outcome", "READY" if state.return_eligible else "REJECTED")
         state.completed_steps.append("check_eligibility")
+        if state.operation_id and result.get("policy_version"):
+            from shared.after_sales.service import get_operation
+
+            receipt = await get_operation(state.operation_id, expected_payload_hash=payload_hash(intent))
+            if receipt.get("operation_id") == state.operation_id and receipt.get("outcome") in {
+                "SUCCEEDED",
+                "REJECTED",
+                "AWAITING_APPROVAL",
+            }:
+                state.existing_operation = receipt
+                state.outcome = receipt["outcome"]
+                if state.outcome == "SUCCEEDED":
+                    state.return_id = receipt["return_id"]
+                    state.refund_amount = receipt.get("refund_amount", 0)
+                elif state.outcome == "AWAITING_APPROVAL":
+                    state.hitl_requested = True
+                else:
+                    state.errors.append(receipt.get("message", "Return request was rejected."))
+                await ctx.yield_output(state)
+                return
         if not state.return_eligible:
-            state.errors.append(result.get("reason", "Not eligible for return"))
+            state.errors.append(result.get("reason", result.get("error", "Not eligible for return")))
             await ctx.yield_output(state)
             return
         await ctx.send_message(state)
@@ -109,24 +173,58 @@ class _InitiateReturnExecutor(Executor):
             state.errors.append("initiate_return tool not available")
             await ctx.yield_output(state)
             return
+        approval_token = current_return_approval.set(
+            ReturnApproval.from_dict(state.approval) if state.approval else None
+        )
+        operation_token = current_operation_id.set(state.operation_id)
+        # An admin may resume a request on its owner's behalf. The owner comes
+        # from the persisted checkpoint; it is not supplied by the model.
+        identity_token = None
+        if current_user_role.get() == "admin" and state.user_email:
+            identity_token = current_user_email.set(state.user_email)
         try:
             result = await fn(
                 order_id=state.order_id,
                 reason=state.reason or "Customer requested replacement",
                 refund_method="store_credit",
             )
-        except Exception as exc:
-            state.errors.append(f"initiate_return: {exc}")
+        except Exception:
+            logger.exception("Return submission failed without a confirmed result")
+            state.outcome = "UNKNOWN"
+            state.errors.append("Return submission could not be confirmed. Check return status before retrying.")
+            await ctx.yield_output(state)
+            return
+        finally:
+            current_return_approval.reset(approval_token)
+            current_operation_id.reset(operation_token)
+            if identity_token is not None:
+                current_user_email.reset(identity_token)
+
+        if not isinstance(result, dict):
+            state.outcome = "UNKNOWN"
+            state.errors.append("Return tool returned an invalid result. Check operation status before retrying.")
+            await ctx.yield_output(state)
+            return
+        state.outcome = result.get("outcome", "SUCCEEDED" if result.get("return_id") else "REJECTED")
+        if "error" in result or not result.get("return_id") or result.get("success") is False:
+            state.errors.append(
+                f"initiate_return: {result.get('error', result.get('message', 'No confirmed return was created.'))}"
+            )
             await ctx.yield_output(state)
             return
 
-        if "error" in result:
-            state.errors.append(f"initiate_return: {result['error']}")
+        try:
+            amount = float(result["refund_amount"])
+            if not math.isfinite(amount) or amount < 0:
+                raise ValueError("invalid amount")
+        except (KeyError, TypeError, ValueError):
+            state.outcome = "UNKNOWN"
+            state.errors.append("Return tool returned an invalid result. Check operation status before retrying.")
             await ctx.yield_output(state)
             return
-
         state.return_id = result.get("return_id")
-        state.refund_amount = float(result.get("refund_amount", 0.0))
+        state.operation_id = result.get("operation_id", state.operation_id)
+        state.refund_amount = amount
         state.completed_steps.append("initiate_return")
         await ctx.send_message(state)
 
@@ -163,8 +261,31 @@ class _HitlGateExecutor(Executor):
     @handler
     async def run(self, state: WorkflowState, ctx: WorkflowContext[WorkflowState, WorkflowState]) -> None:
         state.completed_steps.append("hitl_gate")
-        if state.order_total > self._threshold:
+        # Production eligibility supplies the common approval policy. Older
+        # external tools may omit it; the value threshold remains a fallback.
+        required = (
+            state.requires_approval if state.requires_approval is not None else state.order_total > self._threshold
+        )
+        if required:
             state.hitl_requested = True
+            state.outcome = "AWAITING_APPROVAL"
+            try:
+                request = InitiateReturnInput(
+                    order_id=state.order_id,
+                    reason=state.reason or "Customer requested replacement",
+                    refund_method="store_credit",
+                )
+                state.approval = ReturnApproval(
+                    state.user_email,
+                    payload_hash(request),
+                    state.order_revision,
+                    POLICY_VERSION,
+                    (utc_now() + APPROVAL_TTL).isoformat(),
+                ).to_dict()
+            except ValueError:
+                # Compatibility with non-DB tools. The real submission service
+                # refuses absent/invalid authorization and invalid arguments.
+                state.approval = None
             # Emit a snapshot so callers observing the stream can see the
             # pause state before the request_info event pauses execution.
             await ctx.yield_output(state)
@@ -174,6 +295,10 @@ class _HitlGateExecutor(Executor):
                     order_total=state.order_total,
                     refund_amount=state.refund_amount,
                     replacement_count=len(state.replacement_products),
+                    user_email=state.user_email,
+                    reason=state.reason,
+                    approval=state.approval,
+                    operation_id=state.operation_id,
                 ),
                 response_type=bool,
             )
@@ -182,20 +307,50 @@ class _HitlGateExecutor(Executor):
         await ctx.send_message(state)
 
     @response_handler(request=ReturnApprovalRequest, response=bool)
-    async def on_approval(self, original_request, response, ctx) -> None:
+    async def on_approval(
+        self,
+        original_request: ReturnApprovalRequest,
+        response: bool,
+        ctx: WorkflowContext[WorkflowState, WorkflowState],
+    ) -> None:
         approved = bool(response)
-        # Rehydrate a minimal state from the original_request; the rest of
-        # the chain only needs the refund context that was captured there.
+        # Preserve the exact owner, reason and policy binding before executing
+        # the first write. No return existed when this checkpoint was saved.
         resumed = WorkflowState(
-            user_email="",
+            user_email=original_request.user_email,
             order_id=original_request.order_id,
+            reason=original_request.reason,
+            approval=original_request.approval,
+            operation_id=original_request.operation_id,
             order_total=original_request.order_total,
             refund_amount=original_request.refund_amount,
             hitl_requested=True,
             hitl_approved=approved,
-            completed_steps=["check_eligibility", "initiate_return", "search_replacements", "hitl_gate"],
+            completed_steps=["check_eligibility", "hitl_gate"],
         )
         if not approved:
+            resumed.outcome = "REJECTED"
+            if (
+                original_request.operation_id
+                and original_request.approval
+                and original_request.approval.get("order_revision")
+            ):
+                from uuid import UUID
+
+                from shared.after_sales.operations import reject_workflow
+
+                intent = InitiateReturnInput(
+                    order_id=resumed.order_id,
+                    reason=resumed.reason or "Customer requested replacement",
+                    refund_method="store_credit",
+                )
+                receipt = await reject_workflow(intent, UUID(original_request.operation_id))
+                resumed.existing_operation = receipt
+                resumed.outcome = receipt["outcome"]
+                if receipt.get("success"):
+                    resumed.return_id = receipt["return_id"]
+                    await ctx.yield_output(resumed)
+                    return
             resumed.errors.append("hitl_gate: return rejected by reviewer")
             await ctx.yield_output(resumed)
             return
@@ -260,10 +415,10 @@ class ReturnAndReplaceWorkflow:
 
         return (
             WorkflowBuilder(start_executor=check, name="return-and-replace")
-            .add_edge(check, initiate)
+            .add_edge(check, gate)
+            .add_edge(gate, initiate)
             .add_edge(initiate, search)
-            .add_edge(search, gate)
-            .add_edge(gate, discount)
+            .add_edge(search, discount)
             .add_edge(discount, finalize)
             .build()
         )
@@ -286,7 +441,7 @@ class ReturnAndReplaceWorkflow:
 
         # Mirror the happy-path invariant: if no HITL was requested,
         # treat the run as implicitly approved.
-        if not final_state.hitl_requested and final_state.hitl_approved is None:
+        if not final_state.hitl_requested and final_state.hitl_approved is None and final_state.outcome == "SUCCEEDED":
             final_state.hitl_approved = True
 
         return final_state

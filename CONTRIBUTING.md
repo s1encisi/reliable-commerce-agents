@@ -14,8 +14,7 @@ cd agents/python && uv sync --extra dev      # Python (uv, not pip/poetry)
 cd web && pnpm install                        # frontend (pnpm, not npm/yarn)
 ```
 
-Requires Docker, `uv`, `pnpm`, and a real `OPENAI_API_KEY` (or `AZURE_OPENAI_*`)
-in `.env` — the LLM is never mocked.
+Requires Docker, `uv` and `pnpm`. The isolated portfolio demo and deterministic tests need no model credentials. Real model chat requires an explicitly configured provider; see `docs/portfolio-demo.md`.
 
 ## Conventions
 
@@ -34,7 +33,7 @@ Conventions live in [`CLAUDE.md`](./CLAUDE.md) (the canonical guide). Highlights
 Every change ships with tests.
 
 - **Python**: `cd agents/python && uv run pytest`. Integration tests use
-  **testcontainers** (real Postgres) and **never mock the LLM**. CI enforces
+  **testcontainers** (real Postgres). Deterministic workflow/tool tests make no live model calls; live-model tests are opt-in and skipped without credentials. CI enforces
   coverage on the unit-testable surface via `.coveragerc.ci` (the full 70% bar is
   in `pyproject.toml` for local/integration runs).
 - **Frontend**: `cd web && pnpm test` (vitest) + `pnpm exec playwright test`

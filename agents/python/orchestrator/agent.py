@@ -72,6 +72,10 @@ async def call_specialist_agent(
 
     stream_queue = current_stream_queue.get()
     headers = await build_a2a_headers()
+    from shared.after_sales.operations import current_operation_id
+
+    if current_operation_id.get():
+        headers["X-Return-Operation-Id"] = current_operation_id.get()
     request_body = {"message": message}
 
     with a2a_call_span("orchestrator", agent_name, url):

@@ -52,6 +52,8 @@ dependencies = [
     # Chapter 07 — observability: chapter code builds its own TracerProvider
     # and span exporters, so the SDK (not just the API) is a direct import.
     "opentelemetry-sdk==1.44.0",
+    # Honor SOCKS proxies used by local development environments.
+    "httpx[socks]>=0.28",
 ]
 
 [project.optional-dependencies]

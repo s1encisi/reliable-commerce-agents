@@ -60,6 +60,32 @@ TOOLS_HAPPY: dict[str, Any] = {
 }
 
 
+@pytest.mark.asyncio
+async def test_invalid_success_payload_is_not_announced_as_completed() -> None:
+    async def invalid(**kwargs: Any) -> dict[str, Any]:
+        return {"return_id": "unverified", "refund_amount": "corrupt"}
+
+    result = await ReturnAndReplaceWorkflow({**TOOLS_HAPPY, "initiate_return": invalid}).execute(
+        WorkflowState(user_email="a@b.com", order_id="o1", order_total=10, reason="wrong")
+    )
+    assert result.outcome == "UNKNOWN"
+    assert result.return_id is None
+    assert "finalize" not in result.completed_steps
+
+
+@pytest.mark.asyncio
+async def test_invalid_eligibility_type_stops_before_any_write() -> None:
+    async def invalid(**kwargs: Any) -> dict[str, Any]:
+        return {"eligible": "yes"}
+
+    result = await ReturnAndReplaceWorkflow({**TOOLS_HAPPY, "check_return_eligibility": invalid}).execute(
+        WorkflowState(user_email="a@b.com", order_id="o1", order_total=10, reason="wrong")
+    )
+    assert result.outcome == "FAILED_FINAL"
+    assert result.return_id is None
+    assert "initiate_return" not in result.completed_steps
+
+
 # ─────────────────────── Happy path (no HITL) ─────────────
 
 
@@ -136,8 +162,10 @@ async def test_hitl_request_emits_expected_payload() -> None:
     payload = request_payloads[0]
     assert payload.order_id == "o5"
     assert payload.order_total == high
-    assert payload.refund_amount == 120.0
-    assert payload.replacement_count == 2
+    # Approval now precedes every write and replacement lookup. This is an
+    # estimate of the requested amount, not a result from initiate_return.
+    assert payload.refund_amount == high
+    assert payload.replacement_count == 0
 
 
 # ─────────────────────── Threshold boundary ───────────────
@@ -168,7 +196,8 @@ async def test_failing_initiate_return_surfaces_error_without_finalize() -> None
     state = WorkflowState(user_email="a@b.com", order_id="o7", order_total=25.0)
     result = await ReturnAndReplaceWorkflow(tools).execute(state)
 
-    assert any("downstream unavailable" in e for e in result.errors)
+    assert any("could not be confirmed" in e for e in result.errors)
+    assert result.outcome == "UNKNOWN"
     assert "finalize" not in result.completed_steps
 
 

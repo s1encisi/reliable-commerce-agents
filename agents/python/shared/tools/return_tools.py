@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import uuid
 from typing import Annotated
 
 from agent_framework import tool
@@ -13,85 +12,33 @@ from shared.db import get_pool
 from shared.guardrails.roles import requires_role
 from shared.idempotency import idempotent
 from shared.tool_inputs import (
-    InitiateReturnInput,
     ProcessRefundInput,
     validation_error_payload,
 )
 
 
-@tool(name="check_return_eligibility", description="Check if an order is eligible for return. Orders must be delivered within the last 30 days.")
+@tool(
+    name="check_return_eligibility",
+    description="Check if an order is eligible for return. Orders must be delivered within the last 30 days.",
+)
 async def check_return_eligibility(
     order_id: Annotated[str, Field(description="UUID of the order to check")],
 ) -> dict:
-    email = current_user_email.get()
-    if not email:
-        return {"error": "No user context available"}
+    from shared.after_sales.service import check_eligibility
 
-    pool = get_pool()
-    async with pool.acquire() as conn:
-        order = await conn.fetchrow(
-            """SELECT o.id, o.status, o.total, o.created_at
-               FROM orders o
-               JOIN users u ON o.user_id = u.id
-               WHERE o.id = $1 AND u.email = $2""",
-            order_id, email,
-        )
-        if not order:
-            return {"error": f"Order not found or access denied: {order_id}"}
+    return await check_eligibility(order_id)
 
-        if order["status"] != "delivered":
-            return {
-                "eligible": False,
-                "order_id": str(order["id"]),
-                "status": order["status"],
-                "reason": f"Order must be in 'delivered' status to initiate a return. Current status: {order['status']}.",
-            }
 
-        # Check if already returned
-        existing_return = await conn.fetchrow(
-            "SELECT id, status FROM returns WHERE order_id = $1",
-            order_id,
-        )
-        if existing_return:
-            return {
-                "eligible": False,
-                "order_id": str(order["id"]),
-                "reason": f"A return already exists for this order (status: {existing_return['status']}).",
-                "return_id": str(existing_return["id"]),
-            }
+@tool(
+    name="get_return_operation_status",
+    description="Get the current user's persisted return operation outcome after a timeout or lost response.",
+)
+async def get_return_operation_status(
+    operation_id: Annotated[str, Field(description="Operation UUID returned by a prior return request")],
+) -> dict:
+    from shared.after_sales.service import get_operation
 
-        # Check 30-day delivery window
-        delivered_entry = await conn.fetchrow(
-            """SELECT timestamp FROM order_status_history
-               WHERE order_id = $1 AND status = 'delivered'
-               ORDER BY timestamp DESC LIMIT 1""",
-            order_id,
-        )
-
-        if delivered_entry:
-            days_since = await conn.fetchval(
-                "SELECT EXTRACT(DAY FROM NOW() - $1::timestamptz)::int",
-                delivered_entry["timestamp"],
-            )
-            if days_since > 30:
-                return {
-                    "eligible": False,
-                    "order_id": str(order["id"]),
-                    "reason": f"Return window expired. Order was delivered {days_since} days ago (30-day limit).",
-                    "delivered_at": delivered_entry["timestamp"].isoformat(),
-                }
-            days_remaining = 30 - days_since
-        else:
-            # No delivery timestamp in history — fall back to order created_at
-            days_remaining = 30
-
-        return {
-            "eligible": True,
-            "order_id": str(order["id"]),
-            "total": float(order["total"]),
-            "days_remaining": days_remaining,
-            "message": f"Order is eligible for return. {days_remaining} days remaining in the return window.",
-        }
+    return await get_operation(operation_id)
 
 
 @tool(
@@ -99,84 +46,16 @@ async def check_return_eligibility(
     description="Initiate a return for a delivered order. Generates a return shipping label.",
     approval_mode="always_require",
 )
-@idempotent("initiate_return")
 async def initiate_return(
     order_id: Annotated[str, Field(description="UUID of the order to return")],
     reason: Annotated[str, Field(description="Reason for the return")],
-    refund_method: Annotated[str, Field(description="Refund method: 'original_payment' or 'store_credit'")] = "original_payment",
+    refund_method: Annotated[
+        str, Field(description="Refund method: 'original_payment' or 'store_credit'")
+    ] = "original_payment",
 ) -> dict:
-    email = current_user_email.get()
-    if not email:
-        return {"error": "No user context available"}
+    from shared.after_sales.service import request_return
 
-    try:
-        validated = InitiateReturnInput(
-            order_id=order_id, reason=reason, refund_method=refund_method
-        )
-    except ValidationError as exc:
-        return validation_error_payload("initiate_return", exc)
-    order_id = str(validated.order_id)
-    reason = validated.reason
-    refund_method = validated.refund_method
-
-    pool = get_pool()
-    async with pool.acquire() as conn:
-        # Lock the order row + the existence-check on `returns` together
-        # so two concurrent agents can't both observe "no return yet"
-        # and create one each.
-        async with conn.transaction():
-            order = await conn.fetchrow(
-                """SELECT o.id, o.user_id, o.status, o.total
-                   FROM orders o
-                   JOIN users u ON o.user_id = u.id
-                   WHERE o.id = $1 AND u.email = $2
-                   FOR UPDATE OF o""",
-                order_id, email,
-            )
-            if not order:
-                return {"error": f"Order not found or access denied: {order_id}"}
-
-            if order["status"] != "delivered":
-                return {"error": f"Cannot return order in '{order['status']}' status. Only delivered orders can be returned."}
-
-            existing = await conn.fetchrow(
-                "SELECT id FROM returns WHERE order_id = $1",
-                order_id,
-            )
-            if existing:
-                return {"error": "A return has already been initiated for this order.", "return_id": str(existing["id"])}
-
-            label_token = uuid.uuid4().hex[:12]
-            return_label_url = f"/api/returns/{label_token}/label"
-
-            return_id = await conn.fetchval(
-                """INSERT INTO returns (order_id, user_id, reason, status, return_label_url, refund_method, refund_amount)
-                   VALUES ($1, $2, $3, 'requested', $4, $5, $6)
-                   RETURNING id""",
-                order_id, order["user_id"], reason, return_label_url, refund_method, order["total"],
-            )
-            await conn.execute(
-                "UPDATE orders SET status = 'returned' WHERE id = $1",
-                order_id,
-            )
-            await conn.execute(
-                """INSERT INTO order_status_history (order_id, status, notes)
-                   VALUES ($1, 'returned', $2)""",
-                order_id, f"Return initiated: {reason}",
-            )
-
-        refund_timeline = "instantly" if refund_method == "store_credit" else "within 5-7 business days"
-
-        return {
-            "return_id": str(return_id),
-            "order_id": str(order["id"]),
-            "status": "requested",
-            "reason": reason,
-            "refund_method": refund_method,
-            "refund_amount": float(order["total"]),
-            "return_label_url": return_label_url,
-            "message": f"Return initiated successfully. Print your return label and ship the items back. Refund of ${float(order['total']):.2f} will be processed {refund_timeline} after we receive the package.",
-        }
+    return await request_return(order_id, reason, refund_method)
 
 
 @tool(
@@ -210,7 +89,8 @@ async def process_refund(
                    JOIN users u ON r.user_id = u.id
                    WHERE r.id = $1 AND u.email = $2
                    FOR UPDATE OF r""",
-                return_id, email,
+                return_id,
+                email,
             )
             if not ret:
                 return {"error": f"Return not found or access denied: {return_id}"}
@@ -254,7 +134,8 @@ async def get_return_status(
             """SELECT o.id FROM orders o
                JOIN users u ON o.user_id = u.id
                WHERE o.id = $1 AND u.email = $2""",
-            order_id, email,
+            order_id,
+            email,
         )
         if not order_check:
             return {"error": f"Order not found or access denied: {order_id}"}

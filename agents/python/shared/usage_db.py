@@ -93,7 +93,7 @@ class UsageTimer:
         self._start: float = 0
         self.duration_ms: int = 0
 
-    def __enter__(self) -> "UsageTimer":
+    def __enter__(self) -> UsageTimer:
         self._start = time.perf_counter()
         return self
 
@@ -106,6 +106,7 @@ def _safe_json(data: dict | None) -> str | None:
     if data is None:
         return None
     import json
+
     try:
         return json.dumps(data, default=str)
     except (TypeError, ValueError):

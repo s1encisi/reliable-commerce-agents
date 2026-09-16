@@ -2,7 +2,7 @@
 
 ## 当前布局
 
-本仓库使用 main 作为工作分支。所有运行命令从仓库根目录执行，不依赖某台电脑的绝对路径。
+本轮升级使用独立开发分支 `feat/after-sales-reliability`；`main` 保留原快照，不合并升级内容。所有运行命令从仓库根目录执行，不依赖某台电脑的绝对路径。
 
 当前版本是经过保密检查的独立快照。原始本地提交历史已保存在本机 Git bundle 备份中，不属于本仓库上传的提交历史。上游源码基线为 26f47c494dd6b371312593e82f066713f6f56e9c，来源为 [原始项目](https://github.com/nitin27may/e-commerce-agents)。
 
@@ -13,7 +13,7 @@
     git status --short
     git worktree list
 
-预期分支为 main。查看本次修改：
+本轮预期分支为 `feat/after-sales-reliability`。查看本次修改：
 
     git diff --stat
     git diff --check

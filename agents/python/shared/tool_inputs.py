@@ -89,7 +89,8 @@ class ModifyOrderInput(BaseModel):
 
 class InitiateReturnInput(BaseModel):
     order_id: UUID
-    reason: str = Field(min_length=1, max_length=_REASON_MAX)
+    # Keep every return entry point within returns.reason VARCHAR(255).
+    reason: str = Field(min_length=1, max_length=255)
     refund_method: str = Field(default="original_payment")
 
     model_config = {"extra": "forbid", "str_strip_whitespace": True}

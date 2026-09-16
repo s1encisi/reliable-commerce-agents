@@ -219,11 +219,11 @@ async def test_return_replace_mode_requires_signed_in_user() -> None:
 
 
 @pytest.mark.asyncio
-async def test_return_replace_mode_falls_back_to_most_recent_order(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_return_replace_mode_accepts_only_unambiguous_order(monkeypatch: pytest.MonkeyPatch) -> None:
     import order_management.tools as order_tools
 
     async def _fake_list(*, limit: int) -> list[dict[str, Any]]:
-        assert limit == 1
+        assert limit == 2
         return [{"order_id": ORDER_UUID, "total": 50.0}]
 
     monkeypatch.setattr(order_tools, "get_user_orders", _fake_list)

@@ -146,9 +146,26 @@ def test_adapt_step_handles_missing_agent_key() -> None:
 def test_jsonable_handles_dataclass_pydantic_and_plain_values() -> None:
     from workflows.return_replace import ReturnApprovalRequest
 
-    req = ReturnApprovalRequest(order_id="o1", order_total=100.0, refund_amount=20.0, replacement_count=1)
+    req = ReturnApprovalRequest(
+        order_id="o1",
+        order_total=100.0,
+        refund_amount=20.0,
+        replacement_count=1,
+        user_email="buyer@example.test",
+        reason="Wrong size",
+        approval={"policy_version": "returns-v1"},
+    )
     result = _jsonable(req)
-    assert result == {"order_id": "o1", "order_total": 100.0, "refund_amount": 20.0, "replacement_count": 1}
+    assert result == {
+        "order_id": "o1",
+        "order_total": 100.0,
+        "refund_amount": 20.0,
+        "replacement_count": 1,
+        "user_email": "buyer@example.test",
+        "reason": "Wrong size",
+        "approval": {"policy_version": "returns-v1"},
+        "operation_id": None,
+    }
     assert _jsonable(None) is None
     assert _jsonable("text") == "text"
     assert _jsonable([1, "a", None]) == [1, "a", None]

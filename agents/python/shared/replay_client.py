@@ -117,19 +117,17 @@ def _canonical_request(messages: Any, options: dict[str, Any] | None) -> dict[st
 # Volatile values that live in tool-result payloads. Both are database-derived
 # and differ on every reseed, which is the whole reason _normalize_for_hash
 # exists — see its docstring.
-_UUID_RE = re.compile(
-    r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"
-)
+_UUID_RE = re.compile(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b")
 # Anchored, and longest-match-first: a full timestamp is consumed before the
 # bare-month arm can nibble its leading "YYYY-MM". The month arm exists because
 # get_sentiment_trend buckets by DATE_TRUNC('month', ...) and returns labels
 # like "2026-08", which shift with the seed date exactly like a full timestamp.
 _TIMESTAMP_RE = re.compile(
-    r"\b\d{4}-\d{2}"                           # year-month
-    r"(?:-\d{2}"                                # optional day
-    r"(?:[T ]\d{2}:\d{2}:\d{2}"                # optional time
-    r"(?:\.\d+)?"                               # optional fractional seconds
-    r"(?:Z|[+-]\d{2}:?\d{2})?)?"                # optional timezone
+    r"\b\d{4}-\d{2}"  # year-month
+    r"(?:-\d{2}"  # optional day
+    r"(?:[T ]\d{2}:\d{2}:\d{2}"  # optional time
+    r"(?:\.\d+)?"  # optional fractional seconds
+    r"(?:Z|[+-]\d{2}:?\d{2})?)?"  # optional timezone
     r")?\b"
 )
 
@@ -199,9 +197,7 @@ def _ordinalize_call_ids(messages: list[Any]) -> list[Any]:
             if call_id is None:
                 contents.append(content)
                 continue
-            contents.append(
-                {**content, "call_id": seen.setdefault(call_id, f"call_{len(seen)}")}
-            )
+            contents.append({**content, "call_id": seen.setdefault(call_id, f"call_{len(seen)}")})
         out.append({**message, "contents": contents})
     return out
 
@@ -243,8 +239,7 @@ def _normalize_for_hash(canonical: dict[str, Any]) -> dict[str, Any]:
     tutorial fixture for no benefit.
     """
     messages = [
-        _scrub(m) if isinstance(m, dict) and m.get("role") == "tool" else m
-        for m in canonical.get("messages", [])
+        _scrub(m) if isinstance(m, dict) and m.get("role") == "tool" else m for m in canonical.get("messages", [])
     ]
     return {**canonical, "messages": _ordinalize_call_ids(messages)}
 

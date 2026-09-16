@@ -97,12 +97,21 @@ class StepRecorderMiddleware(FunctionMiddleware):
             steps = current_steps.get()
             if steps is not None:
                 result = getattr(context, "result", None)
+                from shared.after_sales.contracts import Outcome
+
+                outcome = result.get("outcome") if isinstance(result, dict) else None
                 steps.append(
                     {
                         "tool_name": tool_name,
                         "tool_input": _summarize(tool_input),
                         "tool_output": _summarize(result, 400),
                         "status": status,
+                        "business_outcome": outcome
+                        if isinstance(outcome, str) and outcome in {s.value for s in Outcome}
+                        else None,
+                        "business_success": result.get("success")
+                        if isinstance(result, dict) and isinstance(result.get("success"), bool)
+                        else None,
                         "duration_ms": int((time.perf_counter() - start) * 1000),
                         "provenance": {"source": f"tool:{tool_name}", "row_ids": _extract_row_ids(result)},
                     }

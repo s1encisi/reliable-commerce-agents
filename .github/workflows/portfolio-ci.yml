@@ -1,0 +1,52 @@
+name: Portfolio verification
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/after-sales-reliability]
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      OPENAI_API_KEY: ""
+      AZURE_OPENAI_KEY: ""
+      AZURE_OPENAI_API_KEY: ""
+      RECORD: "false"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v4
+      - run: uv python install 3.12
+      - run: uv sync --project agents/python --frozen --all-packages --extra dev
+      - run: uv run --project agents/python --no-sync ruff check agents/python
+      - run: uv run --project agents/python --no-sync ruff format --check agents/python
+      - run: uv run --project agents/python --no-sync pytest agents/python/tests -q
+      - run: uv run --project agents/python --no-sync python scripts/build_docs_site.py --check
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: pnpm --dir web install --frozen-lockfile
+      - run: pnpm --dir web lint
+      - run: pnpm --dir web exec tsc --noEmit
+      - run: pnpm --dir web exec vitest run --maxWorkers=1
+      - run: pnpm --dir web build

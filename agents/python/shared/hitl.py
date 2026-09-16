@@ -36,13 +36,15 @@ logger = logging.getLogger(__name__)
 
 # Tools that require human approval before executing.
 # Matches the @tool(approval_mode="always_require") decorators.
-HITL_GATED_TOOLS: frozenset[str] = frozenset({
-    "cancel_order",
-    "modify_order",
-    "process_refund",
-    "initiate_return",
-    "place_backorder",
-})
+HITL_GATED_TOOLS: frozenset[str] = frozenset(
+    {
+        "cancel_order",
+        "modify_order",
+        "process_refund",
+        "initiate_return",
+        "place_backorder",
+    }
+)
 
 
 # ─────────────────────── Middleware ─────────────────────────────────────────
@@ -70,11 +72,7 @@ class HITLFunctionMiddleware(FunctionMiddleware):
             return
 
         fn = getattr(context, "function", None)
-        tool_name: str = (
-            getattr(fn, "name", None)
-            or getattr(fn, "__name__", None)
-            or ""
-        )
+        tool_name: str = getattr(fn, "name", None) or getattr(fn, "__name__", None) or ""
 
         if tool_name not in HITL_GATED_TOOLS:
             await call_next()
@@ -92,6 +90,22 @@ class HITLFunctionMiddleware(FunctionMiddleware):
 
         # Find the agent name from the context hierarchy
         agent_name = _extract_agent_name(context)
+
+        if tool_name == "initiate_return":
+            from shared.after_sales.service import failure, request_return
+
+            try:
+                # The operation service queues once, or replays a confirmed
+                # receipt. It never converts an existing success into a new queue.
+                context.result = await request_return(**raw_args, force_approval=True)
+            except (TypeError, ValueError):
+                context.result = failure("VALIDATION_ERROR", "Invalid return request parameters.")
+            except Exception:
+                logger.exception("Return approval preparation failed")
+                context.result = failure(
+                    "DEPENDENCY_UNAVAILABLE", "Could not confirm the return request. Check its status."
+                )
+            return
 
         try:
             request_id = await _create_hitl_request(
@@ -177,7 +191,19 @@ async def _create_hitl_request(
     tool_name: str,
     tool_input: dict,
 ) -> UUID:
+    if tool_name == "initiate_return":
+        from shared.after_sales.service import request_return
+
+        identity_token = current_user_email.set(user_email)
+        try:
+            result = await request_return(**tool_input, force_approval=True)
+        finally:
+            current_user_email.reset(identity_token)
+        if result.get("status") != "pending_approval":
+            raise ValueError("Return is not awaiting approval")
+        return UUID(result["request_id"])
     from shared.db import get_pool
+
     pool = get_pool()
     row = await pool.fetchrow(
         """INSERT INTO tool_approval_requests
@@ -199,6 +225,7 @@ async def list_hitl_requests(
 ) -> list[dict]:
     """Return HITL requests for the admin approval queue."""
     from shared.db import get_pool
+
     pool = get_pool()
 
     where = "WHERE status = $1" if status else ""
@@ -235,10 +262,9 @@ async def list_hitl_requests(
 
 async def get_hitl_request(request_id: str) -> dict | None:
     from shared.db import get_pool
+
     pool = get_pool()
-    row = await pool.fetchrow(
-        "SELECT * FROM tool_approval_requests WHERE id = $1", request_id
-    )
+    row = await pool.fetchrow("SELECT * FROM tool_approval_requests WHERE id = $1", request_id)
     if not row:
         return None
     return {
@@ -266,6 +292,7 @@ async def claim_hitl_request(request_id: str) -> dict | None:
     "someone else got here first" and refuse, not retry.
     """
     from shared.db import get_pool
+
     pool = get_pool()
     row = await pool.fetchrow(
         """UPDATE tool_approval_requests
@@ -301,18 +328,31 @@ async def resolve_hitl_request(
     and this returns False, same as before.
     """
     from shared.db import get_pool
+
     pool = get_pool()
-    final_status = "executed" if (decision == "approved" and execution_result) else decision
+    final_status = decision
+    if decision == "denied":
+        from shared.after_sales.operations import deny_tool_approval
+
+        resolved = await deny_tool_approval(request_id, admin_email, note)
+        if resolved is not None:
+            return resolved
+    if decision == "approved" and execution_result:
+        failed = execution_result.get("success") is False or "error" in execution_result
+        # Keep the existing approval-status vocabulary for the admin UI.
+        # A decision can be approved while execution_result rejects the action.
+        final_status = "approved" if failed else "executed"
     result = await pool.execute(
         """UPDATE tool_approval_requests
            SET status = $1, admin_note = $2, approved_by = $3,
                execution_result = $4::jsonb, resolved_at = NOW()
-           WHERE id = $5 AND status IN ('pending', 'processing')""",
+           WHERE id = $5 AND (status = 'pending' OR (status = 'processing' AND $6 = 'approved'))""",
         final_status,
         note,
         admin_email,
         json.dumps(execution_result) if execution_result else None,
         request_id,
+        decision,
     )
     return result.endswith("1")  # "UPDATE 1" → updated
 
@@ -320,28 +360,69 @@ async def resolve_hitl_request(
 # ─────────────────────── Action executor ────────────────────────────────────
 
 
-@idempotent("hitl_execute", identity_fn=lambda tool_name, tool_input, user_email: user_email)
 async def execute_approved_action(
     tool_name: str,
     tool_input: dict,
     user_email: str,
+    approval_id: str | None = None,
 ) -> dict:
-    """Directly execute a previously approved high-stakes action.
+    """Dispatch returns through version-bound approval; preserve other tools' cache keys."""
+    if tool_name == "initiate_return":
+        return await _execute_approved_return(tool_name, tool_input, user_email, approval_id)
+    return await _execute_legacy_action(tool_name, tool_input, user_email)
 
-    Called by the admin approve endpoint so the LLM loop does not need to
-    be re-run. Each tool_name has a corresponding DB operation.
 
-    Idempotent per (user_email, tool_name, tool_input): for a given HITL
-    request, those three values are drawn from the same immutable
-    ``tool_approval_requests`` row every time, so two overlapping approve
-    attempts on the *same* request (a double-click, a route-level retry)
-    hash identically and the second replays the first's cached result
-    instead of re-executing — on top of, not instead of, the atomic
-    ``status = 'pending' -> 'processing'`` claim the approve route takes
-    before calling this at all (see ``orchestrator/routes/legacy.py``'s
-    ``approve_hitl_request``).
-    """
+async def _execute_approved_return(
+    tool_name: str,
+    tool_input: dict,
+    user_email: str,
+    approval_id: str | None,
+) -> dict:
+    """Only a claimed server-side approval may authorize the shared return service."""
     from shared.db import get_pool
+
+    pool = get_pool()
+    from shared.after_sales.approval import ReturnApproval, current_return_approval
+    from shared.after_sales.service import failure, request_return
+
+    if approval_id is None:
+        return failure("APPROVAL_REQUIRED", "A claimed approval record is required.")
+    row = await pool.fetchrow(
+        "SELECT user_email, tool_name, tool_input, status FROM tool_approval_requests WHERE id = $1",
+        approval_id,
+    )
+    if (
+        row is None
+        or row["status"] not in {"processing", "executed", "approved"}
+        or row["user_email"] != user_email
+        or row["tool_name"] != tool_name
+        or _decode_jsonb(row["tool_input"]) != tool_input
+    ):
+        return failure("APPROVAL_INVALID", "Approval does not authorize this return request.")
+    params = dict(tool_input)
+    from shared.after_sales.operations import current_operation_id
+
+    try:
+        approval = ReturnApproval.from_dict(params.pop("_return_approval"))
+        operation_id = str(UUID(params.pop("_operation_id")))
+    except (KeyError, TypeError, ValueError):
+        return failure("APPROVAL_STALE", "This approval predates the return policy. Request fresh approval.")
+    identity_token = current_user_email.set(user_email)
+    approval_token = current_return_approval.set(approval)
+    operation_token = current_operation_id.set(operation_id)
+    try:
+        return await request_return(**params)
+    finally:
+        current_return_approval.reset(approval_token)
+        current_operation_id.reset(operation_token)
+        current_user_email.reset(identity_token)
+
+
+@idempotent("hitl_execute", identity_fn=lambda tool_name, tool_input, user_email: user_email)
+async def _execute_legacy_action(tool_name: str, tool_input: dict, user_email: str) -> dict:
+    """Existing non-return actions keep their original idempotency protocol."""
+    from shared.db import get_pool
+
     pool = get_pool()
 
     if tool_name == "cancel_order":
@@ -401,49 +482,11 @@ async def execute_approved_action(
             }
         return {"success": False, "message": "Return not found, already resolved, or access denied."}
 
-    if tool_name == "initiate_return":
-        order_id = tool_input.get("order_id", "")
-        reason = tool_input.get("reason", "Admin-approved return")
-        async with pool.acquire() as conn:
-            # NOT EXISTS guards against a second run inserting a second
-            # returns row for the same order (a double-execution here
-            # otherwise has no status/uniqueness guard at all, unlike
-            # cancel_order's WHERE ... status IN (...) or process_refund's
-            # WHERE ... status NOT IN (...) above).
-            row = await conn.fetchrow(
-                """INSERT INTO returns (order_id, user_id, reason, status, refund_method)
-                   SELECT o.id, o.user_id, $3, 'approved', 'original_payment'
-                   FROM orders o
-                   JOIN users u ON o.user_id = u.id
-                   WHERE o.id = $1 AND u.email = $2
-                     AND NOT EXISTS (SELECT 1 FROM returns r WHERE r.order_id = o.id)
-                   RETURNING id""",
-                order_id,
-                user_email,
-                reason,
-            )
-        if row:
-            return {
-                "success": True,
-                "return_id": str(row["id"]),
-                "message": "Return approved and initiated.",
-            }
-        existing = await pool.fetchval(
-            "SELECT id FROM returns WHERE order_id = $1",
-            order_id,
-        )
-        if existing:
-            return {
-                "success": False,
-                "return_id": str(existing),
-                "message": "A return has already been initiated for this order.",
-            }
-        return {"success": False, "message": "Order not found."}
-
     if tool_name == "modify_order":
         order_id = tool_input.get("order_id", "")
         new_address = tool_input.get("new_address", {})
         import json as _json
+
         async with pool.acquire() as conn:
             result = await conn.execute(
                 """UPDATE orders SET shipping_address = $3::jsonb, updated_at = NOW()

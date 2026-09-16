@@ -1,3 +1,11 @@
+import { returnOperationSchema, type ReturnOperation } from "./return-operation";
+
+export class ApiError extends Error {
+  constructor(public readonly status: number, public readonly data: Record<string, unknown>) {
+    super(typeof data.detail === "string" ? data.detail : typeof data.error === "string" ? data.error : `API error ${status}`);
+  }
+}
+
 /**
  * Base URL for API calls. Empty by default: the browser talks to its own
  * origin and `src/app/api/[...path]/route.ts` forwards to the orchestrator, so
@@ -245,7 +253,7 @@ class ApiClient {
 
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      throw new Error(body.detail || body.error || `API error ${res.status}`);
+      throw new ApiError(res.status, body);
     }
 
     return res.json();
@@ -386,7 +394,7 @@ class ApiClient {
 
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      throw new Error(body.detail || body.error || `API error ${res.status}`);
+      throw new ApiError(res.status, body);
     }
 
     const reader = res.body?.getReader();
@@ -823,18 +831,24 @@ class ApiClient {
     });
   }
 
-  initiateReturn(orderId: string, reason: string, refundMethod: string) {
-    return this.request<{
-      return_id: string;
-      order_id: string;
-      status: string;
-      return_label_url: string;
-      refund_amount: number;
-      refund_method: string;
-    }>(`/api/orders/${orderId}/return`, {
-      method: "POST",
-      body: JSON.stringify({ reason, refund_method: refundMethod }),
-    });
+  async initiateReturn(orderId: string, reason: string, refundMethod: string, operationId: string): Promise<ReturnOperation> {
+    try {
+      const result = await this.request<unknown>(`/api/orders/${orderId}/return`, {
+        method: "POST",
+        headers: { "Idempotency-Key": operationId },
+        body: JSON.stringify({ reason, refund_method: refundMethod }),
+      });
+      return returnOperationSchema.parse(result);
+    } catch (error) {
+      if (error instanceof ApiError && error.data.outcome === "AWAITING_APPROVAL") {
+        return returnOperationSchema.parse(error.data);
+      }
+      throw error;
+    }
+  }
+
+  async returnOperation(operationId: string): Promise<ReturnOperation> {
+    return returnOperationSchema.parse(await this.request<unknown>(`/api/returns/operations/${operationId}`));
   }
 
   // Orders

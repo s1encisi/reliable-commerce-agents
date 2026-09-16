@@ -76,6 +76,15 @@ def _apply_forwarded_identity(request: Request, agent_name: str) -> str | None:
         if settings.GUARDRAILS_STRICT_IDENTITY:
             return "Invalid forwarded identity"
 
+    from uuid import UUID
+
+    from shared.after_sales.operations import current_operation_id
+
+    operation_id = request.headers.get("X-Return-Operation-Id")
+    try:
+        current_operation_id.set(str(UUID(operation_id)) if operation_id else None)
+    except ValueError:
+        return "Invalid return operation identifier"
     current_user_email.set(email)
     current_user_role.set(role)
     current_session_id.set(session_id)
