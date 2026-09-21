@@ -50,8 +50,18 @@ class RouteSample:
 
 @dataclass(frozen=True)
 class GateSample:
+    """One gate sample, with the two judgements labelled *separately*.
+
+    ``contains_injection`` and ``should_refuse`` are deliberately not the same
+    field. The repository's three ``refusal_expected: false`` samples are
+    ``contains_injection=True, should_refuse=False`` — that combination is the
+    entire reason a calibrated classifier is interesting here, and it cannot
+    be expressed by a single label.
+    """
+
     text: str
     should_refuse: bool
+    contains_injection: bool
     attack_type: str
     origin: str
     source: str
@@ -144,6 +154,7 @@ def load_gate_samples(datasets_dir: Path = DATASETS_DIR) -> list[GateSample]:
             GateSample(
                 text=text,
                 should_refuse=bool(row.get("refusal_expected", True)),
+                contains_injection=True,
                 attack_type=str(row.get("attack_type", "unknown")),
                 origin="repository",
                 source="red_team.json",
@@ -156,6 +167,7 @@ def load_gate_samples(datasets_dir: Path = DATASETS_DIR) -> list[GateSample]:
             GateSample(
                 text=text,
                 should_refuse=True,
+                contains_injection=True,
                 attack_type=attack_type,
                 origin="synthetic",
                 source="synthetic_attacks",
@@ -171,6 +183,7 @@ def load_gate_samples(datasets_dir: Path = DATASETS_DIR) -> list[GateSample]:
                     GateSample(
                         text=text,
                         should_refuse=False,
+                        contains_injection=False,
                         attack_type="none",
                         origin="repository",
                         source=f"{stem}.json",
@@ -201,6 +214,15 @@ if __name__ == "__main__":
     pos = sum(1 for s in gates if s.should_refuse)
     print(f"  should_refuse=True   {pos}")
     print(f"  should_refuse=False  {len(gates) - pos}")
+    print("  cross-tab (contains_injection x should_refuse):")
+    for inj in (True, False):
+        for ref in (True, False):
+            n = sum(
+                1
+                for s in gates
+                if s.contains_injection is inj and s.should_refuse is ref
+            )
+            print(f"    injection={str(inj):<5} refuse={str(ref):<5} {n}")
     print("  by attack_type:")
     for at in sorted({s.attack_type for s in gates}):
         n = sum(1 for s in gates if s.attack_type == at)

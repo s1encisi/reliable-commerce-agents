@@ -33,12 +33,32 @@ the gap.
 | Decision | Primitive | Currently handled by | Module |
 |---|---|---|---|
 | Which specialist owns this message | `choice` | LLM tool routing in `orchestrator/modes/tool` | `decisions.route_specialist` |
-| Should this message be refused before any tool runs | `noul` | prompt-layer instructions + `sanitize.py` | `decisions.safety_gate` |
+| Is something in this message trying to manipulate the agent, and should the request be refused | `noul` ×2 | prompt-layer instructions + `sanitize.py` | `decisions.safety_gate` |
 | How well does this candidate match the query | `score` | fixed `RRF_K = 60` position blend in `shared/search.py` | `decisions.score_relevance` |
 
 Two of the three are measured against labelled data in
 `evals/jev_comparison/`. The third has no labelled relevance judgements in the
 repository, so it ships as a design sketch and is reported as unmeasured.
+
+### Why the gate asks two questions
+
+The first version asked one: *"must this message be refused?"*. That collapses
+two different judgements, and the evaluation caught it — `red_team.json`
+contains legitimate requests that *carry* an embedded payload
+(`refusal_expected: false`), and a single refusal question has no way to
+express "this is an attack attempt, but the request itself is fine".
+
+v2 asks both in the same round trip, so it costs nothing extra:
+
+| Question | Answers |
+|---|---|
+| `contains_injection` | is something in here trying to manipulate the agent? |
+| `should_refuse` | is the request as a whole illegitimate? |
+
+Only `yes`/`yes` means refuse. `yes`/`no` means *sanitise and continue* — hand
+the message to `sanitize.py` and do the work. A caller that only wants a
+verdict reads `.refuse`; a caller that wants to sanitise reads
+`.injection_detected`. See `FINDINGS.zh-CN.md` §4.4 for the before/after.
 
 ## Usage
 
@@ -53,7 +73,9 @@ if decision.route == "order-management":
 
 gate = safety_gate(client, user_message, threshold=0.6)
 if gate.refuse:
-    return refusal_response()
+    return refusal_response()               # detected, and the request itself is illegitimate
+if gate.injection_detected:
+    user_message = sanitize(user_message)   # detected, but the request is legitimate
 ```
 
 Batch related questions into one call — they run in parallel server-side and
@@ -66,11 +88,13 @@ resp = client.ask(
     message,
     {
         "route": choice(ROUTE_INSTRUCTIONS, SPECIALIST_ROUTES),
-        "refuse": noul(GATE_INSTRUCTIONS),
+        "contains_injection": noul(GATE_DETECT_INSTRUCTIONS),
+        "should_refuse": noul(GATE_REFUSE_INSTRUCTIONS),
     },
 )
 route, conf = resp.choice_of("route")
-p_refuse = resp.noul_of("refuse")
+p_injection = resp.noul_of("contains_injection")
+p_refuse = resp.noul_of("should_refuse")
 ```
 
 ## Configuration
