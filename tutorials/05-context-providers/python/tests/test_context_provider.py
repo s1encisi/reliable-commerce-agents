@@ -1,8 +1,8 @@
 """
-Chapter 05 — Context Providers: tests.
+第 05 章 —— 上下文提供器：测试。
 
-Unit tests drive the provider directly and capture what reaches the LLM.
-Integration tests prove real Azure OpenAI answers correctly with injected context.
+单元测试直接驱动该提供器，并捕获最终送达 LLM 的内容。
+集成测试证明真实的 Azure OpenAI 在注入上下文后能正确作答。
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from main import FIXTURES_DIR, INSTRUCTIONS, UserProfileProvider, ask, build_age
 
 
 class CannedChatClient(BaseChatClient):
-    """Chat client that records options + messages so we can assert what the provider injected."""
+    """记录 options 与 messages 的 chat client，好让我们断言提供器注入了什么。"""
 
     def __init__(self, *canned: str) -> None:
         super().__init__()
@@ -53,7 +53,7 @@ class CannedChatClient(BaseChatClient):
         return _return()
 
 
-# ─────────── Unit tests (no LLM) ───────────
+# ─────────── 单元测试（不涉及 LLM） ───────────
 
 
 @pytest.mark.asyncio
@@ -64,7 +64,7 @@ async def test_provider_injects_user_into_instructions() -> None:
 
     await ask(agent, "hello")
 
-    # Exactly one chat call.
+    # 恰好一次 chat 调用。
     assert len(client.calls) == 1
     _, options = client.calls[0]
     instructions = options.get("instructions") or ""
@@ -76,7 +76,7 @@ async def test_provider_injects_user_into_instructions() -> None:
 
 @pytest.mark.asyncio
 async def test_provider_populates_state_dict() -> None:
-    """The provider's state dict entry should carry structured user data for tools."""
+    """该提供器写入 state 字典的条目，应当带上供工具使用的结构化用户数据。"""
     provider = UserProfileProvider(email="bob@example.com", name="Bob")
     state: dict[str, Any] = {}
 
@@ -98,7 +98,7 @@ async def test_provider_populates_state_dict() -> None:
 
 @pytest.mark.asyncio
 async def test_multiple_users_see_different_context() -> None:
-    """A fresh provider + agent per user must never leak context between them."""
+    """每位用户各自全新的提供器 + 智能体，上下文绝不能在他们之间泄漏。"""
     alice_client = CannedChatClient("hi alice")
     alice = build_agent(
         UserProfileProvider(email="alice@example.com", name="Alice", loyalty_tier="gold"),
@@ -120,27 +120,27 @@ async def test_multiple_users_see_different_context() -> None:
     assert "Bob" in bob_instructions and "Alice" not in bob_instructions
 
 
-# ─────────── Replay test (no credentials, runs in CI) ───────────
+# ─────────── 回放测试（无需凭据，可在 CI 中运行） ───────────
 
 
 @pytest.mark.asyncio
 async def test_replay_uses_injected_name(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Plays back tests/fixtures/replay/ — no network, no credentials.
+    """回放 tests/fixtures/replay/ —— 不走网络、不需凭据。
 
-    Recorded once against a real LLM (test_real_llm_uses_injected_name
-    below, run with RECORD=true) and committed.
+    曾针对真实 LLM 录制过一次（即下方的 test_real_llm_uses_injected_name，
+    以 RECORD=true 运行），随后提交入库。
     """
     if not any(FIXTURES_DIR.glob("*.json")):
-        pytest.skip(f"no recorded fixtures in {FIXTURES_DIR} — run with RECORD=true first")
+        pytest.skip(f"{FIXTURES_DIR} 中没有已录制的夹具 —— 请先以 RECORD=true 运行")
     monkeypatch.setenv("LLM_PROVIDER", "replay")
     agent = build_agent(UserProfileProvider(email="alice@example.com", name="Alice", loyalty_tier="gold"))
     answer = await ask(agent, "Greet me by name and tell me my loyalty tier.")
     lowered = answer.lower()
-    assert "alice" in lowered, f"expected 'alice' in answer, got: {answer!r}"
-    assert "gold" in lowered, f"expected 'gold' tier in answer, got: {answer!r}"
+    assert "alice" in lowered, f"期望答案中出现 'alice'，实际为：{answer!r}"
+    assert "gold" in lowered, f"期望答案中出现 'gold' 等级，实际为：{answer!r}"
 
 
-# ─────────── Integration (real LLM) ───────────
+# ─────────── 集成测试（真实 LLM） ───────────
 
 
 def _llm_available() -> bool:
@@ -156,10 +156,10 @@ def _llm_available() -> bool:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-@pytest.mark.skipif(not _llm_available(), reason="no LLM credentials in .env")
+@pytest.mark.skipif(not _llm_available(), reason=".env 中没有 LLM 凭据")
 async def test_real_llm_uses_injected_name() -> None:
     agent = build_agent(UserProfileProvider(email="alice@example.com", name="Alice", loyalty_tier="gold"))
     answer = await ask(agent, "Greet me by name and tell me my loyalty tier.")
     lowered = answer.lower()
-    assert "alice" in lowered, f"expected 'alice' in answer, got: {answer!r}"
-    assert "gold" in lowered, f"expected 'gold' tier in answer, got: {answer!r}"
+    assert "alice" in lowered, f"期望答案中出现 'alice'，实际为：{answer!r}"
+    assert "gold" in lowered, f"期望答案中出现 'gold' 等级，实际为：{answer!r}"

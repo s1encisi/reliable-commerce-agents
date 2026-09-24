@@ -1,0 +1,10 @@
+{
+  "otlp_to_prometheus": "passed",
+  "otlp_to_rotating_log_file": "passed",
+  "prometheus_rules": {
+    "exit_code": 0,
+    "output": "Checking /alerts.yml\n  SUCCESS: 2 rules found\n\n"
+  },
+  "prometheus_scrape_query_and_rules_loaded": "passed",
+  "log_volume_init_tools": "passed"
+}

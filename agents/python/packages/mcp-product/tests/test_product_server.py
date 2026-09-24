@@ -1,10 +1,10 @@
-"""Tests for ecommerce-mcp-product server.
+"""ecommerce-mcp-product 服务的测试。
 
-Two tiers:
-- Registration smoke tests (no DB) — verify tool names are registered and
-  the ASGI app is importable. These always run in CI.
-- Integration tests (DB via testcontainers) — verify actual SQL queries against
-  a real Postgres container with the production schema. Marked `integration`.
+分两个层次：
+- 注册冒烟测试（不涉及数据库）—— 校验工具名称已注册，且 ASGI 应用可导入。
+  这些测试在 CI 中总会运行。
+- 集成测试（通过 testcontainers 连接数据库）—— 在带生产 schema 的真实
+  Postgres 容器上校验实际的 SQL 查询。标记为 `integration`。
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import pytest_asyncio
 
 from ecommerce_mcp_product.server import _get_pool, app, mcp
 
-# ─────────────────────── Registration smoke ─────────────────────────────────
+# ─────────────────────── 注册冒烟测试 ─────────────────────────────────
 
 
 def test_mcp_server_name() -> None:
@@ -23,7 +23,7 @@ def test_mcp_server_name() -> None:
 
 
 def test_tool_names_registered() -> None:
-    """All 5 product tools must be discoverable without a DB connection."""
+    """全部 5 个商品工具都必须能在无数据库连接的情况下被发现。"""
     tool_names = {t.name for t in mcp._tool_manager.list_tools()}
     expected = {
         "search_products",
@@ -36,24 +36,24 @@ def test_tool_names_registered() -> None:
 
 
 def test_asgi_app_importable() -> None:
-    """app must be a callable ASGI app (uvicorn entry-point check)."""
+    """app 必须是可调用的 ASGI 应用（uvicorn 入口点检查）。"""
     assert callable(app)
 
 
 def test_get_pool_raises_before_startup() -> None:
-    """_get_pool() must fail loudly if called before lifespan starts."""
+    """若在 lifespan 启动前调用，_get_pool() 必须显式报错。"""
     with pytest.raises(RuntimeError, match="DB pool not initialized"):
         _get_pool()
 
 
-# ─────────────────────── Integration (live DB) ──────────────────────────────
+# ─────────────────────── 集成测试（真实数据库） ──────────────────────────────
 
 
 @pytest.fixture
 async def product_id(postgres_pool: asyncpg.Pool) -> str:
-    """Insert a minimal product row and return its id."""
+    """插入一条最小化的商品记录并返回其 id。"""
     async with postgres_pool.acquire() as conn:
-        # Insert a seller first (users table)
+        # 先插入商家（users 表）
         seller_id = await conn.fetchval(
             """INSERT INTO users (email, name, role, password_hash)
                VALUES ('seller@test.com', 'Test Seller', 'seller', 'hash')
@@ -77,7 +77,7 @@ async def product_id(postgres_pool: asyncpg.Pool) -> str:
 
 @pytest_asyncio.fixture
 async def _patched_pool(postgres_pool: asyncpg.Pool, monkeypatch: pytest.MonkeyPatch):
-    """Patch the module-level _pool so tool functions use the test container."""
+    """对模块级 _pool 打补丁，使工具函数使用测试容器。"""
     import ecommerce_mcp_product.server as srv
 
     monkeypatch.setattr(srv, "_pool", postgres_pool)
@@ -151,22 +151,21 @@ async def test_get_price_history_no_history(
     result = await get_price_history(product_id=product_id, days=30)
     assert "error" not in result
     assert result["product_id"] == product_id
-    # No price_history rows seeded → summary field present
+    # 没有种入 price_history 记录 → 存在 summary 字段
     assert "current_price" in result
 
 
-# ─────────────────────── Full-text search parity ────────────────────────────
+# ─────────────────────── 全文检索一致性对齐 ────────────────────────────
 #
-# The MCP path must answer the same queries the same way as the native
-# product_discovery tool. This server used to LIKE the whole query as one
-# `%phrase%`, so any multi-word query needed an exact substring — far stricter
-# than the native tool's per-word matching, and a real behavior difference
-# between MCP_ENABLED=true and false.
+# MCP 路径必须以相同方式回答与原生 product_discovery 工具相同的查询。
+# 本服务过去是把整个查询当作一个 `%phrase%` 做 LIKE，因此任何多词查询
+# 都需要精确子串匹配 —— 远比原生工具的逐词匹配严格，是 MCP_ENABLED=true
+# 与 false 之间真实存在的行为差异。
 
 
 @pytest_asyncio.fixture
 async def fts_catalog(postgres_pool: asyncpg.Pool) -> dict[str, str]:
-    """Two products whose terms differ morphologically from the test queries."""
+    """两个商品的用词在形态上与测试查询不同。"""
     async with postgres_pool.acquire() as conn:
         anc = await conn.fetchval(
             """INSERT INTO products (name, description, category, brand, price, rating, is_active)
@@ -189,7 +188,7 @@ async def test_search_matches_stemmed_terms(
     fts_catalog: dict[str, str],
     _patched_pool: None,
 ) -> None:
-    """ "noise cancellation" must find "noise cancelling" — no literal substring."""
+    """ "noise cancellation" 必须能找到 "noise cancelling" —— 不依赖字面子串。"""
     from ecommerce_mcp_product.server import search_products
 
     results = await search_products(query="noise cancellation headphones")
@@ -202,7 +201,7 @@ async def test_search_does_not_require_every_term(
     fts_catalog: dict[str, str],
     _patched_pool: None,
 ) -> None:
-    """No product mentions bluetooth; that must not empty the result set."""
+    """没有商品提到 bluetooth；这不能让结果集变空。"""
     from ecommerce_mcp_product.server import search_products
 
     results = await search_products(query="wireless bluetooth headphones")
@@ -215,11 +214,11 @@ async def test_search_stopword_only_query_falls_back_to_filters(
     fts_catalog: dict[str, str],
     _patched_pool: None,
 ) -> None:
-    """`plainto_tsquery('the ???')` is an empty tsquery matching no rows — that
-    must not turn a filtered browse into zero results.
+    """`plainto_tsquery('the ???')` 是一个匹配不到任何行的空 tsquery ——
+    这不能把一次带过滤条件的浏览变成零结果。
 
-    This package's `postgres_pool` is session-scoped with no per-test truncate,
-    so assert on membership and the filter, not on an exact row set.
+    本包的 `postgres_pool` 是会话级的，且没有逐测试的 truncate，
+    因此断言的是成员关系与过滤条件，而不是精确的行集合。
     """
     from ecommerce_mcp_product.server import search_products
 

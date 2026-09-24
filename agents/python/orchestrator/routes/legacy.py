@@ -1,13 +1,11 @@
-"""Orchestrator API routes — auth, conversations, marketplace, admin, commerce.
+"""编排器 API 路由 —— 认证、会话、市场、管理、商务。
 
-Chat (``/api/chat``, ``/api/chat/stream``) lives in ``.chat`` and the
-orchestration-introspection endpoints (Phase 1.2+) live in
-``.orchestration`` — both combined with this module's ``router`` in
-``orchestrator/routes/__init__.py``. This module is everything else: it was
-the entire route surface before the Phase 1.3 split, kept together here
-rather than broken up further, since the split's purpose is isolating chat
-(which every orchestration mode touches) from routes that don't change as
-modes are added.
+聊天（``/api/chat``、``/api/chat/stream``）位于 ``.chat``，编排内省端点
+（Phase 1.2+）位于 ``.orchestration`` —— 两者都在
+``orchestrator/routes/__init__.py`` 中与本模块的 ``router`` 组合。
+本模块是其余一切：在 Phase 1.3 拆分之前，它曾是整个路由面，这里把它
+整体保留而没有进一步拆分，因为那次拆分的目的是把聊天（每种编排模式都会
+触及）与那些不随模式增加而改变的路由隔离开。
 """
 
 from __future__ import annotations
@@ -45,7 +43,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-# ── Request / Response Models ──────────────────────────────────
+# ── 请求 / 响应模型 ──────────────────────────────────
 
 
 class SignupRequest(BaseModel):
@@ -114,11 +112,11 @@ class ReturnOrderRequest(BaseModel):
     refund_method: str = "original_payment"
 
 
-# ── Auth Dependency ────────────────────────────────────────────
+# ── 认证依赖 ────────────────────────────────────────────
 
 
 async def require_auth(request: Request) -> dict[str, Any]:
-    """Extract and validate JWT from Authorization header. Sets ContextVars."""
+    """从 Authorization 请求头中提取并校验 JWT。会设置 ContextVar。"""
     auth_header = request.headers.get("authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
@@ -153,13 +151,13 @@ async def require_auth(request: Request) -> dict[str, Any]:
 
 
 async def optional_auth(request: Request) -> dict[str, Any]:
-    """Like ``require_auth`` but allows anonymous access for public storefront
-    endpoints (product browse + product-discovery chat).
+    """类似 ``require_auth``，但允许匿名访问公开的店面端点
+    （商品浏览 + 商品发现聊天）。
 
-    - Valid Bearer token  → returns the JWT payload, sets identity ContextVars.
-    - No Authorization     → returns an anonymous identity (``anonymous=True``),
-      sets empty ContextVars. Account-bound tools degrade gracefully.
-    - Present-but-invalid  → still 401 (delegated to ``require_auth``).
+    - 有效的 Bearer 令牌 → 返回 JWT 载荷，设置身份 ContextVar。
+    - 无 Authorization   → 返回匿名身份（``anonymous=True``），
+      设置空的 ContextVar。需要账号的工具会优雅降级。
+    - 存在但无效         → 仍返回 401（交给 ``require_auth`` 处理）。
     """
     auth_header = request.headers.get("authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
@@ -171,28 +169,28 @@ async def optional_auth(request: Request) -> dict[str, Any]:
 
 
 async def require_admin(user: dict[str, Any] = Depends(require_auth)) -> dict[str, Any]:
-    """Require the authenticated user to have admin role."""
+    """要求已认证用户具有 admin 角色。"""
     if user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
 
 
 async def require_seller(user: dict[str, Any] = Depends(require_auth)) -> dict[str, Any]:
-    """Require the authenticated user to have seller or admin role."""
+    """要求已认证用户具有 seller 或 admin 角色。"""
     if user.get("role") not in ("seller", "admin"):
         raise HTTPException(status_code=403, detail="Seller access required")
     return user
 
 
-# ── Auth Routes (PUBLIC) ──────────────────────────────────────
+# ── 认证路由（公开） ──────────────────────────────────────
 
 
 @router.post("/api/auth/signup", response_model=AuthResponse)
 async def signup(body: SignupRequest) -> AuthResponse:
-    """Create a new user account and return tokens."""
+    """创建一个新用户账号并返回令牌。"""
     pool = get_pool()
 
-    # Check if user already exists
+    # 检查用户是否已存在
     existing = await pool.fetchrow("SELECT id FROM users WHERE email = $1", body.email)
     if existing:
         raise HTTPException(status_code=409, detail="Email already registered")
@@ -230,13 +228,12 @@ async def signup(body: SignupRequest) -> AuthResponse:
 
 @router.post("/api/auth/login", response_model=AuthResponse)
 async def login(body: LoginRequest) -> AuthResponse:
-    """Authenticate user and return tokens.
+    """认证用户并返回令牌。
 
-    In ``AUTH_MODE=oauth`` the orchestrator is a confidential first-party
-    client brokering a Resource Owner Password Credentials grant against the
-    self-hosted auth-server — the AS is the sole authority on the
-    credentials (it re-verifies the same bcrypt hash), so this path does not
-    duplicate the password check. In ``local`` mode nothing changes.
+    在 ``AUTH_MODE=oauth`` 下，编排器是一个机密的第三方客户端，向自建的
+    auth-server 代理 Resource Owner Password Credentials 授权 —— AS 是
+    凭证的唯一权威（它会重新校验同一个 bcrypt 哈希），因此这条路径不会
+    重复做密码校验。在 ``local`` 模式下没有任何变化。
     """
     pool = get_pool()
 
@@ -254,8 +251,8 @@ async def login(body: LoginRequest) -> AuthResponse:
             body.email,
         )
         if not row:
-            # The AS validated these credentials against the same `users`
-            # table; this would mean the row vanished between the two reads.
+            # AS 已针对同一张 `users` 表校验过这些凭证；走到这里意味着那一行
+            # 在两次读取之间消失了。
             raise HTTPException(status_code=401, detail="Invalid email or password")
     else:
         row = await pool.fetchrow(
@@ -295,13 +292,12 @@ async def login(body: LoginRequest) -> AuthResponse:
 
 @router.post("/api/auth/refresh")
 async def refresh_token(body: RefreshRequest) -> dict[str, str]:
-    """Exchange a refresh token for a new access token.
+    """用刷新令牌换取一个新的访问令牌。
 
-    In ``AUTH_MODE=oauth`` this relays a ``refresh_token`` grant to the
-    auth-server, which does not rotate refresh tokens (see the design doc's
-    correction #6) — the browser's single stored refresh token stays valid
-    for the whole session, matching this endpoint's existing contract of
-    returning only a new access token.
+    在 ``AUTH_MODE=oauth`` 下，这会把一个 ``refresh_token`` 授权中继给
+    auth-server，而后者不轮换刷新令牌（见设计文档的修正 #6）—— 浏览器存储
+    的那个唯一刷新令牌在整个会话期间保持有效，与本端点「只返回一个新访问
+    令牌」的既有契约一致。
     """
     if settings.AUTH_MODE == "oauth":
         try:
@@ -339,12 +335,12 @@ async def refresh_token(body: RefreshRequest) -> dict[str, str]:
     return {"access_token": access_token}
 
 
-# ── Conversation Routes ───────────────────────────────────────
+# ── 会话路由 ───────────────────────────────────────
 
 
 @router.get("/api/conversations")
 async def list_conversations(user: dict[str, Any] = Depends(require_auth)) -> list[dict[str, Any]]:
-    """List the authenticated user's conversations."""
+    """列出已认证用户的会话。"""
     pool = get_pool()
     user_id = user.get("user_id", "")
 
@@ -375,7 +371,7 @@ async def get_conversation(
     conversation_id: str,
     user: dict[str, Any] = Depends(require_auth),
 ) -> dict[str, Any]:
-    """Get a conversation with its messages."""
+    """获取一个会话及其消息。"""
     pool = get_pool()
     user_id = user.get("user_id", "")
 
@@ -425,7 +421,7 @@ async def delete_conversation(
     conversation_id: str,
     user: dict[str, Any] = Depends(require_auth),
 ) -> dict[str, str]:
-    """Soft-delete a conversation (set is_active=false)."""
+    """软删除一个会话（把 is_active 设为 false）。"""
     pool = get_pool()
     user_id = user.get("user_id", "")
 
@@ -442,12 +438,12 @@ async def delete_conversation(
     return {"status": "deleted"}
 
 
-# ── Marketplace Routes ────────────────────────────────────────
+# ── 市场路由 ────────────────────────────────────────
 
 
 @router.get("/api/marketplace/agents")
 async def list_agents(user: dict[str, Any] = Depends(require_auth)) -> list[dict[str, Any]]:
-    """List available agents in the marketplace catalog."""
+    """列出市场目录中可用的智能体。"""
     pool = get_pool()
 
     rows = await pool.fetch(
@@ -481,11 +477,11 @@ async def submit_access_request(
     body: AccessRequestBody,
     user: dict[str, Any] = Depends(require_auth),
 ) -> dict[str, Any]:
-    """Submit a request to access a specific agent."""
+    """提交一个访问某个特定智能体的申请。"""
     pool = get_pool()
     user_id = user.get("user_id", "")
 
-    # Verify agent exists
+    # 校验智能体存在
     agent = await pool.fetchrow(
         "SELECT name, requires_approval FROM agent_catalog WHERE name = $1 AND status = 'active'",
         body.agent_name,
@@ -493,7 +489,7 @@ async def submit_access_request(
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    # Check for existing pending request
+    # 检查是否已有待处理申请
     existing = await pool.fetchrow(
         """SELECT id FROM access_requests
            WHERE user_id = $1 AND agent_name = $2 AND status = 'pending'""",
@@ -503,7 +499,7 @@ async def submit_access_request(
     if existing:
         raise HTTPException(status_code=409, detail="You already have a pending request for this agent")
 
-    # Check if already has permission
+    # 检查是否已拥有权限
     perm = await pool.fetchrow(
         "SELECT id FROM agent_permissions WHERE user_id = $1 AND agent_name = $2",
         user_id,
@@ -512,7 +508,7 @@ async def submit_access_request(
     if perm:
         raise HTTPException(status_code=409, detail="You already have access to this agent")
 
-    # If no approval required, auto-approve
+    # 若无需审批，则自动批准
     if not agent["requires_approval"]:
         await pool.execute(
             """INSERT INTO agent_permissions (user_id, agent_name, role)
@@ -539,7 +535,7 @@ async def submit_access_request(
             "message": "Access granted automatically — no approval required.",
         }
 
-    # Create pending request
+    # 创建待处理申请
     row = await pool.fetchrow(
         """INSERT INTO access_requests (user_id, agent_name, role_requested, use_case)
            VALUES ($1, $2, $3, $4)
@@ -562,7 +558,7 @@ async def submit_access_request(
 
 @router.get("/api/marketplace/my-agents")
 async def list_my_agents(user: dict[str, Any] = Depends(require_auth)) -> list[dict[str, Any]]:
-    """List agents the authenticated user has been granted access to."""
+    """列出已认证用户被授予访问权限的智能体。"""
     pool = get_pool()
     user_id = user.get("user_id", "")
 
@@ -590,12 +586,12 @@ async def list_my_agents(user: dict[str, Any] = Depends(require_auth)) -> list[d
     ]
 
 
-# ── Admin Routes ──────────────────────────────────────────────
+# ── 管理路由 ──────────────────────────────────────────
 
 
 @router.get("/api/admin/requests")
 async def list_pending_requests(admin: dict[str, Any] = Depends(require_admin)) -> list[dict[str, Any]]:
-    """List all pending access requests (admin only)."""
+    """列出所有待处理的访问申请（仅管理员）。"""
     pool = get_pool()
 
     rows = await pool.fetch(
@@ -630,11 +626,11 @@ async def approve_request(
     body: AdminActionBody,
     admin: dict[str, Any] = Depends(require_admin),
 ) -> dict[str, str]:
-    """Approve an access request (admin only)."""
+    """批准一个访问申请（仅管理员）。"""
     pool = get_pool()
     admin_id = admin.get("user_id", "")
 
-    # Fetch the request
+    # 取出该申请
     req = await pool.fetchrow(
         """SELECT id, user_id, agent_name, role_requested, status
            FROM access_requests WHERE id = $1""",
@@ -648,7 +644,7 @@ async def approve_request(
 
     async with pool.acquire() as conn:
         async with conn.transaction():
-            # Update request status
+            # 更新申请状态
             await conn.execute(
                 """UPDATE access_requests
                    SET status = 'approved', admin_notes = $1, reviewed_by = $2, resolved_at = NOW()
@@ -658,7 +654,7 @@ async def approve_request(
                 request_id,
             )
 
-            # Grant permission
+            # 授予权限
             await conn.execute(
                 """INSERT INTO agent_permissions (user_id, agent_name, role, granted_by)
                    VALUES ($1, $2, $3, $4)
@@ -685,7 +681,7 @@ async def deny_request(
     body: AdminActionBody,
     admin: dict[str, Any] = Depends(require_admin),
 ) -> dict[str, str]:
-    """Deny an access request (admin only)."""
+    """拒绝一个访问申请（仅管理员）。"""
     pool = get_pool()
     admin_id = admin.get("user_id", "")
 
@@ -720,7 +716,7 @@ async def deny_request(
 
 @router.get("/api/agents/stats")
 async def get_agent_stats(user: dict[str, Any] = Depends(require_auth)) -> list[dict[str, Any]]:
-    """Per-agent aggregate stats for the last 30 days (all authenticated users)."""
+    """按智能体聚合的近 30 天统计（所有已认证用户可见）。"""
     pool = get_pool()
     rows = await pool.fetch(
         """SELECT
@@ -745,10 +741,10 @@ async def get_agent_stats(user: dict[str, Any] = Depends(require_auth)) -> list[
 
 @router.get("/api/admin/usage")
 async def get_usage_stats(admin: dict[str, Any] = Depends(require_admin)) -> dict[str, Any]:
-    """Get aggregate usage statistics (admin only)."""
+    """获取聚合用量统计（仅管理员）。"""
     pool = get_pool()
 
-    # Overall stats
+    # 总体统计
     overall = await pool.fetchrow(
         """SELECT
                COUNT(*) as total_requests,
@@ -761,7 +757,7 @@ async def get_usage_stats(admin: dict[str, Any] = Depends(require_admin)) -> dic
            WHERE created_at >= NOW() - INTERVAL '30 days'""",
     )
 
-    # Per-agent breakdown
+    # 按智能体细分
     agent_rows = await pool.fetch(
         """SELECT
                agent_name,
@@ -777,7 +773,7 @@ async def get_usage_stats(admin: dict[str, Any] = Depends(require_admin)) -> dic
            ORDER BY request_count DESC""",
     )
 
-    # Daily trend (last 7 days)
+    # 每日趋势（近 7 天）
     daily_rows = await pool.fetch(
         """SELECT
                DATE(created_at) as day,
@@ -828,11 +824,11 @@ async def list_hitl_requests(
     status: str | None = None,
     limit: int = 50,
 ) -> dict[str, Any]:
-    """List HITL approval requests (admin only).
+    """列出人工参与（HITL）审批申请（仅管理员）。
 
     Query params:
-        status: filter by status (pending, approved, denied, executed). Omit for all.
-        limit: max rows (capped at 200).
+        status: 按状态过滤（pending、approved、denied、executed）。省略则返回全部。
+        limit: 最大行数（上限 200）。
     """
     from shared.hitl import list_hitl_requests as _list
 
@@ -850,21 +846,20 @@ async def approve_hitl_request(
     body: HITLDecisionBody = HITLDecisionBody(),
     admin: dict[str, Any] = Depends(require_admin),
 ) -> dict[str, Any]:
-    """Approve a pending HITL request and execute the underlying action."""
+    """批准一个待处理的人工参与请求并执行其底层动作。"""
     from shared.hitl import claim_hitl_request, execute_approved_action, get_hitl_request, resolve_hitl_request
 
-    # Atomically claim the request (pending -> processing) BEFORE executing
-    # the underlying action — this is what closes the race two concurrent
-    # approve clicks used to hit (both would pass a pre-check read here,
-    # both would execute, and only the second write-after-execute would
-    # notice). Whoever wins this UPDATE is the only caller that proceeds.
+    # 在执行底层动作*之前*原子地认领该请求（pending -> processing）——
+    # 这正是关闭此前两次并发批准点击会撞上的竞态的关键（两者都会在这里的
+    # 前置读取中通过，两者都会执行，而只有第二次的「执行后写入」才会察觉）。
+    # 赢得这次 UPDATE 的调用方是唯一继续往下走的。
     req = await claim_hitl_request(request_id)
     if not req:
         existing = await get_hitl_request(request_id)
         if not existing:
             raise HTTPException(status_code=404, detail="HITL request not found")
         if existing["tool_name"] == "initiate_return" and existing["status"] == "processing":
-            req = existing  # the durable operation lock makes crash recovery safe
+            req = existing  # 持久化的操作锁使崩溃恢复是安全的
         else:
             raise HTTPException(status_code=400, detail=f"Request is already {existing['status']}")
 
@@ -884,11 +879,10 @@ async def approve_hitl_request(
             approval_id=request_id,
         )
     except Exception:
-        # The claim above already moved this row out of 'pending' — if we
-        # left it 'processing' on an unhandled error it could never be
-        # retried (claim_hitl_request only matches 'pending'). Revert the
-        # claim so a follow-up approve attempt is possible, then let the
-        # error surface as a 500.
+        # 上面的认领已经把这行移出了 'pending' —— 如果我们让它在未处理错误下
+        # 停在 'processing'，它就永远无法重试（claim_hitl_request 只匹配
+        # 'pending'）。把认领回退，使后续的批准尝试仍有可能，然后让错误以
+        # 500 的形式暴露出来。
         await get_pool().execute(
             "UPDATE tool_approval_requests SET status = 'pending' WHERE id = $1 AND status = 'processing'",
             request_id,
@@ -896,9 +890,9 @@ async def approve_hitl_request(
         raise
 
     if req["tool_name"] == "initiate_return":
-        # The return, operation result and approval execution result commit together.
+        # 退货、操作结果与审批执行结果一起提交。
         if result.get("outcome") not in {"UNKNOWN", "RETRYABLE_FAILURE"}:
-            # Conflicting parameters reject before touching the original operation.
+            # 参数冲突会在触碰原操作之前就被拒绝。
             await get_pool().execute(
                 """UPDATE tool_approval_requests SET status = 'approved', execution_result = $2::jsonb,
                    resolved_at = clock_timestamp() WHERE id = $1 AND status = 'processing'""",
@@ -933,7 +927,7 @@ async def deny_hitl_request(
     body: HITLDecisionBody = HITLDecisionBody(),
     admin: dict[str, Any] = Depends(require_admin),
 ) -> dict[str, Any]:
-    """Deny a pending HITL request (no action is taken)."""
+    """拒绝一个待处理的人工参与请求（不执行任何动作）。"""
     from shared.hitl import get_hitl_request, resolve_hitl_request
 
     req = await get_hitl_request(request_id)
@@ -970,10 +964,10 @@ async def get_audit_log(
     status: str | None = None,
     search: str | None = None,
 ) -> dict[str, Any]:
-    """Get recent audit log from usage_logs and execution steps (admin only).
+    """从 usage_logs 与执行步骤中获取近期审计日志（仅管理员）。
 
-    Supports optional filters: agent_name, status (success|error), search (user
-    email or input_summary ILIKE).
+    支持可选过滤：agent_name、status（success|error）、search（用户 email
+    或 input_summary 的 ILIKE）。
     """
     pool = get_pool()
     limit = min(limit, 200)
@@ -1015,7 +1009,7 @@ async def get_audit_log(
         offset,
     )
 
-    # For each log entry, fetch execution steps
+    # 为每条日志记录获取执行步骤
     entries = []
     for r in rows:
         steps = await pool.fetch(
@@ -1076,9 +1070,9 @@ async def list_runs(
     limit: int = 20,
     offset: int = 0,
 ) -> dict[str, Any]:
-    """Return the current user's recent agent runs with step details.
+    """返回当前用户近期的智能体运行记录及步骤详情。
 
-    Admins see all users' runs; regular users see only their own.
+    管理员可见所有用户的运行记录；普通用户只能看到自己的。
     """
     pool = get_pool()
     limit = min(limit, 100)
@@ -1160,14 +1154,15 @@ async def list_runs(
 
 @router.get("/api/runs/{run_id}/checkpoints")
 async def get_run_checkpoints(run_id: str, user: dict[str, Any] = Depends(require_auth)) -> dict[str, Any]:
-    """Checkpoints saved during a run — Phase 1.5, ``workflow_mode.py``'s
-    ``RecordingCheckpointStorage`` links each save back to its
-    ``usage_logs`` row via ``workflow_checkpoints.usage_log_id``.
+    """一次运行期间保存的检查点 —— Phase 1.5，``workflow_mode.py`` 的
+    ``RecordingCheckpointStorage`` 通过
+    ``workflow_checkpoints.usage_log_id`` 把每次保存关联回它的
+    ``usage_logs`` 行。
 
-    Scoped the same way ``GET /api/runs`` is: admins can look up any run,
-    everyone else only their own (checked against ``usage_logs.user_id``,
-    not just "does this checkpoint_id exist" — a checkpoint's payload can
-    carry order/refund details, so ownership matters here).
+    作用域与 ``GET /api/runs`` 相同：管理员可查询任意运行，其他人只能查
+    自己的（对照 ``usage_logs.user_id`` 校验，而不只是「这个
+    checkpoint_id 是否存在」—— 检查点载荷可能携带订单/退款细节，因此这里的
+    归属校验很重要）。
     """
     pool = get_pool()
     email = current_user_email.get()
@@ -1214,10 +1209,10 @@ async def get_run_checkpoints(run_id: str, user: dict[str, Any] = Depends(requir
             {
                 "id": str(hitl["id"]),
                 "status": hitl["status"],
-                # asyncpg returns JSONB as raw str with no codec configured
-                # (shared/db.py registers none) — verified directly, not
-                # assumed; every other JSONB read in this codebase (e.g.
-                # PostgresCheckpointStorage._payload) has the same guard.
+                # asyncpg 在未配置编解码器时会把 JSONB 返回为原始 str
+                # （shared/db.py 未注册任何编解码器）—— 这是直接验证的，
+                # 不是假设；本代码库中其他每一处 JSONB 读取（例如
+                # PostgresCheckpointStorage._payload）都有同样的防护。
                 "payload": json.loads(hitl["payload"]) if isinstance(hitl["payload"], str) else hitl["payload"],
                 "response": (json.loads(hitl["response"]) if isinstance(hitl["response"], str) else hitl["response"]),
                 "created_at": hitl["created_at"].isoformat(),
@@ -1229,7 +1224,7 @@ async def get_run_checkpoints(run_id: str, user: dict[str, Any] = Depends(requir
     }
 
 
-# ── Product Routes ────────────────────────────────────────────
+# ── 商品路由 ──────────────────────────────────────────
 
 
 @router.get("/api/products")
@@ -1320,7 +1315,7 @@ async def get_product(product_id: str, _user: dict = Depends(optional_auth)):
     if not row:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    # Get stock status
+    # 获取库存状态
     stock = await pool.fetch(
         """SELECT w.name, w.region, wi.quantity
            FROM warehouse_inventory wi
@@ -1330,7 +1325,7 @@ async def get_product(product_id: str, _user: dict = Depends(optional_auth)):
     )
     total_stock = sum(r["quantity"] for r in stock)
 
-    # Get recent reviews
+    # 获取近期评论
     reviews = await pool.fetch(
         """SELECT r.id, r.rating, r.title, r.body, r.verified_purchase, r.created_at,
                   u.name as reviewer_name
@@ -1341,7 +1336,7 @@ async def get_product(product_id: str, _user: dict = Depends(optional_auth)):
         product_id,
     )
 
-    # Rating distribution
+    # 评分分布
     dist = await pool.fetch(
         "SELECT rating, COUNT(*) as count FROM reviews WHERE product_id = $1 GROUP BY rating ORDER BY rating",
         product_id,
@@ -1382,7 +1377,7 @@ async def get_product(product_id: str, _user: dict = Depends(optional_auth)):
     }
 
 
-# ── Order Routes ──────────────────────────────────────────────
+# ── 订单路由 ──────────────────────────────────────────
 
 
 @router.get("/api/orders")
@@ -1537,7 +1532,7 @@ async def get_order(order_id: str, user: dict = Depends(require_auth)):
 
 @router.post("/api/orders/{order_id}/cancel")
 async def cancel_order(order_id: str, body: CancelOrderRequest, user: dict = Depends(require_auth)):
-    """Cancel a placed or confirmed order."""
+    """取消一笔已下单或已确认的订单。"""
     pool = get_pool()
     email = current_user_email.get()
 
@@ -1583,13 +1578,13 @@ async def cancel_order(order_id: str, body: CancelOrderRequest, user: dict = Dep
 
 @router.post("/api/orders/{order_id}/return", dependencies=[Depends(operation_scope)])
 async def return_order(order_id: str, body: ReturnOrderRequest, user: dict = Depends(require_auth)) -> JSONResponse:
-    """Use the same validation, approval gate and locked write as the tool."""
+    """使用与工具完全相同的校验、审批门控与加锁写入。"""
     from shared.after_sales.service import request_return
 
     result = await request_return(order_id, body.reason, body.refund_method)
     if result.get("status") == "pending_approval":
-        # The existing order page treats every 2xx as a created return. Keep
-        # pending approval on its message path until it has a distinct UI state.
+        # 现有订单页会把每个 2xx 都当作「退货已创建」。在待审批拥有独立的 UI
+        # 状态之前，让它继续走消息路径。
         return JSONResponse(status_code=409, content={"detail": result["message"], **result})
     if result.get("success") is not True:
         code = result.get("error_code")
@@ -1613,15 +1608,15 @@ async def return_operation_status(operation_id: str, user: dict = Depends(requir
     return JSONResponse(status_code=status, content=result)
 
 
-# ── Return Label PDF ─────────────────────────────────────────
+# ── 退货标签 PDF ─────────────────────────────────────
 
 
 @router.get("/api/returns/{label_token}/label")
 async def get_return_label(label_token: str):
-    """Generate a return shipping label PDF for the given token."""
+    """为给定令牌生成一个退货运输标签 PDF。"""
     pool = get_pool()
 
-    # Find the return by label URL pattern
+    # 按标签 URL 模式查找该退货单
     ret = await pool.fetchrow(
         """SELECT r.id, r.order_id, r.reason, r.status, r.return_label_url,
                   r.refund_method, r.refund_amount, r.created_at,
@@ -1640,7 +1635,7 @@ async def get_return_label(label_token: str):
     if isinstance(address, str):
         address = json.loads(address)
 
-    # Build a simple PDF using raw PDF syntax (no dependencies needed)
+    # 用原始 PDF 语法构建一个简单 PDF（无需任何依赖）
     user_name = ret["user_name"] or "Customer"
     user_email = ret["user_email"] or ""
     order_id = str(ret["order_id"])[:8]
@@ -1695,70 +1690,70 @@ def _build_return_label_pdf(
     addr_state: str,
     addr_zip: str,
 ) -> bytes:
-    """Generate a minimal return shipping label as raw PDF (no external libs)."""
-    # Page dimensions: Letter size (612 x 792 points)
-    # This creates a clean, professional-looking return label
+    """以原始 PDF 生成一个极简的退货运输标签（不依赖任何外部库）。"""
+    # 页面尺寸：Letter 纸（612 x 792 点）
+    # 这会生成一个干净、看起来专业的退货标签
 
     def pdf_str(s: str) -> str:
         return s.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
-    # Build PDF objects
+    # 构建 PDF 对象
     objects = []
 
-    # Object 1: Catalog
+    # 对象 1：Catalog
     objects.append("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj")
 
-    # Object 2: Pages
+    # 对象 2：Pages
     objects.append("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj")
 
-    # Object 3: Page
+    # 对象 3：Page
     objects.append(
         "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
         "/Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>\nendobj"
     )
 
-    # Object 5: Helvetica font
+    # 对象 5：Helvetica 字体
     objects.append("5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj")
 
-    # Object 6: Helvetica-Bold font
+    # 对象 6：Helvetica-Bold 字体
     objects.append("6 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>\nendobj")
 
-    # Object 4: Page content stream
+    # 对象 4：页面内容流
     stream_lines = [
-        # --- Header bar ---
-        "0.05 0.58 0.55 rg",  # Teal fill
+        # --- 顶部标题栏 ---
+        "0.05 0.58 0.55 rg",  # 青色填充
         "0 742 612 50 re f",
-        "1 1 1 rg",  # White text
+        "1 1 1 rg",  # 白色文字
         "BT /F2 20 Tf 30 760 Td (RETURN SHIPPING LABEL) Tj ET",
-        # --- Barcode area ---
+        # --- 条形码区域 ---
         "0.95 0.95 0.95 rg",
         "30 680 552 50 re f",
         "0 0 0 rg",
         f"BT /F2 16 Tf 180 700 Td ({pdf_str(barcode)}) Tj ET",
         "BT /F1 9 Tf 30 685 Td (Scan or enter this code at drop-off) Tj ET",
-        # --- Carrier ---
+        # --- 承运商 ---
         "0 0 0 rg",
         f"BT /F2 12 Tf 30 655 Td (Carrier: {pdf_str(carrier)}) Tj ET",
         f"BT /F1 10 Tf 400 655 Td (Date: {pdf_str(created)}) Tj ET",
-        # --- Divider ---
+        # --- 分隔线 ---
         "0.8 0.8 0.8 RG",
         "0.5 w",
         "30 640 m 582 640 l S",
-        # --- FROM Section ---
+        # --- 寄件人（FROM）区块 ---
         "0 0 0 rg",
         "BT /F2 11 Tf 30 620 Td (FROM:) Tj ET",
         f"BT /F1 11 Tf 30 605 Td ({pdf_str(user_name)}) Tj ET",
         f"BT /F1 10 Tf 30 591 Td ({pdf_str(addr_street)}) Tj ET",
         f"BT /F1 10 Tf 30 577 Td ({pdf_str(addr_city)}, {pdf_str(addr_state)} {pdf_str(addr_zip)}) Tj ET",
         f"BT /F1 9 Tf 30 562 Td ({pdf_str(user_email)}) Tj ET",
-        # --- TO Section ---
+        # --- 收件人（TO）区块 ---
         "BT /F2 11 Tf 320 620 Td (TO:) Tj ET",
         "BT /F1 11 Tf 320 605 Td (E-Commerce Agents Returns Center) Tj ET",
         "BT /F1 10 Tf 320 591 Td (1200 Returns Blvd, Suite 400) Tj ET",
         "BT /F1 10 Tf 320 577 Td (Memphis, TN 38118) Tj ET",
-        # --- Divider ---
+        # --- 分隔线 ---
         "30 545 m 582 545 l S",
-        # --- Return Details Box ---
+        # --- 退货详情框 ---
         "0.97 0.97 0.97 rg",
         "30 460 552 75 re f",
         "0 0 0 rg",
@@ -1770,19 +1765,19 @@ def _build_return_label_pdf(
         f"BT /F1 10 Tf 140 488 Td ({pdf_str(reason[:60])}) Tj ET",
         "BT /F2 10 Tf 40 472 Td (Status:) Tj ET",
         "BT /F1 10 Tf 140 472 Td (Return Requested) Tj ET",
-        # --- Instructions Box ---
-        "0.05 0.58 0.55 rg",  # Teal
+        # --- 说明框 ---
+        "0.05 0.58 0.55 rg",  # 青色
         "30 380 552 60 re f",
         "1 1 1 rg",
         "BT /F2 12 Tf 40 420 Td (INSTRUCTIONS) Tj ET",
         "BT /F1 10 Tf 40 404 Td (1. Print this label and cut along the border.) Tj ET",
         "BT /F1 10 Tf 40 390 Td (2. Pack all items securely in the original packaging.) Tj ET",
-        # Continue instructions below the box
+        # 说明文字继续写在框下方
         "0 0 0 rg",
         "BT /F1 10 Tf 40 360 Td (3. Attach this label to the outside of the package.) Tj ET",
         "BT /F1 10 Tf 40 346 Td (4. Drop off at any carrier location or schedule a pickup.) Tj ET",
         "BT /F1 10 Tf 40 332 Td (5. Your refund will be processed after we receive and inspect the items.) Tj ET",
-        # --- Footer ---
+        # --- 页脚 ---
         "0.6 0.6 0.6 rg",
         (
             "BT /F1 8 Tf 30 50 Td (Generated by E-Commerce Agents | This label is val"
@@ -1799,7 +1794,7 @@ def _build_return_label_pdf(
 
     objects.insert(3, f"4 0 obj\n<< /Length {len(stream_bytes)} >>\nstream\n{stream}\nendstream\nendobj")
 
-    # Build the PDF file
+    # 构建 PDF 文件
     pdf_lines = ["%PDF-1.4"]
     offsets = []
 
@@ -1823,16 +1818,16 @@ def _build_return_label_pdf(
     return "\n".join(pdf_lines).encode("latin-1")
 
 
-# ── Cart Routes ──────────────────────────────────────────────
+# ── 购物车路由 ────────────────────────────────────────
 
 
 @router.get("/api/cart")
 async def get_cart(user: dict = Depends(require_auth)):
-    """Get the current user's shopping cart with items."""
+    """获取当前用户的购物车及其条目。"""
     pool = get_pool()
     user_id = user.get("user_id", "")
 
-    # Lazy-create cart for user
+    # 为用户惰性创建购物车
     cart = await pool.fetchrow(
         """SELECT id, coupon_code, discount_amount, shipping_address, billing_address,
                   billing_same_as_shipping
@@ -1849,7 +1844,7 @@ async def get_cart(user: dict = Depends(require_auth)):
 
     cart_id = str(cart["id"])
 
-    # Fetch items with product details and stock
+    # 获取条目及其商品详情与库存
     items = await pool.fetch(
         (
             "SELECT ci.id, ci.product_id, ci.quantity,\n                  p.name, p.br"
@@ -1908,11 +1903,11 @@ async def get_cart(user: dict = Depends(require_auth)):
 
 @router.post("/api/cart/items")
 async def add_cart_item(body: AddToCartRequest, user: dict = Depends(require_auth)):
-    """Add an item to the cart or increase its quantity."""
+    """向购物车添加一件商品，或增加其数量。"""
     pool = get_pool()
     user_id = user.get("user_id", "")
 
-    # Validate product exists and is active
+    # 校验商品存在且处于上架状态
     product = await pool.fetchrow(
         "SELECT id, is_active FROM products WHERE id = $1",
         body.product_id,
@@ -1922,7 +1917,7 @@ async def add_cart_item(body: AddToCartRequest, user: dict = Depends(require_aut
     if not product["is_active"]:
         raise HTTPException(status_code=400, detail="Product is no longer available")
 
-    # Get or create cart
+    # 获取或创建购物车
     cart = await pool.fetchrow("SELECT id FROM carts WHERE user_id = $1", user_id)
     if not cart:
         cart = await pool.fetchrow(
@@ -1931,7 +1926,7 @@ async def add_cart_item(body: AddToCartRequest, user: dict = Depends(require_aut
         )
     cart_id = str(cart["id"])
 
-    # Upsert item
+    # Upsert 该条目
     await pool.execute(
         """INSERT INTO cart_items (cart_id, product_id, quantity)
            VALUES ($1, $2, $3)
@@ -1942,7 +1937,7 @@ async def add_cart_item(body: AddToCartRequest, user: dict = Depends(require_aut
         body.quantity,
     )
 
-    # Touch cart updated_at
+    # 更新购物车的 updated_at
     await pool.execute("UPDATE carts SET updated_at = NOW() WHERE id = $1", cart_id)
 
     return {"status": "added", "product_id": body.product_id, "quantity": body.quantity}
@@ -1950,11 +1945,11 @@ async def add_cart_item(body: AddToCartRequest, user: dict = Depends(require_aut
 
 @router.put("/api/cart/items/{item_id}")
 async def update_cart_item(item_id: str, body: UpdateCartItemRequest, user: dict = Depends(require_auth)):
-    """Update the quantity of a cart item."""
+    """更新某个购物车条目的数量。"""
     pool = get_pool()
     user_id = user.get("user_id", "")
 
-    # Verify item belongs to user's cart
+    # 校验该条目属于该用户的购物车
     item = await pool.fetchrow(
         """SELECT ci.id, ci.cart_id
            FROM cart_items ci
@@ -1982,7 +1977,7 @@ async def update_cart_item(item_id: str, body: UpdateCartItemRequest, user: dict
 
 @router.delete("/api/cart/items/{item_id}")
 async def remove_cart_item(item_id: str, user: dict = Depends(require_auth)):
-    """Remove an item from the cart."""
+    """从购物车中移除一件商品。"""
     pool = get_pool()
     user_id = user.get("user_id", "")
 
@@ -2005,18 +2000,18 @@ async def remove_cart_item(item_id: str, user: dict = Depends(require_auth)):
 
 @router.post("/api/cart/coupon")
 async def apply_coupon(body: ApplyCouponRequest, user: dict = Depends(require_auth)):
-    """Validate and apply a coupon code to the cart."""
+    """校验并把一个优惠码应用到购物车。"""
     pool = get_pool()
     user_id = user.get("user_id", "")
     email = current_user_email.get()
 
-    # Get user's cart
+    # 获取用户的购物车
     cart = await pool.fetchrow("SELECT id FROM carts WHERE user_id = $1", user_id)
     if not cart:
         raise HTTPException(status_code=400, detail="Cart not found")
     cart_id = str(cart["id"])
 
-    # Calculate current cart subtotal
+    # 计算当前购物车小计
     items = await pool.fetch(
         """SELECT ci.quantity, p.price
            FROM cart_items ci
@@ -2029,7 +2024,7 @@ async def apply_coupon(body: ApplyCouponRequest, user: dict = Depends(require_au
 
     subtotal = sum(float(i["price"]) * i["quantity"] for i in items)
 
-    # Validate coupon
+    # 校验优惠券
     coupon = await pool.fetchrow(
         """SELECT id, code, description, discount_type, discount_value,
                   min_spend, max_discount, usage_limit, times_used,
@@ -2053,7 +2048,7 @@ async def apply_coupon(body: ApplyCouponRequest, user: dict = Depends(require_au
     if coupon["user_specific_email"] and coupon["user_specific_email"] != email:
         raise HTTPException(status_code=400, detail="This coupon is not valid for your account")
 
-    # Calculate discount
+    # 计算折扣
     if coupon["discount_type"] == "percentage":
         discount = subtotal * float(coupon["discount_value"]) / 100
         if coupon["max_discount"]:
@@ -2063,7 +2058,7 @@ async def apply_coupon(body: ApplyCouponRequest, user: dict = Depends(require_au
 
     discount = round(min(discount, subtotal), 2)
 
-    # Apply to cart
+    # 应用到购物车
     await pool.execute(
         "UPDATE carts SET coupon_code = $1, discount_amount = $2, updated_at = NOW() WHERE id = $3",
         coupon["code"],
@@ -2081,7 +2076,7 @@ async def apply_coupon(body: ApplyCouponRequest, user: dict = Depends(require_au
 
 @router.delete("/api/cart/coupon")
 async def remove_coupon(user: dict = Depends(require_auth)):
-    """Remove the applied coupon from the cart."""
+    """移除购物车中已应用的优惠码。"""
     pool = get_pool()
     user_id = user.get("user_id", "")
 
@@ -2095,11 +2090,11 @@ async def remove_coupon(user: dict = Depends(require_auth)):
 
 @router.put("/api/cart/address")
 async def update_cart_address(body: CartAddressRequest, user: dict = Depends(require_auth)):
-    """Update shipping and/or billing address on the cart."""
+    """更新购物车上的收货地址和/或账单地址。"""
     pool = get_pool()
     user_id = user.get("user_id", "")
 
-    # Get or create cart
+    # 获取或创建购物车
     cart = await pool.fetchrow("SELECT id FROM carts WHERE user_id = $1", user_id)
     if not cart:
         cart = await pool.fetchrow(
@@ -2130,19 +2125,17 @@ async def update_cart_address(body: CartAddressRequest, user: dict = Depends(req
     return {"status": "updated"}
 
 
-# ── Checkout Route ───────────────────────────────────────────
+# ── 结账路由 ─────────────────────────────────────────
 
 
 @router.post("/api/checkout")
 async def checkout(body: CheckoutRequest, user: dict = Depends(require_auth)):
-    """Process checkout: validate cart, create order, decrement inventory, clear cart.
+    """处理结账：校验购物车、创建订单、扣减库存、清空购物车。
 
-    Delegates to ``_do_checkout``, which is idempotency-wrapped per
-    (user_id, request body) — a double-submit (double-click, a client
-    retrying after a timeout that the server actually completed) replays
-    the first attempt's order instead of placing a second one and
-    decrementing inventory twice. A genuinely new checkout (different cart
-    contents, different address) hashes differently and is not deduped.
+    委托给 ``_do_checkout``，后者按 (user_id, 请求体) 做了幂等包装 ——
+    重复提交（双击，或客户端在服务端实际已完成的超时之后重试）会重放第一次
+    尝试的订单，而不是再下一单并二次扣减库存。一次真正全新的结账（购物车
+    内容不同、地址不同）哈希值不同，不会被去重。
     """
     user_id = user.get("user_id", "")
     return await _do_checkout(user_id, body)
@@ -2154,7 +2147,7 @@ async def _do_checkout(user_id: str, body: CheckoutRequest) -> dict:
 
     async with pool.acquire() as conn:
         async with conn.transaction():
-            # 1. Fetch cart
+            # 1. 取出购物车
             cart = await conn.fetchrow(
                 "SELECT id, coupon_code, discount_amount FROM carts WHERE user_id = $1",
                 user_id,
@@ -2163,7 +2156,7 @@ async def _do_checkout(user_id: str, body: CheckoutRequest) -> dict:
                 raise HTTPException(status_code=400, detail="No cart found")
             cart_id = str(cart["id"])
 
-            # 2. Fetch cart items with product info
+            # 2. 取出购物车条目及其商品信息
             items = await conn.fetch(
                 """SELECT ci.id, ci.product_id, ci.quantity,
                           p.name, p.price, p.is_active
@@ -2175,7 +2168,7 @@ async def _do_checkout(user_id: str, body: CheckoutRequest) -> dict:
             if not items:
                 raise HTTPException(status_code=400, detail="Cart is empty")
 
-            # 3. Validate all products are active
+            # 3. 校验所有商品都已上架
             inactive = [i["name"] for i in items if not i["is_active"]]
             if inactive:
                 raise HTTPException(
@@ -2183,7 +2176,7 @@ async def _do_checkout(user_id: str, body: CheckoutRequest) -> dict:
                     detail=f"The following products are no longer available: {', '.join(inactive)}",
                 )
 
-            # 4. Check stock for each item
+            # 4. 逐项检查库存
             for item in items:
                 stock = await conn.fetchval(
                     "SELECT COALESCE(SUM(quantity), 0) FROM warehouse_inventory WHERE product_id = $1",
@@ -2198,10 +2191,10 @@ async def _do_checkout(user_id: str, body: CheckoutRequest) -> dict:
                         ),
                     )
 
-            # 5. Calculate subtotal
+            # 5. 计算小计
             subtotal = sum(float(i["price"]) * i["quantity"] for i in items)
 
-            # 6. Handle coupon discount
+            # 6. 处理优惠券折扣
             coupon_discount = 0.0
             coupon_code = cart["coupon_code"]
             if coupon_code:
@@ -2228,7 +2221,7 @@ async def _do_checkout(user_id: str, body: CheckoutRequest) -> dict:
                         else:
                             coupon_discount = float(coupon["discount_value"])
 
-                        # Increment usage
+                        # 递增使用次数
                         await conn.execute(
                             "UPDATE coupons SET times_used = times_used + 1 WHERE code = $1",
                             coupon_code,
@@ -2238,7 +2231,7 @@ async def _do_checkout(user_id: str, body: CheckoutRequest) -> dict:
                 else:
                     coupon_code = None
 
-            # 7. Handle loyalty discount
+            # 7. 处理忠诚度折扣
             loyalty_discount = 0.0
             loyalty_row = await conn.fetchrow(
                 """SELECT lt.discount_pct
@@ -2250,27 +2243,27 @@ async def _do_checkout(user_id: str, body: CheckoutRequest) -> dict:
             if loyalty_row and loyalty_row["discount_pct"]:
                 loyalty_discount = subtotal * float(loyalty_row["discount_pct"]) / 100
 
-            # 8. Final total
+            # 8. 最终总价
             total = max(subtotal - coupon_discount - loyalty_discount, 0)
             total = round(total, 2)
 
-            # 9. Resolve billing address
+            # 9. 确定账单地址
             shipping_address = json.dumps(body.shipping_address)
             if body.billing_same_as_shipping or not body.billing_address:
                 billing_address = shipping_address
             else:
                 billing_address = json.dumps(body.billing_address)
 
-            # 10. Pick a carrier
+            # 10. 挑选承运商
             carrier = await conn.fetchrow(
                 "SELECT id, name FROM carriers ORDER BY base_rate LIMIT 1",
             )
             carrier_name = carrier["name"] if carrier else "Standard Shipping"
 
-            # 11. Generate tracking number
+            # 11. 生成物流跟踪号
             tracking = f"TRK-{uuid.uuid4().hex[:12].upper()}"
 
-            # 12. Insert order
+            # 12. 插入订单
             total_discount = round(coupon_discount + loyalty_discount, 2)
             order = await conn.fetchrow(
                 """INSERT INTO orders (user_id, status, total, shipping_address, billing_address,
@@ -2288,7 +2281,7 @@ async def _do_checkout(user_id: str, body: CheckoutRequest) -> dict:
             )
             order_id = str(order["id"])
 
-            # 13. Insert order items
+            # 13. 插入订单条目
             for item in items:
                 item_subtotal = round(float(item["price"]) * item["quantity"], 2)
                 await conn.execute(
@@ -2301,14 +2294,14 @@ async def _do_checkout(user_id: str, body: CheckoutRequest) -> dict:
                     item_subtotal,
                 )
 
-            # 14. Insert order status history
+            # 14. 插入订单状态历史
             await conn.execute(
                 """INSERT INTO order_status_history (order_id, status, notes)
                    VALUES ($1, 'placed', 'Order placed via checkout')""",
                 order_id,
             )
 
-            # 15. Decrement warehouse inventory
+            # 15. 扣减仓库库存
             for item in items:
                 remaining = item["quantity"]
                 warehouses = await conn.fetch(
@@ -2332,14 +2325,14 @@ async def _do_checkout(user_id: str, body: CheckoutRequest) -> dict:
                     )
                     remaining -= deduct
 
-            # 16. Update user total_spend
+            # 16. 更新用户的 total_spend
             await conn.execute(
                 "UPDATE users SET total_spend = total_spend + $1 WHERE id = $2",
                 total,
                 user_id,
             )
 
-            # 17. Clear cart
+            # 17. 清空购物车
             await conn.execute("DELETE FROM cart_items WHERE cart_id = $1", cart_id)
             await conn.execute(
                 """UPDATE carts
@@ -2358,7 +2351,7 @@ async def _do_checkout(user_id: str, body: CheckoutRequest) -> dict:
     }
 
 
-# ── Profile Routes ────────────────────────────────────────────
+# ── 个人资料路由 ────────────────────────────────────────
 
 
 @router.get("/api/profile")
@@ -2411,7 +2404,7 @@ async def get_user_memories(
     limit: int = 20,
     user: dict[str, Any] = Depends(require_auth),
 ) -> list[dict[str, Any]]:
-    """Return the authenticated user's stored agent memories."""
+    """返回已认证用户所存储的智能体记忆。"""
     pool = get_pool()
     email = current_user_email.get()
 
@@ -2453,7 +2446,7 @@ async def delete_user_memory(
     memory_id: str,
     user: dict[str, Any] = Depends(require_auth),
 ) -> dict[str, Any]:
-    """Soft-delete a stored memory (sets is_active=false)."""
+    """软删除一条已存储的记忆（把 is_active 设为 false）。"""
     pool = get_pool()
     email = current_user_email.get()
     result = await pool.execute(
@@ -2467,7 +2460,7 @@ async def delete_user_memory(
     return {"deleted": True}
 
 
-# ── Seller Routes ────────────────────────────────────────────
+# ── 卖家路由 ──────────────────────────────────────────
 
 
 @router.get("/api/seller/products")
@@ -2477,7 +2470,7 @@ async def list_seller_products(
     offset: int = 0,
     user: dict[str, Any] = Depends(require_seller),
 ) -> dict[str, Any]:
-    """List products owned by the authenticated seller."""
+    """列出已认证卖家拥有的商品。"""
     pool = get_pool()
     safe_limit = clamp_limit(limit, default=50, maximum=200)
     safe_offset = max(0, int(offset))
@@ -2531,7 +2524,7 @@ async def list_seller_orders(
     offset: int = 0,
     user: dict[str, Any] = Depends(require_seller),
 ) -> dict[str, Any]:
-    """List orders containing the authenticated seller's products."""
+    """列出包含已认证卖家商品的订单。"""
     pool = get_pool()
     safe_limit = clamp_limit(limit, default=20, maximum=200)
     safe_offset = max(0, int(offset))
@@ -2589,7 +2582,7 @@ async def list_seller_orders(
 
 @router.get("/api/seller/stats")
 async def get_seller_stats(user: dict[str, Any] = Depends(require_seller)) -> dict[str, Any]:
-    """Get aggregate sales statistics for the authenticated seller."""
+    """获取已认证卖家的聚合销售统计。"""
     pool = get_pool()
     user_id = user.get("user_id", "")
 

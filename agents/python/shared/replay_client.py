@@ -1,66 +1,18 @@
-"""Record/replay chat client — runs agents against a frozen LLM cassette.
+"""录制和回放聊天客户端，用固定模型响应驱动真实智能体流程。
 
-Removes the paid-key wall for anyone running the tutorials or the
-integration-marked test suites: with ``LLM_PROVIDER=replay`` and a committed
-fixtures directory, an agent runs exactly as it did when the fixture was
-recorded, with zero network calls and zero credentials.
+LLM_PROVIDER=replay 默认只读取 REPLAY_FIXTURES_DIR，无需网络或密钥。
+RECORD=true 时，缺少夹具才使用 REPLAY_RECORD_PROVIDER 发起真实调用
+并保存结果；录制仍需明确授权和相应凭据。
 
-Usage::
+夹具按有序消息、系统指令及工具模式构成的请求哈希索引，每次模型
+调用对应一个文件。FunctionInvocationLayer 仍执行真实本地工具，
+再把结果加入下一轮；因此回放覆盖工具循环，而非只重放最终答案。
+录制直接调用真实客户端 _inner_get_response，避免真实客户端的工具层
+提前执行完整循环，丢失原始 function_call。
 
-    LLM_PROVIDER=replay uv run python tutorials/01-first-agent/python/main.py
-    LLM_PROVIDER=replay RECORD=true uv run python tutorials/01-first-agent/python/main.py
-
-The first form plays back whatever is already in ``REPLAY_FIXTURES_DIR``
-(default ``tests/fixtures/replay``, relative to the process's cwd — each
-chapter/test module should pass its own directory so cassettes live next to
-the test that uses them, the same way VCR-style cassette libraries do).
-The second form additionally falls through to a real call — via
-``REPLAY_RECORD_PROVIDER`` (``openai`` or ``azure``, using the same
-credentials ``shared.factory.get_chat_client()`` would use for that
-provider) — whenever a fixture is missing, and persists the response before
-returning it. Re-running with ``RECORD`` unset then replays deterministically
-with no network access at all.
-
-Design notes:
-
-- Fixtures are keyed by a hash of the exact request (every message, in
-  order, plus the tool schemas offered) — not the response. A conversation
-  with N turns, or a tool-calling loop with N model calls, produces N
-  fixture files, each keyed on the request state at that point. This falls
-  naturally out of how ``BaseChatClient._inner_get_response`` is invoked:
-  MAF calls it once per model turn, and the message list already reflects
-  prior turns (including appended tool results) by the time of each call.
-- This class composes ``FunctionInvocationLayer`` directly with
-  ``BaseChatClient``, the same layering ``OpenAIChatClient`` uses internally
-  (``OpenAIChatClient``'s MRO is
-  ``FunctionInvocationLayer -> ChatMiddlewareLayer -> ChatTelemetryLayer ->
-  RawOpenAIChatClient -> BaseChatClient``) minus the middleware/telemetry
-  layers, which a replay client doesn't need. This is what makes recorded
-  tool-calling fixtures replay correctly: the recorded response can contain
-  a ``function_call`` content item, and ``FunctionInvocationLayer`` actually
-  executes the real local tool function and re-invokes
-  ``_inner_get_response`` with the tool result appended — exactly like a
-  live model would drive the loop, just without a live model.
-- Recording always calls the real client's ``_inner_get_response`` directly
-  (not its public ``get_response()``), for the same reason: providers like
-  ``OpenAIChatClient`` also layer ``FunctionInvocationLayer`` on top of their
-  raw client, and if recording went through that layer it would execute
-  tools *during recording* — leaving nothing to replay, since the fixture
-  would only ever contain the already-resolved final answer. Calling
-  ``_inner_get_response`` directly captures the raw, single-turn response —
-  including a raw ``function_call`` when the model wants one — so replay
-  reproduces the same tool-invocation loop, not just its answer.
-- Streaming isn't token-level here (mirrors the same simplification
-  ``shared/remote_agent.py`` already makes for the A2A transport): the full
-  recorded/replayed response is emitted as one ``ChatResponseUpdate`` per
-  message.
-- ``tutorials/_shared/replay_client.py`` is a second, independent copy of
-  this file — the tutorials workspace has its own venv with no path
-  dependency on ``agents/python``, so it can't import this module directly.
-  Same precedent as ``patch_maf.py`` / ``tutorials/_shared/maf_bootstrap.py``.
-  Keep the two in sync when either changes, with one deliberate exception:
-  ``_normalize_for_hash`` is intentionally *not* mirrored there. See its
-  docstring for why.
+流式模式按消息输出完整块，不是逐 token 流。教程有独立副本，因其
+环境不依赖 agents/python；公共行为应同步，但教程不含数据库载荷，
+有意不使用应用端的 _normalize_for_hash，以免改变已有夹具键。
 """
 
 from __future__ import annotations
@@ -83,19 +35,16 @@ logger = logging.getLogger(__name__)
 
 
 class ReplayFixtureMissingError(RuntimeError):
-    """Raised in replay mode when no fixture exists for a request.
+    """回放模式缺少请求夹具时抛出。
 
-    Not raised when ``record=True`` — a missing fixture then triggers a real
-    call instead.
+    record=True 时改为发起真实调用，不抛此异常。
     """
 
 
 def _canonical_request(messages: Any, options: dict[str, Any] | None) -> dict[str, Any]:
-    """JSON-serializable, hashable view of a request: every message plus tool schemas.
+    """将请求消息和工具模式转为可 JSON 序列化、可哈希的结构。
 
-    Deliberately excludes sampling params (temperature, etc.) from the key —
-    those don't change what a cassette should replay, and excluding them
-    means minor prompt-adjacent config tweaks don't invalidate every fixture.
+    温度等采样参数不参与键，避免不影响请求语义的配置调整使夹具失效。
     """
     tools = (options or {}).get("tools") or []
     tool_specs: list[dict[str, Any]] = []
@@ -107,59 +56,58 @@ def _canonical_request(messages: Any, options: dict[str, Any] | None) -> dict[st
     return {
         "messages": [m.to_dict() for m in messages],
         "tools": tool_specs,
-        # Agent-level system instructions travel in options, not as a message
-        # — include them so "same question, different instructions" doesn't
-        # collide on one fixture.
+        # 智能体系统指令保存在 options 而非消息中，
+        # 也必须加入哈希，避免相同问题、不同指令
+        # 错误命中同一夹具。
         "instructions": (options or {}).get("instructions"),
     }
 
 
-# Volatile values that live in tool-result payloads. Both are database-derived
-# and differ on every reseed, which is the whole reason _normalize_for_hash
-# exists — see its docstring.
+# 工具结果中的数据库易变值，
+# 每次重新初始化数据都可能不同，
+# 因此由 _normalize_for_hash 单独处理。
 _UUID_RE = re.compile(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b")
-# Anchored, and longest-match-first: a full timestamp is consumed before the
-# bare-month arm can nibble its leading "YYYY-MM". The month arm exists because
-# get_sentiment_trend buckets by DATE_TRUNC('month', ...) and returns labels
-# like "2026-08", which shift with the seed date exactly like a full timestamp.
+# 正则锚定且优先最长匹配，先消费完整时间戳，
+# 避免年月分支只吃掉 YYYY-MM 前缀。
+# 情感趋势按月分桶，
+# 其 YYYY-MM 标签也会随初始化日期变化。
 _TIMESTAMP_RE = re.compile(
-    r"\b\d{4}-\d{2}"  # year-month
-    r"(?:-\d{2}"  # optional day
-    r"(?:[T ]\d{2}:\d{2}:\d{2}"  # optional time
-    r"(?:\.\d+)?"  # optional fractional seconds
-    r"(?:Z|[+-]\d{2}:?\d{2})?)?"  # optional timezone
+    r"\b\d{4}-\d{2}"  # 年月。
+    r"(?:-\d{2}"  # 可选日期。
+    r"(?:[T ]\d{2}:\d{2}:\d{2}"  # 可选时分秒。
+    r"(?:\.\d+)?"  # 可选小数秒。
+    r"(?:Z|[+-]\d{2}:?\d{2})?)?"  # 可选时区。
     r")?\b"
 )
 
-# Scrubbing the month *labels* above is not enough: the bucket structure drifts
-# too, and it is made of plain numbers no regex can recognise as volatile.
+# 仅清理月份标签不够，桶结构本身也会变化，
+# 其中普通数值无法用时间正则识别。
 #
-# `get_sentiment_trend` groups by DATE_TRUNC('month', created_at) over a
-# NOW()-relative window. `scripts/seed.py` places each review at a fixed
-# day-offset from seed time (random.seed(42) pins the offsets), so the *set* of
-# reviews in the window is genuinely invariant — 15 reviews, every run. What is
-# not invariant is which calendar month a fixed day-offset lands in: it changes
-# as the calendar advances, so the same 15 reviews partition into 7 buckets one
-# week and 5 the next, with different per-bucket counts and averages, and a
-# `trend` derived from them that can flip with the partitioning.
+# get_sentiment_trend 按自然月分组，
+# 时间窗口相对 NOW()；种子脚本按固定天数偏移生成评论，
+# 随机种子固定了偏移，
+# 窗口内评论集合因此可以保持不变，
+# 但偏移落在哪个自然月会随日期变化。
+# 相同评论可能分到不同数量的桶，
+# 各桶计数、均值及推导趋势
+# 也会随之改变。
 #
-# That made the fixture key a function of the wall-clock date. It passed for
-# weeks, then failed the moment enough month boundaries had drifted — an eval
-# suite that goes red on its own, on a day nobody changed anything, and sends
-# whoever looks into it hunting a code change that does not exist.
+# 若把这些结果直接纳入键，夹具就依赖墙钟日期，
+# 可能连续通过数周后突然失效，
+# 即使没有任何代码改动，
+# 也会让排查者误以为出现代码回归。
 #
-# Only this one tool buckets by calendar period; every other NOW()-relative
-# query in the repo returns a set or a scalar over the window, both of which are
-# stable under a sliding anchor. So this stays narrow deliberately rather than
-# blanket-scrubbing numbers, which would let genuinely different requests
-# collide on one fixture.
+# 这里只针对该自然月聚合工具清理易变结构。
+# 其他相对时间查询返回的集合或标量通常稳定，
+# 所以归一化必须保持范围狭窄，
+# 不能粗暴清除所有数值，
+# 否则真正不同的请求也会碰撞。
 _MONTH_BUCKETS_RE = re.compile(r'"monthly_data"\s*:\s*\[[^\]]*\]')
 _TREND_RE = re.compile(r'"trend"\s*:\s*"(?:improving|declining|stable|insufficient_data)"')
 
 
 def _scrub(value: Any) -> Any:
-    """Recursively replace UUIDs, ISO-8601 timestamps and calendar-bucketed
-    aggregates with placeholders."""
+    """递归将 UUID、ISO-8601 时间戳和自然月聚合替换为占位值。"""
     if isinstance(value, str):
         value = _MONTH_BUCKETS_RE.sub('"monthly_data": "<buckets>"', value)
         value = _TREND_RE.sub('"trend": "<trend>"', value)
@@ -172,18 +120,11 @@ def _scrub(value: Any) -> Any:
 
 
 def _ordinalize_call_ids(messages: list[Any]) -> list[Any]:
-    """Rewrite provider-assigned tool ``call_id``s to their ordinal position.
+    """将提供方生成的工具 call_id 按首次出现顺序归一化。
 
-    ``call_uuzd0LvuGKurv6rH8b8XoucM`` is generated by the model, so a request
-    that is otherwise identical gets a different key depending on which
-    recording session produced the turn before it. Replacing each distinct id
-    with ``call_0``, ``call_1``, … keeps the call-to-result pairing intact while
-    removing that coupling, so re-recording one turn no longer invalidates every
-    fixture downstream of it.
-
-    Also removes an asymmetry: ``_scrub`` runs over tool messages only, so a
-    UUID-shaped ``call_id`` would be rewritten on the result side and left alone
-    on the call side. Normalizing both here keeps them paired either way.
+    依次映射为 call_0、call_1 等，保持调用与结果配对，避免重新录制
+    前一轮就改变所有后续夹具键。调用侧和结果侧同时处理，也避免仅在
+    工具结果中清理 UUID 时破坏配对。
     """
     seen: dict[str, str] = {}
     out: list[Any] = []
@@ -203,40 +144,12 @@ def _ordinalize_call_ids(messages: list[Any]) -> list[Any]:
 
 
 def _normalize_for_hash(canonical: dict[str, Any]) -> dict[str, Any]:
-    """Strip database-derived volatility out of the cache key.
+    """从夹具键中移除数据库派生的易变值。
 
-    In a MAF tool loop, turn N+1's messages carry turn N's ``function_result``
-    — raw JSON straight out of Postgres. That means live database payloads end
-    up in the fixture key, and CI reseeds a fresh database on every run, so
-    every fixture misses. Two kinds of value are responsible, and both appear
-    *only* inside ``role: "tool"`` messages:
-
-    - random ``gen_random_uuid()`` primary keys (``reviews.id``, ``orders.id``)
-    - timestamps, which ``scripts/seed.py`` anchors to ``datetime.now()`` at
-      seed time, down to the microsecond
-
-    So they are replaced with placeholders here, for hashing only — the fixture
-    file on disk still stores the raw request, which is what makes it readable
-    and what lets ``evals/rehash_fixtures.py`` recompute keys offline.
-
-    Deliberately scoped to tool results. A tool *call*'s arguments live in the
-    preceding assistant message and are hashed verbatim, so two genuinely
-    different calls can never collide on one fixture.
-
-    That is safe only because of a coupling worth stating out loud: the model
-    routinely copies an id out of a tool result and back into a later call
-    (``find_product_by_name`` -> ``analyze_sentiment(product_id=...)``), and
-    every such id today is a deterministic uuid5 from
-    ``scripts/seed.py::product_id_for``. A dataset case that passed a *random*
-    id — a real ``orders.id`` or ``reviews.id`` — as a tool argument would put
-    a volatile value in an un-normalized message and quietly reintroduce this
-    bug. ``test_deterministic_product_ids_are_load_bearing_for_this_design``
-    guards that.
-
-    Note: ``tutorials/_shared/replay_client.py`` deliberately does *not* carry
-    this. Tutorial chapters never touch the database, so they have no volatile
-    payloads to strip, and changing their hash would invalidate every recorded
-    tutorial fixture for no benefit.
+    工具循环的下一轮携带上一轮数据库结果；重新初始化会改变 UUID 与
+    时间字段，导致相同业务请求无法命中。这里只对需要处理的载荷归一化，
+    保留真正的请求差异。教程不访问数据库，故不复制该逻辑，以免无谓
+    改变全部教程夹具哈希。
     """
     messages = [
         _scrub(m) if isinstance(m, dict) and m.get("role") == "tool" else m for m in canonical.get("messages", [])
@@ -250,10 +163,9 @@ def _request_hash(canonical: dict[str, Any]) -> str:
 
 
 class ReplayChatClient(FunctionInvocationLayer, BaseChatClient):
-    """``BaseChatClient`` that serves recorded fixtures instead of calling a live LLM.
+    """读取已录制夹具而不调用真实模型的 BaseChatClient。
 
-    See the module docstring for the record/replay contract and why this
-    composes ``FunctionInvocationLayer`` directly.
+    直接组合 FunctionInvocationLayer，保留真实工具循环。
     """
 
     OTEL_PROVIDER_NAME = "replay"
@@ -272,13 +184,10 @@ class ReplayChatClient(FunctionInvocationLayer, BaseChatClient):
         self._record_client: BaseChatClient | None = None
 
     def _build_record_client(self) -> BaseChatClient:
-        """Lazily build the real client used only when recording a missing fixture.
+        """仅在缺少夹具且允许录制时创建真实客户端。
 
-        Deliberately does not call ``shared.factory.get_chat_client()`` —
-        that would dispatch back to ``LLM_PROVIDER``, which is ``"replay"``
-        while this class is active, recursing into itself. Constructs the
-        real client directly from settings instead, mirroring
-        ``get_chat_client()``'s openai/azure branches exactly.
+        不能调用通用 get_chat_client，否则当前 replay 配置会递归创建自身；
+        直接按配置构造 openai 或 azure 客户端。
         """
         if self._record_client is not None:
             return self._record_client
@@ -356,13 +265,13 @@ class ReplayChatClient(FunctionInvocationLayer, BaseChatClient):
                 for msg in response.messages:
                     yield ChatResponseUpdate(role=msg.role, contents=msg.contents, author_name=msg.author_name)
 
-            # _build_response_stream (not a bare ResponseStream(_gen())) wires
-            # the finalizer that turns the update chunks back into a
-            # ChatResponse. Skipping it works for a direct agent.run(stream=True)
-            # caller that only consumes the update iterator, but breaks under
-            # MAF's own streaming call sites (e.g. an AgentExecutor inside a
-            # WorkflowBuilder) that call ResponseStream.get_final_response() —
-            # without a finalizer that raises, not returns a ChatResponse.
+            # 使用 _build_response_stream 安装终结器，
+            # 把更新分块合成为最终 ChatResponse。
+            # 仅创建裸 ResponseStream 虽可供简单迭代使用，
+            # 但工作流中的 AgentExecutor 等调用方
+            # 还会读取最终响应。
+            # 若缺少终结器，get_final_response()
+            # 会抛错，无法返回 ChatResponse。
             return self._build_response_stream(_gen())
 
         return self._load_or_record(messages, options)

@@ -1,24 +1,26 @@
-# Chapter 32 — Cost Control and Budgets
+# 第 32 章 · 成本控制与预算
 
-An agentic loop that keeps calling tools and re-prompting the model has no natural stopping point of its own — nothing about the loop knows it's gotten expensive. This chapter builds a small `ChatMiddleware` that tracks the running dollar cost of a run turn by turn and, once it crosses a ceiling, refuses to start another one — the same mechanic the capstone app's `CostBudgetMiddleware` uses in production.
+[项目首页](../../README.md) · [教程总览](../README.md) · [术语表](../_shared/jargon-glossary.md)
 
-## Why this chapter
+一个不断调用工具、反复重新提示模型的智能体循环，自身没有任何天然的停止点 —— 循环里没有任何东西知道自己已经变贵了。本章构建一个小型 `ChatMiddleware`，逐轮跟踪一次运行的美元成本，并在越过上限后拒绝再开始下一轮 —— 这正是完整项目的 `CostBudgetMiddleware` 在生产中所用的同一套机制。
 
-[Chapter 07](../07-observability-otel/) and [`docs/concepts/13-observability-and-cost.md`](../../docs/concepts/13-observability-and-cost.md) cover cost as a *reporting* concern: turn token counts into a dollar figure so an eval report or a mode-comparison UI can say what a request cost, after the fact. That's necessary but it isn't a ceiling — a report only tells you what already happened. Nothing stops a tool-calling loop from re-prompting the model ten more times on a single user request if the model keeps deciding it needs one more lookup; by the time a post-hoc report shows the number, the money is already spent. In this repo, `shared/cost.py::estimate_cost()` existed for exactly one caller for a long time — `evals/evaluator.py`, pricing a *completed* eval run — and nothing at runtime ever read it. That gap, not the pricing math itself, is what this chapter's middleware closes: the same `estimate_cost()` formula, called on every turn *as the run happens*, with a hard stop available if you want one.
+## 本章动机
 
-## Prerequisites
+[第 07 章](../07-observability-otel/)与 [`docs/concepts/13-observability-and-cost.md`](../../docs/concepts/13-observability-and-cost.md) 把成本作为*报告*问题来讲：把每轮的 token 数换算成美元，好让一份评测报告或模式对比界面在事后说出一次请求花了多少钱。这很必要，但它不是一个上限 —— 报告只能告诉你已经发生了什么。没有任何东西阻止一个工具调用循环在单个用户请求上把模型再重新提示十次，只要模型一直认为自己还需要再查一次；等到事后报告显示出那个数字时，钱已经花掉了。在本仓库中，`shared/cost.py::estimate_cost()` 在很长一段时间里只有一个调用方 —— `evals/evaluator.py`，给一次*已完成的*评测运行定价 —— 运行期从来没有任何东西读过它。本章中间件要补上的正是这个缺口，而不是定价公式本身：同一套 `estimate_cost()` 公式，在运行过程中*每一轮*都被调用，并且在你需要时提供一个硬性停止。
 
-- Completed [Chapter 06 — Middleware and the Agent Pipeline](../06-middleware/) — this chapter assumes you already know the three middleware kinds and how `call_next()` works
-- Repo-root `.env` with a working LLM provider (`OPENAI_API_KEY`, or `AZURE_OPENAI_ENDPOINT` + `AZURE_OPENAI_KEY` + `AZURE_OPENAI_DEPLOYMENT`)
-- Skim [`docs/concepts/13-observability-and-cost.md`](../../docs/concepts/13-observability-and-cost.md) for the tokens-as-cost-unit background — this chapter doesn't re-derive that, it builds the runtime enforcement on top of it
+## 前置条件
 
-## The concept
+- 已完成[第 06 章 · 中间件与智能体管线](../06-middleware/) —— 本章假设你已经了解三类中间件以及 `call_next()` 的工作方式
+- 仓库根目录的 `.env` 中有可用的 LLM 提供方（`OPENAI_API_KEY`，或 `AZURE_OPENAI_ENDPOINT` + `AZURE_OPENAI_KEY` + `AZURE_OPENAI_DEPLOYMENT`）
+- 浏览 [`docs/concepts/13-observability-and-cost.md`](../../docs/concepts/13-observability-and-cost.md) 了解「以 token 为成本单位」的背景 —— 本章不重新推导它，而是在其之上构建运行期强制
 
-A cost *ceiling* and a cost *report* answer different questions at different times. A report answers "what did this cost?" once the run is already over — useful for an eval dashboard, useless for stopping a runaway request while it's still spending. A ceiling answers "should the next turn even happen?" — it has to run *inside* the loop, checking the running total before every model call, not after the whole thing finishes. That's why this has to be middleware and not a wrapper around the final response: `ChatMiddleware.process()` fires once per raw LLM call, which for a tool-calling agent means multiple times per user question — exactly the granularity a budget check needs.
+## 核心概念
 
-This repo already has a two-tier posture for a guardrail that can misfire: `GROUNDING_MODE` (`docs/concepts/10-guardrails.md`) can `observe` (log only) or `enforce` (change behavior) without an all-or-nothing flag. The cost budget uses the identical shape — `COST_BUDGET_MODE` is `"off"` (middleware not attached at all), `"observe"` (accumulate and log every turn's cost; never block, even past the ceiling), or `"enforce"` (same accumulation, plus refuse the next turn once the running total exceeds the ceiling). `observe` is the safe default specifically because it can't change a run's outcome, only its logs — you can turn cost tracking on in production and watch real numbers accumulate for a while before ever risking a false-positive refusal on a legitimate expensive request. Both `COST_BUDGET_MODE` (default `"observe"`) and `COST_BUDGET_USD_PER_RUN` (default `None`, i.e. unset) ship additive and opt-in in this repo, matching every other guardrail flag's default-off posture — nothing is enforced anywhere until an operator sets both.
+成本*上限*与成本*报告*在不同时刻回答不同的问题。报告回答「这次花了多少？」，在运行已经结束之后 —— 对评测看板有用，对在一个仍在花钱的失控请求中途把它拦住则毫无用处。上限回答「下一轮到底该不该发生？」—— 它必须跑在循环*内部*，在每次模型调用之前检查累计总额，而不是等整件事结束之后。这正是为什么它必须是中间件，而不是对最终响应的包装：`ChatMiddleware.process()` 每次原始 LLM 调用触发一次，对于带工具调用的智能体而言，这意味着每个用户问题会触发多次 —— 恰好是预算检查所需的粒度。
 
-The enforcement mechanic itself has an honest limitation worth stating up front: cost is only knowable *after* a turn completes, from its usage data — there's no way to know a turn's price before making it. So `enforce` mode is necessarily one turn behind the actual overage: it can't abort a call already in flight, it can only refuse the *next* one once the running total from completed turns has already crossed the line. A run can therefore finish slightly over budget (whatever the last permitted turn cost), never wildly over it. That's the same trade-off the real `GroundingVerificationMiddleware` accepts for streamed content — correct the next decision point, not the one already committed.
+本仓库对「可能误触的护栏」已经有一套两档姿态：`GROUNDING_MODE`（`docs/concepts/10-guardrails.md`）可以是 `observe`（只记日志）或 `enforce`（改变行为），而不需要一个全有或全无的开关。成本预算使用完全相同的形态 —— `COST_BUDGET_MODE` 取 `"off"`（完全不挂载中间件）、`"observe"`（累计并记录每一轮的成本；即使越过上限也从不拦截），或 `"enforce"`（同样的累计，外加一旦累计总额超过上限就拒绝下一轮）。`observe` 之所以是安全的默认值，正是因为它无法改变一次运行的结果，只能改变它的日志 —— 你可以在生产环境打开成本跟踪、先观察真实数字累积一段时间，再去冒「对一次合法的昂贵请求产生误拒」的风险。`COST_BUDGET_MODE`（默认 `"observe"`）与 `COST_BUDGET_USD_PER_RUN`（默认 `None`，即未设置）在本仓库中都以增量、可选的方式提供，与其他每一个护栏开关默认关闭的姿态一致 —— 除非运维同时设置两者，否则任何地方都不会强制执行。
+
+强制机制本身有一个值得事先说明的诚实局限：成本只有在一轮*完成之后*、从其用量数据中才可知 —— 没有办法在发起之前知道一轮的价格。因此 `enforce` 模式必然落后于实际超支一轮：它无法中止一次已经在途的调用，只能在已完成轮次的累计总额已经越线之后拒绝*下一*轮。于是运行结束时可能略微超出预算（即最后那个被允许的轮次的成本），但绝不会大幅超出。这与真实的 `GroundingVerificationMiddleware` 对流式内容所接受的取舍相同 —— 纠正下一个决策点，而不是已经承诺的那个。
 
 ```mermaid
 %%{init: {'theme':'base', 'themeVariables': {
@@ -31,21 +33,21 @@ flowchart LR
   classDef success  fill:#10b981,stroke:#047857,color:#ffffff
   classDef error    fill:#ef4444,stroke:#b91c1c,color:#ffffff
 
-  user([User question])
+  user([用户提问])
   budget{{CostBudgetChatMiddleware}}
   llm[(LLM)]
-  tool[[get_product_price tool]]
-  answer([Answer])
-  refusal([Budget refusal])
+  tool[[get_product_price 工具]]
+  answer([回答])
+  refusal([预算拒绝])
 
   user --> budget
-  budget -- "under budget: call_next()" --> llm
-  llm -- "decides to call tool" --> tool
-  tool -- "result" --> llm
+  budget -- "未超预算：call_next()" --> llm
+  llm -- "决定调用工具" --> tool
+  tool -- "结果" --> llm
   llm -- "usage_details" --> budget
-  budget -- "+turn cost -> running total" --> budget
-  budget -- "still under budget" --> answer
-  budget -- "next turn: over budget" --> refusal
+  budget -- "累加本轮成本 → 累计总额" --> budget
+  budget -- "仍在预算内" --> answer
+  budget -- "下一轮：超预算" --> refusal
 
   class user success
   class llm external
@@ -55,18 +57,18 @@ flowchart LR
   class refusal error
 ```
 
-The middleware sits *between* every model call and the model itself — it can let a turn through, price it after the fact, and refuse the next one without the agent's own code ever knowing a budget exists.
+中间件位于每次模型调用与模型本身*之间* —— 它可以让一轮通过、在事后为它定价、并拒绝下一轮，而智能体自己的代码始终不知道预算的存在。
 
 ## Python
 
-Run from the repo root using the shared `tutorials/` uv project (one `uv sync` covers every chapter):
+在仓库根目录运行，使用共享的 `tutorials/` uv 项目（一次 `uv sync` 覆盖全部章节）：
 
 ```bash
 uv sync --project tutorials
 uv run --project tutorials python tutorials/32-cost-control-and-budgets/python/main.py
 ```
 
-Source: [`python/main.py`](./python/main.py). The middleware itself:
+源码：[`python/main.py`](./python/main.py)。中间件本身：
 
 ```python
 class CostBudgetChatMiddleware(ChatMiddleware):
@@ -88,7 +90,7 @@ class CostBudgetChatMiddleware(ChatMiddleware):
                 messages=[Message(role="assistant", contents=[BUDGET_REFUSAL_MESSAGE])],
                 finish_reason="length",
             )
-            return  # short-circuit — call_next() is never invoked
+            return  # 短路 —— call_next() 永远不会被调用
 
         await call_next()
         if context.result is None:
@@ -96,9 +98,9 @@ class CostBudgetChatMiddleware(ChatMiddleware):
         self._record(context.result)
 ```
 
-`_record()` reads `context.result.usage_details` (the same attribute the real client populates from the provider's response), converts token counts to a dollar figure with a simplified, single-model version of `estimate_cost()`, and adds it to `self.total_cost_usd`. The check-before-`call_next()` / record-after-`call_next()` split is the whole mechanism — everything else in the class is bookkeeping for the demo's printouts.
+`_record()` 读取 `context.result.usage_details`（真实客户端从提供方响应中填充的同一个属性），用一个简化到单模型的 `estimate_cost()` 版本把 token 数换算成美元，并累加进 `self.total_cost_usd`。`call_next()` 之前检查、`call_next()` 之后记录 —— 这个分工就是全部机制；类里其余的一切都只是为演示打印服务的记账。
 
-`build_agent()` wires the tool and the middleware exactly the way Chapter 06 wires its three middleware classes:
+`build_agent()` 接工具与中间件的方式，与第 06 章接它那三个中间件类完全一致：
 
 ```python
 def build_agent(budget_middleware: CostBudgetChatMiddleware, client: object | None = None) -> Agent:
@@ -111,7 +113,7 @@ def build_agent(budget_middleware: CostBudgetChatMiddleware, client: object | No
     )
 ```
 
-`main()` asks three questions in sequence against the *same* middleware instance, so cost accumulates across them the way it would across a longer real run — a single tool-calling question is only two model turns, not enough to demonstrate a ceiling tripping on its own. `DEMO_BUDGET_USD_PER_RUN` is set to a fraction of a cent purely so the ceiling trips within those three short questions; a real deployment sets `COST_BUDGET_USD_PER_RUN` for its actual workload economics, not a teaching demo's scale. A real run against Azure OpenAI looks like this:
+`main()` 针对*同一个*中间件实例依次问三个问题，因此成本会像在一次更长的真实运行中那样跨问题累积 —— 单个带工具调用的问题只有两轮模型调用，不足以演示上限被触顶。`DEMO_BUDGET_USD_PER_RUN` 被设成不到一美分，纯粹是为了让上限在那三个简短问题内就被触顶；真实部署会按自己实际的工作负载经济性来设 `COST_BUDGET_USD_PER_RUN`，而不是按教学演示的量级。一次针对 Azure OpenAI 的真实运行看起来是这样的：
 
 ```text
 budget: $0.0015 per run (mode=enforce)
@@ -135,78 +137,50 @@ turns blocked:  1
 running total:  $0.0016 (budget $0.0015)
 ```
 
-The first two questions each cost two turns (tool call, then answer) and both complete normally. By the third question the running total ($0.0016) already exceeds the budget ($0.0015) from the second question's turns — so the third question's very first turn is refused before it's made, and the agent's "answer" is the canned refusal text instead of a real price lookup.
+前两个问题各花两轮（工具调用，然后回答），都正常完成。到第三个问题时，累计总额（$0.0016）已经因第二个问题的那几轮而超过了预算（$0.0015）—— 于是第三个问题的第一轮在发起之前就被拒绝，智能体的「回答」变成预置的拒绝文本，而不是一次真实的价格查询。
 
-## .NET
+## 常见坑
 
-Source: [`dotnet/Program.cs`](./dotnet/Program.cs).
+- **`enforce` 在 `call_next()` *之前*检查、在它*之后*记录。** 把顺序反过来 —— 在记录完当前轮自身成本之后才检查 —— 就意味着某一轮可以把总额推过预算却仍然完成；上限永远只拦*下一*轮，从不拦当前正在跑的这一轮。这是刻意的，不是缺陷：见上文「核心概念」。
+- **`ChatMiddleware` 在 `LLM_PROVIDER=replay` 下不会触发。** `tutorials/_shared/replay_client.py` 的 `ReplayChatClient` 把 `FunctionInvocationLayer` 与 `BaseChatClient` 直接组合，完全跳过了 `ChatMiddlewareLayer`（见该模块自己的 docstring）—— 一个回放客户端仅仅为了正确回放一次工具调用并不需要它。这意味着预算中间件的逐轮打印与它的拒绝，只有面对真实 LLM 时才可观察；本章的回放测试只证明工具调用往返能正确回放。第 06 章做 PII 脱敏的 `ChatMiddleware` 出于同样的原因、有完全相同的局限。
+- **预算为 `0.0` 时仍然恰好允许一轮。** 判断是 `total_cost_usd > budget_usd` 而不是 `>=` —— 在还没花任何钱时，`0.0 > 0.0` 为 `False`，因此即使预算是零，第一轮也总会通过。这与生产实现的 `CostBudgetMiddleware` 完全一致，并有单元测试覆盖。
+- **拒绝是一个响应，而不是异常。** 它带 `finish_reason="length"` 返回，因此调用方不可能忘记处理它，也不需要处理它。
+- **流式需要自己的路径。** 用量在流上是作为 `UsageContent` 项到达的，而不是挂在响应对象上；漏掉它就会让一个流式智能体得到一个永不累积、因而永不触顶的预算。
+- **完全省略用量的提供方需要自己的计数器。** 生产实现为这种情况单独计数（`TurnsUnpriced`），而不是把它当作免费 —— 静默地让预算失效，正是让一次运行变得无界而表面上一切正常的方式。本章的 `_record()` 遇到缺失用量时只是跳过不加，属于「无数据」而非「免费调用」，与生产实现的 `_turn_cost()` 一致。
+- **本演示用的是普通实例属性，而不是 `ContextVar`。** 生产实现的 `CostBudgetMiddleware` 把成本累加进 `current_run_cost_usd`，一个 `ContextVar`，因为真实应用中的并发请求是各自独立的 asyncio Task，绝不能看到彼此的累计总额。本章的问题在一个进程里顺序执行，因此普通属性就够 —— 不要把这种简化照搬进服务并发请求的代码。
 
-```bash
-cd tutorials/32-cost-control-and-budgets/dotnet
-dotnet run
-dotnet test tests/CostControl.Tests.csproj
-```
-
-**This is the chapter where .NET can test what Python cannot.** Python's `ReplayChatClient` composes `FunctionInvocationLayer` directly and skips `ChatMiddlewareLayer`, so `CostBudgetChatMiddleware.process()` never runs under `LLM_PROVIDER=replay` and the enforcement path is live-LLM-only. A `DelegatingChatClient` has no such gap — it wraps whatever it is handed — so all of it is gated on every PR, for free.
-
-```csharp
-IChatClient pipeline = inner
-    .AsBuilder()
-    .Use(next => new CostBudgetChatClient(next, budget, log))
-    .Build();
-```
-
-Order matters: the budget client sits **outside** function invocation, so each model round trip in a tool-calling loop is one budgeted turn. `A_Tool_Calling_Loop_Costs_One_Budgeted_Turn_Per_Model_Round_Trip` asserts it — if a two-turn tool call only counted once, an agent looping through ten tool calls would look as cheap as one.
-
-### Two behaviours that read like bugs
-
-- **Enforcement is one turn behind.** Cost is only knowable *after* a turn completes, from its `Usage`, so the turn that crosses the ceiling always runs to completion and the one after it is refused. A budget promising a hard cap would be lying. `The_Turn_That_Crosses_The_Ceiling_Still_Completes` asserts the honest version.
-- **A refusal is a response, not an exception**, with `FinishReason.Length` — so a caller cannot forget to handle it, and does not have to.
-
-Streaming needs its own path: usage arrives as a `UsageContent` item on the stream rather than on a response object, and missing it gives a streaming agent a budget that never accumulates and therefore never trips.
-
-A provider that omits usage entirely gets its own counter (`TurnsUnpriced`) rather than being treated as free — silently disabling the budget is how a run goes unbounded without anything looking wrong.
-
-## Gotchas
-
-- **`enforce` checks *before* `call_next()`, records *after* it.** Reversing that — checking after recording the current turn's own cost — would mean a turn could push the total over budget and still complete; the ceiling only ever blocks the *next* turn, never the one currently running. This is deliberate, not a bug: see "The concept" above.
-- **`ChatMiddleware` doesn't fire under `LLM_PROVIDER=replay`.** `tutorials/_shared/replay_client.py`'s `ReplayChatClient` composes `FunctionInvocationLayer` directly with `BaseChatClient`, skipping `ChatMiddlewareLayer` entirely (see that module's own docstring) — a replay client doesn't need it just to play back a tool call correctly. That means the budget middleware's turn-by-turn prints and its refusal are only observable against a live LLM; the replay test in this chapter only proves the tool-calling round trip replays correctly. Chapter 06's PII-redaction `ChatMiddleware` has the identical limitation, for the identical reason.
-- **A budget of `0.0` still allows exactly one turn.** The check is `total_cost_usd > budget_usd`, not `>=` — before anything has been spent, `0.0 > 0.0` is `False`, so the very first turn always goes through even at a zero budget. This mirrors production's `CostBudgetMiddleware` exactly and is covered by a unit test.
-- **This demo uses a plain instance attribute, not a `ContextVar`.** Production's `CostBudgetMiddleware` accumulates into `current_run_cost_usd`, a `ContextVar`, because concurrent requests in the real app run as separate asyncio Tasks that must never see each other's running total. This chapter's questions run sequentially in one process, so a plain attribute is enough — don't copy that simplification into code that serves concurrent requests.
-- **Missing `usage_details` is silently skipped, not priced at zero.** A response without usage data (some fixtures, some providers) means `_record()` returns without adding anything — this is a "no data" case, not a "free call," matching production's `_turn_cost()`.
-
-## Tests
+## 测试
 
 ```bash
 uv run --project tutorials pytest tutorials/32-cost-control-and-budgets/python/tests -v
 ```
 
-`tutorials/32-cost-control-and-budgets/python/tests/test_cost_control_and_budgets.py` covers, structurally:
+`tutorials/32-cost-control-and-budgets/python/tests/test_cost_control_and_budgets.py` 从结构上覆盖：
 
-1. **Unit tests against the tool function directly** — canned price for a known product ID, a clean fallback for an unknown one, case-insensitivity — no LLM involved.
-2. **Agent wiring** — `get_product_price` and the `CostBudgetChatMiddleware` instance both show up on `build_agent()`'s built agent.
-3. **Middleware unit tests against a hand-built duck-typed `ChatContext`** — cost accumulates across turns, `observe` mode never blocks even far over budget, `off` mode skips tracking entirely, `enforce` mode lets the first two turns through (running total `<=` budget) and refuses the third, and the zero-budget edge case above — none of these touch an LLM, mirroring the real `agents/python/tests/test_cost_budget.py` test names and structure.
-4. **A replay test** (`test_replay_invokes_price_tool_and_answers`) that plays back a committed fixture in `tests/fixtures/replay/` — no network or credentials required, safe for CI. Per the Gotchas above, it only asserts the tool-calling answer, not middleware counters.
-5. **Real-LLM integration tests**, skipped unless usable credentials are present — one drives the three-question demo end to end and asserts the budget actually trips (`blocked >= 1`), the other asserts `observe` mode never blocks no matter how far over a trivially tiny budget it goes.
+1. **直接针对工具函数的单元测试** —— 已知商品 ID 的预置价格、未知商品 ID 的干净兜底、大小写不敏感 —— 不涉及 LLM。
+2. **智能体接线** —— `get_product_price` 与那个 `CostBudgetChatMiddleware` 实例都出现在 `build_agent()` 构建出的智能体上。
+3. **针对手工构造的鸭子类型 `ChatContext` 的中间件单元测试** —— 成本跨轮累积；`observe` 模式即使远超预算也从不拦截；`off` 模式完全跳过跟踪；`enforce` 模式让前两轮通过（累计总额 `<=` 预算）并拒绝第三轮；以及上面那个零预算的边界情况 —— 以上都不接触 LLM，其测试名称与结构都刻意对齐真实的 `agents/python/tests/test_cost_budget.py`。
+4. **一次回放测试**（`test_replay_invokes_price_tool_and_answers`），播放 `tests/fixtures/replay/` 中已提交的夹具 —— 不需要网络或凭据，可安全用于 CI。按上文「常见坑」所述，它只断言工具调用的回答，不断言中间件计数器。
+5. **真实 LLM 集成测试**，在缺少可用凭据时跳过 —— 一个端到端驱动那个三问演示并断言预算确实被触顶（`blocked >= 1`），另一个断言 `observe` 模式无论超出多么微小的预算多远都从不拦截。
 
-## How this shows up in the capstone
+## 在完整项目中的落点
 
-This chapter's `CostBudgetChatMiddleware` is a simplified stand-in for `CostBudgetMiddleware` in `agents/python/shared/guardrails/cost_budget_middleware.py:119`, whose own `process()` method (`agents/python/shared/guardrails/cost_budget_middleware.py:132`) is the exact check-before / record-after pattern this chapter teaches — same short-circuit shape as `InjectionDetectionChatMiddleware`, per that file's own module docstring. The one structural difference is the accumulator: production reads and writes `current_run_cost_usd`, a `ContextVar` (`agents/python/shared/guardrails/cost_budget_middleware.py:69`), instead of this chapter's plain instance attribute, specifically so concurrent requests (separate asyncio Tasks in the real app) never see each other's running total.
+本章的 `CostBudgetChatMiddleware` 是 `agents/python/shared/guardrails/cost_budget_middleware.py:83` 中 `CostBudgetMiddleware` 的简化替身，其 `process()` 方法（`agents/python/shared/guardrails/cost_budget_middleware.py:94`）正是本章讲授的「先检查 / 后记录」模式 —— 与 `InjectionDetectionChatMiddleware` 相同的短路形态，这一点在该文件自己的模块 docstring 中有说明。唯一的结构性差别是累加器：生产实现读写 `current_run_cost_usd`，一个 `ContextVar`（`agents/python/shared/guardrails/cost_budget_middleware.py:29`），而不是本章的普通实例属性 —— 专门为了让并发请求（真实应用中各自独立的 asyncio Task）绝不看到彼此的累计总额。
 
-It's wired into the standard middleware stack at the single composition point every specialist and the orchestrator use, `build_specialist_middleware()` in `agents/python/shared/middleware.py:179`, gated on the mode flag:
+它接在标准中间件栈上那个每个专业智能体与编排器都使用的唯一组装点 —— `agents/python/shared/middleware.py:214` 的 `build_specialist_middleware()` —— 并由模式开关门控：
 
 ```python
 if settings.COST_BUDGET_MODE != "off":
     stack.append(CostBudgetMiddleware())
 ```
 
-(`agents/python/shared/middleware.py:224-225`.) Both config flags live in `agents/python/shared/config.py`: `COST_BUDGET_MODE: str = "observe"` at `agents/python/shared/config.py:295`, and `COST_BUDGET_USD_PER_RUN: float | None = None` at `agents/python/shared/config.py:300` — off by default, opt-in, exactly as this chapter's "The concept" section describes.
+（`agents/python/shared/middleware.py:248-245`。）两个配置开关都位于 `agents/python/shared/config.py`：`COST_BUDGET_MODE: str = "observe"` 在 `agents/python/shared/config.py:341`，`COST_BUDGET_USD_PER_RUN: float | None = None` 在 `agents/python/shared/config.py:346` —— 默认关闭、可选启用，正如本章「核心概念」小节所述。
 
-The per-turn dollar conversion itself — token counts to USD — is `estimate_cost()` in `agents/python/shared/cost.py:45`, the same function this chapter's `estimate_cost_usd()` simplifies down to a single model's pricing. Before `CostBudgetMiddleware` existed, that function had exactly one caller (`evals/evaluator.py`, pricing a *completed* eval run for reporting); the middleware is what turns it into a runtime ceiling instead of an after-the-fact number. `agents/python/tests/test_cost_budget.py` (266 lines) is the real test suite this chapter's own middleware tests deliberately mirror the shape of.
+逐轮把 token 数换算成美元这件事本身 —— 即 `agents/python/shared/cost.py:35` 的 `estimate_cost()` —— 与本章 `estimate_cost_usd()` 所简化成的单模型定价是同一个函数。在 `CostBudgetMiddleware` 存在之前，那个函数只有一个调用方（`evals/evaluator.py`，为报告给一次*已完成的*评测运行定价）；正是这个中间件把它从一个事后数字变成了运行期上限。`agents/python/tests/test_cost_budget.py`（347 行）是本章自己的中间件测试刻意对齐其形态的真实测试套件。
 
-## What's next
+## 下一步
 
-- Previous chapter: [Chapter 31 — Retry and Compensation](../31-retry-and-compensation/)
-- Full source: [`python/`](./python/)
-- Concept deep dive: [`docs/concepts/13-observability-and-cost.md`](../../docs/concepts/13-observability-and-cost.md)
-- Shared: [Mermaid style guide](../_shared/mermaid-style-guide.md) · [Jargon glossary](../_shared/jargon-glossary.md)
+- 上一章：[第 31 章 · 重试与补偿](../31-retry-and-compensation/)
+- 完整源码：[`python/`](./python/)
+- 概念深入：[`docs/concepts/13-observability-and-cost.md`](../../docs/concepts/13-observability-and-cost.md)
+- 共享资料：[Mermaid 风格指南](../_shared/mermaid-style-guide.md) · [术语表](../_shared/jargon-glossary.md)

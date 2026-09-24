@@ -1,10 +1,7 @@
-"""
-Phase 7 Refactor 07 — Context provider split tests.
+"""上下文提供器拆分的单元测试。
 
-Pure unit tests — no DB required. Each fine-grained provider is exercised
-through a fake connection pool so we can assert on the state dict + the
-instructions passed to a fake SessionContext, and the composite is
-verified to produce the legacy state["user_context"] string byte-for-byte.
+使用预设查询结果验证状态字典、指令追加以及组合器兼容字符串，
+不需要数据库服务。
 """
 
 from __future__ import annotations
@@ -27,7 +24,7 @@ from shared.context_providers import (
 
 
 class FakeContext:
-    """Captures extend_instructions calls for assertion."""
+    """记录 extend_instructions 调用，供断言。"""
 
     def __init__(self) -> None:
         self.extensions: list[tuple[str, str]] = []
@@ -37,7 +34,7 @@ class FakeContext:
 
 
 class FakePool:
-    """asyncpg-style pool that returns canned rows for the three provider queries."""
+    """为三个提供器查询返回预设行的 asyncpg 形态替身。"""
 
     def __init__(
         self,
@@ -140,7 +137,7 @@ async def test_user_profile_provider_no_op_when_no_user(monkeypatch) -> None:
     _patch_pool(monkeypatch, FakePool(user_row=None))
     ctx = FakeContext()
     state: dict[str, Any] = {}
-    # No email set → ContextVar returns empty → provider exits early.
+    # 无邮箱时 ContextVar 为空，提供器提前退出。
     await UserProfileProvider().before_run(agent=None, session=None, context=ctx, state=state)
     assert state == {}
     assert ctx.extensions == []
@@ -148,7 +145,7 @@ async def test_user_profile_provider_no_op_when_no_user(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_user_profile_provider_no_op_when_db_unavailable(monkeypatch, user_email) -> None:
-    """A missing pool (e.g., worker startup) must not crash the agent run."""
+    """连接池未就绪时不能使智能体运行崩溃。"""
     import shared.context_providers as mod
 
     monkeypatch.setattr(mod, "get_pool", lambda: (_ for _ in ()).throw(RuntimeError("no pool")))
@@ -205,7 +202,7 @@ async def test_agent_memories_provider_populates_state(monkeypatch, user_email) 
 
 @pytest.mark.asyncio
 async def test_agent_memories_respects_limit(monkeypatch, user_email) -> None:
-    """The limit argument reaches the DB query (asserted via the fake's arg)."""
+    """确认 limit 参数到达查询调用。"""
     captured_args: list[Any] = []
 
     class CapturingPool(FakePool):
@@ -216,7 +213,7 @@ async def test_agent_memories_respects_limit(monkeypatch, user_email) -> None:
     _patch_pool(monkeypatch, CapturingPool(memory_rows=MEMORY_ROWS))
     state: dict[str, Any] = {"user": {"email": user_email}}
     await AgentMemoriesProvider(limit=3).before_run(agent=None, session=None, context=FakeContext(), state=state)
-    # email + limit → second arg is the numeric limit
+    # 参数依次为邮箱与数值上限。
     assert 3 in captured_args
 
 
@@ -249,7 +246,7 @@ async def test_composite_produces_legacy_user_context_string(monkeypatch, user_e
     await ECommerceContextProvider().before_run(agent=None, session=None, context=ctx, state=state)
 
     text = state["user_context"]
-    # The custom tool loop threads this string through the system prompt.
+    # 检查保留的 user_context 兼容字符串。
     assert "Current user: Alice" in text
     assert "gold" in text
     assert "delivered" in text
@@ -261,14 +258,14 @@ async def test_composite_skips_user_context_when_nothing_to_say(monkeypatch) -> 
     _patch_pool(monkeypatch, FakePool(user_row=None))
     ctx = FakeContext()
     state: dict[str, Any] = {}
-    # No user email → no providers produce anything.
+    # 无用户邮箱时，所有提供器均不产生内容。
     await ECommerceContextProvider().before_run(agent=None, session=None, context=ctx, state=state)
     assert "user_context" not in state
 
 
 @pytest.mark.asyncio
 async def test_composite_accepts_custom_provider_subset(monkeypatch, user_email) -> None:
-    """A specialist can wire a lighter composite with fewer providers."""
+    """专业智能体可只组合所需的少量提供器。"""
     _patch_pool(monkeypatch, FakePool(user_row=USER_ROW, order_rows=ORDER_ROWS))
     ctx = FakeContext()
     state: dict[str, Any] = {}

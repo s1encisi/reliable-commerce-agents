@@ -1,17 +1,16 @@
 """
-MAF v1 — Chapter 23: A2A Protocol (Python)
+MAF v1 —— 第 23 章：A2A 协议（Python）
 
-A coordinator agent calls an "order-lookup" specialist over the same A2A
-HTTP shapes the real capstone uses: a GET agent-card for identity, a
-blocking POST /message:send, and a streaming POST /message:stream (SSE).
+一个协调者智能体通过真实的完整项目所使用的同一套 A2A HTTP 形态调用一个
+「订单查询」专业智能体：用 GET agent-card 获取身份、用阻塞式
+POST /message:send，以及流式 POST /message:stream（SSE）。
 
-The specialist here is a tiny Starlette app — not a mock, a real ASGI app
-with real routes — exercised through httpx's ASGITransport, so the request
-actually goes through Starlette's routing/JSON/SSE machinery, just without
-opening a real TCP socket. See the README's "Why an in-process transport"
-section for why that trade-off was made instead of spawning `uvicorn`.
+这里的专业智能体是一个极小的 Starlette 应用 —— 不是 mock，而是带真实路由的
+真实 ASGI 应用 —— 通过 httpx 的 ASGITransport 驱动，因此请求确实会走完
+Starlette 的路由/JSON/SSE 机制，只是不打开真实的 TCP 套接字。为什么选择这种
+取舍而不是拉起 `uvicorn`，见 README 的「为什么用进程内传输」小节。
 
-Run:
+运行：
     source agents/.venv/bin/activate
     python tutorials/23-a2a-protocol/python/main.py "What's the status of ORD-1001?"
 """
@@ -51,13 +50,12 @@ DEFAULT_QUESTION = "What's the status of order ORD-1001?"
 FIXTURES_DIR = pathlib.Path(__file__).resolve().parent / "tests" / "fixtures" / "replay"
 
 # ─────────────────────────────────────────────────────────────────
-# The "remote" side: an order-lookup specialist hosted as a Starlette
-# app exposing the real A2A surface — the same three endpoints
-# agents/python/shared/agent_host.py::create_agent_app() serves for every
-# specialist in the capstone:
-#   GET  /.well-known/agent-card.json  — identity/discovery
-#   POST /message:send                 — blocking request/response
-#   POST /message:stream                — SSE streaming
+# 「远端」一侧：一个订单查询专业智能体，以 Starlette 应用的形式承载，
+# 暴露真实的 A2A 接口 —— 与 agents/python/shared/agent_host.py
+# ::create_agent_app() 为完整项目中每个专业智能体提供的同样三个端点：
+#   GET  /.well-known/agent-card.json  —— 身份/发现
+#   POST /message:send                 —— 阻塞式请求/响应
+#   POST /message:stream                —— SSE 流式
 # ─────────────────────────────────────────────────────────────────
 
 AGENT_CARD = {
@@ -67,8 +65,8 @@ AGENT_CARD = {
     "version": "1.0",
 }
 
-# Canned data, same spirit as Chapter 02's weather dictionary — the point
-# of this chapter is the transport, not a real orders database.
+# 预置数据，与第 02 章的天气字典同一思路 —— 本章的重点是传输，
+# 而不是一个真实的订单数据库。
 ORDERS: dict[str, str] = {
     "ord-1001": "Shipped, arriving 2026-08-22.",
     "ord-1002": "Processing — not yet shipped.",
@@ -79,7 +77,7 @@ _ORDER_ID_RE = re.compile(r"ORD-\d+", re.IGNORECASE)
 
 
 def _lookup_order(message: str) -> str:
-    """Pure lookup — no I/O. What the specialist's endpoints wrap."""
+    """纯查询 —— 无 I/O。专业智能体的各端点包装的就是它。"""
     match = _ORDER_ID_RE.search(message)
     if not match:
         return "No order id found in the request. Expected something like 'ORD-1001'."
@@ -108,10 +106,10 @@ async def _message_stream(request: Request) -> StreamingResponse:
         if not message:
             yield "data: [ERROR: no message]\n\n"
             return
-        # Real specialists stream token-by-token; this demo emits the whole
-        # answer as one SSE frame, then the same "[DONE]" sentinel
-        # agents/python/shared/agent_host.py::message_stream() emits — the
-        # frame *shape* matters here, not token granularity.
+        # 真实的专业智能体是逐 token 流式输出的；本演示把整个回答作为一帧
+        # SSE 发出，然后发出 agents/python/shared/agent_host.py::message_stream()
+        # 所发出的同一个 "[DONE]" 哨兵 —— 这里重要的是帧的*形态*，
+        # 而不是 token 粒度。
         yield f"data: {_lookup_order(message)}\n\n"
         yield "data: [DONE]\n\n"
 
@@ -133,8 +131,8 @@ SPECIALIST_BASE_URL = "http://order-lookup.local"
 
 
 def _specialist_client() -> httpx.AsyncClient:
-    # ASGITransport drives the Starlette app in-process — real HTTP
-    # request/response objects, real routing, no socket. See the README.
+    # ASGITransport 在进程内驱动 Starlette 应用 —— 真实的 HTTP 请求/响应
+    # 对象、真实的路由，但没有套接字。见 README。
     transport = httpx.ASGITransport(app=SPECIALIST_APP)
     return httpx.AsyncClient(transport=transport, base_url=SPECIALIST_BASE_URL, timeout=10)
 
@@ -147,9 +145,9 @@ async def demo_fetch_agent_card() -> dict:
 
 
 async def demo_stream_call(message: str) -> list[str]:
-    """Mirrors the SSE parsing in orchestrator/agent.py::call_specialist_agent:
-    read `data: ` lines, stop at the `[DONE]` sentinel, treat a `[ERROR`
-    prefix as a failure frame instead of real content.
+    """镜像 orchestrator/agent.py::call_specialist_agent 中的 SSE 解析：
+    读取 `data: ` 行，在 `[DONE]` 哨兵处停止，把 `[ERROR` 前缀当作
+    失败帧而不是真实内容。
     """
     chunks: list[str] = []
     async with _specialist_client() as client:
@@ -168,9 +166,9 @@ async def demo_stream_call(message: str) -> list[str]:
 
 
 # ─────────────────────────────────────────────────────────────────
-# The "local" side: a coordinator agent whose one tool is an A2A call —
-# same shape as orchestrator/agent.py::call_specialist_agent's blocking
-# path: build a request body, POST /message:send, read `response`.
+# 「本地」一侧：一个协调者智能体，其唯一的工具就是一次 A2A 调用 ——
+# 与 orchestrator/agent.py::call_specialist_agent 的阻塞路径同形：
+# 组装请求体、POST /message:send、读取 `response`。
 # ─────────────────────────────────────────────────────────────────
 
 
@@ -207,9 +205,9 @@ def _default_client() -> OpenAIChatClient | OpenAIChatCompletionClient | ReplayC
     return OpenAIChatClient(
         model=os.environ.get("LLM_MODEL", "gpt-4.1"),
         api_key=os.environ["OPENAI_API_KEY"],
-        # Phase 9: any OpenAI-compatible endpoint (GitHub Models, OpenRouter,
-        # vLLM, LM Studio, Ollama) instead of api.openai.com — see
-        # tutorials/00-setup/README.md's "Don't have a paid API key?" section.
+        # Phase 9：改用任何 OpenAI 兼容端点（GitHub Models、OpenRouter、
+        # vLLM、LM Studio、Ollama），而不是 api.openai.com —— 见
+        # tutorials/00-setup/README.md 的「没有付费 API 密钥？」小节。
         base_url=os.environ.get("LLM_BASE_URL") or None,
     )
 
@@ -235,9 +233,9 @@ async def main() -> None:
     print(f"Q: {question}")
     print(f"A: {answer}")
 
-    # Bonus: exercise the two raw A2A transport shapes directly (not through
-    # the LLM) — the same calls the coordinator's tool and a real A2A caller
-    # make against agents/python/shared/agent_host.py in production.
+    # 附加内容：直接演练两种原始 A2A 传输形态（不经过 LLM）—— 这正是
+    # 协调者的工具以及真实 A2A 调用方在生产中对
+    # agents/python/shared/agent_host.py 发起的同一批调用。
     card = await demo_fetch_agent_card()
     print(f"\nAgent card: {card}")
     chunks = await demo_stream_call(question)

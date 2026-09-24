@@ -6,7 +6,7 @@ import { ArrowUp, Check, ChevronDown, Paperclip, Square, X } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
-// ─── Tooltip ─────────────────────────────────────────────────────────────────
+// ─── 提示气泡 ─────────────────────────────────────────────────────────────────
 
 const TooltipProvider = TooltipPrimitive.Provider;
 const Tooltip = TooltipPrimitive.Root;
@@ -29,7 +29,7 @@ const TooltipContent = React.forwardRef<
 ));
 TooltipContent.displayName = "TooltipContent";
 
-// ─── Image preview overlay ────────────────────────────────────────────────────
+// ─── 图片预览浮层 ─────────────────────────────────────────────────────────────
 
 function ImagePreviewOverlay({ src, onClose }: { src: string; onClose: () => void }) {
   React.useEffect(() => {
@@ -41,7 +41,7 @@ function ImagePreviewOverlay({ src, onClose }: { src: string; onClose: () => voi
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div className="relative max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
-        <img src={src} alt="Preview" className="max-h-[85vh] max-w-full rounded-xl object-contain shadow-2xl" />
+        <img src={src} alt="预览" className="max-h-[85vh] max-w-full rounded-xl object-contain shadow-2xl" />
         <button onClick={onClose} className="absolute -right-2 -top-2 rounded-full bg-zinc-800 p-1.5 text-white transition-colors hover:bg-zinc-700">
           <X className="h-3.5 w-3.5" />
         </button>
@@ -50,7 +50,7 @@ function ImagePreviewOverlay({ src, onClose }: { src: string; onClose: () => voi
   );
 }
 
-// ─── Agent mode definitions ───────────────────────────────────────────────────
+// ─── 智能体模式定义 ───────────────────────────────────────────────────────────
 
 export interface AgentMode {
   id: string | null;
@@ -58,13 +58,14 @@ export interface AgentMode {
   placeholder: string;
 }
 
+// 注意：`id` 是后端智能体名，必须保持英文；`label` 与 `placeholder` 面向用户。
 export const AGENT_MODES: AgentMode[] = [
-  { id: null, label: "Auto", placeholder: "Ask about products, orders, or anything..." },
-  { id: "product-discovery", label: "Products", placeholder: "Search, compare, or explore the catalog..." },
-  { id: "order-management", label: "Orders", placeholder: "Track, cancel, or return an order..." },
-  { id: "pricing-promotions", label: "Pricing", placeholder: "Check deals, coupons, or price trends..." },
-  { id: "review-sentiment", label: "Reviews", placeholder: "Analyse reviews or check sentiment..." },
-  { id: "inventory-fulfillment", label: "Inventory", placeholder: "Check stock or estimate shipping..." },
+  { id: null, label: "自动", placeholder: "询问商品、订单，或任何其他问题…" },
+  { id: "product-discovery", label: "商品", placeholder: "搜索、对比或浏览商品目录…" },
+  { id: "order-management", label: "订单", placeholder: "查询物流、取消或退掉订单…" },
+  { id: "pricing-promotions", label: "定价", placeholder: "查看优惠、优惠券或价格趋势…" },
+  { id: "review-sentiment", label: "评论", placeholder: "分析评论或查看情感倾向…" },
+  { id: "inventory-fulfillment", label: "库存", placeholder: "查询库存或预估配送时间…" },
 ];
 
 // ─── PromptInputBox ───────────────────────────────────────────────────────────
@@ -94,7 +95,7 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
     const currentMode = AGENT_MODES.find((m) => m.id === agentMode) ?? AGENT_MODES[0];
     const placeholder = currentMode.placeholder;
 
-    // Auto-resize textarea
+    // 输入框高度自适应
     React.useEffect(() => {
       const ta = textareaRef.current;
       if (!ta) return;
@@ -102,9 +103,8 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
       ta.style.height = `${Math.min(ta.scrollHeight, MAX_HEIGHT)}px`;
     }, [input]);
 
-    // Close the mode menu on an outside click or Escape. A popover that only
-    // closes by re-clicking its trigger traps a user who opened it by accident,
-    // which is the most likely way anyone opens this one.
+    // 点击外部或按 Escape 关闭模式菜单。如果弹层只能靠再次点击触发按钮来关闭，
+    // 那些「误触打开」的用户就被困住了——而这恰恰是最常见的打开方式。
     React.useEffect(() => {
       if (!modeMenuOpen) return;
       const onPointerDown = (e: PointerEvent) => {
@@ -155,7 +155,7 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
 
     const removeFile = () => { setAttachedFile(null); setFilePreview(null); };
 
-    // Paste image
+    // 粘贴图片
     React.useEffect(() => {
       const handler = (e: ClipboardEvent) => {
         const items = e.clipboardData?.items;
@@ -191,7 +191,7 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
             onDragOver={(e) => e.preventDefault()}
             onDrop={handleDrop}
           >
-            {/* Attached image thumbnail */}
+            {/* 已附图片缩略图 */}
             <AnimatePresence>
               {filePreview && attachedFile && (
                 <motion.div
@@ -213,7 +213,7 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
               )}
             </AnimatePresence>
 
-            {/* Textarea */}
+            {/* 文本输入区 */}
             <textarea
               ref={textareaRef}
               value={input}
@@ -230,7 +230,7 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
               style={{ maxHeight: MAX_HEIGHT, scrollbarWidth: "thin" }}
             />
 
-            {/* Suggested prompts — shown when input is empty */}
+            {/* 建议提问——仅在输入为空时显示 */}
             <AnimatePresence>
               {!input && suggestions.length > 0 && !isLoading && (
                 <motion.div
@@ -256,9 +256,9 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
               )}
             </AnimatePresence>
 
-            {/* Bottom actions */}
+            {/* 底部操作区 */}
             <div className="flex items-center justify-between px-3 pb-3">
-              {/* Attach button */}
+              {/* 附件按钮 */}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -270,31 +270,26 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                     <Paperclip className="h-4 w-4" />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent>Attach image</TooltipContent>
+                <TooltipContent>上传图片</TooltipContent>
               </Tooltip>
 
               <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
 
               {/*
-                Specialist picker, collapsed.
+                专业智能体选择器（折叠态）。
 
-                This was a six-chip row pinned above the textarea on every
-                message. `Auto` is the default and the one most people want —
-                it is what lets the orchestrator route for you — so the row spent
-                a full line of composer height advertising five options that are
-                rarely the right answer, on every viewport.
+                这里原本是固定在输入框上方的一整行六个胶囊按钮。`自动` 才是默认
+                项，也是绝大多数人想要的——正是它让编排器替你路由——而那一行在
+                每个视口上都占掉一行输入区高度，只为展示五个极少用到的选项。
 
-                Collapsed to a single button that names the ACTIVE mode, so the
-                current state is still visible at a glance while costing a
-                button rather than a row. Only shown as "Auto" when nothing is
-                pinned; picking a specialist makes the button read that
-                specialist, which is the state worth surfacing.
+                折叠成单个按钮并显示「当前生效的模式」，这样状态依然一眼可见，代价
+                从一行降为一个按钮。未指定时才显示「自动」；一旦选定某个专业智能体，
+                按钮就显示该智能体名——这才是值得暴露的状态。
 
-                NOT the orchestration-mode switcher. That is a different control
-                (`chat/mode-switcher.tsx`, fed by GET /api/orchestration/modes)
-                on the page toolbar, and issue #4 puts it explicitly out of
-                scope. Collapsing that one would hide the feature this repo is
-                built around.
+                注意：这不是编排模式切换器。那是另一个控件
+                （`chat/mode-switcher.tsx`，数据来自 GET /api/orchestration/modes），
+                位于页面工具栏，issue #4 明确将其排除在范围之外。把那个也折叠起来
+                会隐藏本仓库赖以存在的核心功能。
               */}
               <div className="relative" ref={modeMenuRef}>
                 <Tooltip>
@@ -305,7 +300,7 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                       disabled={isDisabled}
                       aria-haspopup="listbox"
                       aria-expanded={modeMenuOpen}
-                      aria-label="Specialist"
+                      aria-label="专业智能体"
                       className={cn(
                         "flex h-8 items-center gap-1 rounded-full px-2.5 text-[11px] font-medium transition-colors disabled:pointer-events-none disabled:opacity-40",
                         agentMode === null
@@ -318,7 +313,7 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                     </button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    {agentMode === null ? "Route automatically" : `Pinned to ${currentMode.label}`}
+                    {agentMode === null ? "自动路由" : `已指定 ${currentMode.label}`}
                   </TooltipContent>
                 </Tooltip>
 
@@ -326,7 +321,7 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                   {modeMenuOpen && (
                     <motion.div
                       role="listbox"
-                      aria-label="Specialist"
+                      aria-label="专业智能体"
                       initial={{ opacity: 0, y: 4 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: 4 }}
@@ -360,12 +355,12 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                 </AnimatePresence>
               </div>
 
-              {/* Keyboard hint */}
+              {/* 键盘提示 */}
               <span className="hidden select-none text-[10px] text-muted-foreground/50 sm:block">
-                Enter to send · Shift+Enter newline
+                Enter 发送 · Shift+Enter 换行
               </span>
 
-              {/* Send / Stop button */}
+              {/* 发送 / 停止按钮 */}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <motion.button
@@ -396,7 +391,7 @@ export const PromptInputBox = React.forwardRef<HTMLDivElement, PromptInputBoxPro
                     </AnimatePresence>
                   </motion.button>
                 </TooltipTrigger>
-                <TooltipContent>{isLoading ? "Stop generation" : "Send message"}</TooltipContent>
+                <TooltipContent>{isLoading ? "停止生成" : "发送消息"}</TooltipContent>
               </Tooltip>
             </div>
           </div>

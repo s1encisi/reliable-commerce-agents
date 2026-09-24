@@ -1,11 +1,7 @@
-"""``/api/chat``'s ``chat()`` handler dispatches through the mode registry.
+"""测试 /api/chat 通过模式注册表分派。
 
-Anonymous (storefront) path only — it skips every DB call except the
-initial ``get_pool()`` existence check, so this exercises the real
-``chat()`` function (not a mock of it) without needing a live Postgres.
-Verifies both the default mode and an explicit ``mode`` in the request
-body reach the right :class:`OrchestrationMode`, and that an unknown mode
-name surfaces as a 400 rather than an unhandled ``UnknownModeError``.
+匿名路径不执行业务数据库查询，覆盖默认模式、显式模式及未知模式
+返回 400，调用的是实际处理函数。
 """
 
 from __future__ import annotations
@@ -93,10 +89,7 @@ async def test_chat_route_rejects_unknown_mode(monkeypatch: pytest.MonkeyPatch) 
 
 @pytest.mark.asyncio
 async def test_chat_route_reaches_a_workflow_mode(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A non-"tool" mode with no delta events at all (see chat.py's module
-    docstring) still returns its answer through chat()'s blocking path,
-    which reads run_completed's text directly rather than reconstructing
-    it from streamed chunks."""
+    """没有 delta 的非 tool 模式，也应从 run_completed 读取并返回最终答案。"""
     import orchestrator.modes as modes_module
     from orchestrator.modes.workflow_mode import PrePurchaseMode
 

@@ -1,87 +1,69 @@
 ---
-title: "MAF v1 — <Chapter Title>"
+title: "MAF v1 — <章节标题>"
 date: 2026-04-20
 lastmod: 2026-04-20
 draft: true
-tags: [microsoft-agent-framework, ai-agents, python, dotnet, <concept-tag>]
-categories: [Deep Dive]
-series: ["MAF v1: Python and .NET"]
-summary: "<one-line summary>"
+tags: [microsoft-agent-framework, ai-agents, python, <概念标签>]
+categories: [深度解析]
+series: ["MAF v1：Python 单栈实战"]
+summary: "<一句话摘要>"
 cover:
   image: "img/posts/maf-v1-<slug>.jpg"
-  alt: "<alt text>"
-author: "Nitin Kumar Singh"
+  alt: "<替代文本>"
+author: "aria"
 toc: true
 ---
 
-> **Series note** — This article is part of *MAF v1: Python and .NET*. If you read the original Python-only version, it lives at [Part N — &lt;title&gt;](<old-url>).
+> **系列说明** — 本文属于 *MAF v1：Python 单栈实战* 系列。所有章节均以 Python 实现，代码可直接运行。
 
-## Why this chapter
+## 本章动机
 
-<One paragraph: the concrete problem this chapter solves and why the reader cares. Ground it in an e-commerce scenario where possible so the capstone stays in mind.>
+<一段话：本章要解决的具体问题，以及读者为什么应当关心。尽量落在电商场景里，让读者始终记得完整项目。>
 
-## Prerequisites
+## 前置条件
 
-- Completed [Chapter 00 — Setup](../00-setup/)
-- Familiar with [Chapter N-1 — &lt;title&gt;](../NN-previous/)
-- Environment variables set: `OPENAI_API_KEY` (or `AZURE_OPENAI_*`) and `LLM_MODEL`
+- 已完成 [第 00 章 — 环境准备](../00-setup/)
+- 已熟悉 [第 N-1 章 — &lt;标题&gt;](../NN-previous/)
+- 已设置环境变量：`OPENAI_API_KEY`（或 `AZURE_OPENAI_*`）与 `LLM_MODEL`
 
-## The concept
+## 核心概念
 
-<Plain-language explanation in 2–3 paragraphs. One diagram if it helps. Avoid framework jargon until after the concept is clear.>
+<用平实语言讲清概念，2–3 段。必要时配一张图。在概念讲清楚之前，先避开框架术语。>
 
 ## Python
 
-Run from the repo root using the shared `tutorials/` uv project (one `uv sync` covers every chapter):
+在仓库根目录运行，共用 `tutorials/` 这一个 uv 项目（一次 `uv sync` 覆盖全部章节）：
 
 ```bash
 uv sync --project tutorials
 uv run --project tutorials python tutorials/<chapter>/python/main.py
 ```
 
-<Walk through the key parts of `main.py`. Full file is linked; show only the instructive 10–20 lines inline.>
+<带读者走一遍 `main.py` 的关键部分。完整文件用链接给出，正文里只贴最有教学价值的 10–20 行。>
 
-## .NET
+## 常见坑
 
-```bash
-cd tutorials/<chapter>/dotnet
-dotnet run
-```
+- <常见错误 1 + 如何识别它>
+- <应当避开的 SDK 版本或 API 版本>
+- <平台相关的坑>
 
-<Same structure — walk through `Program.cs` or the relevant class. Highlight differences from Python where they matter.>
-
-## Side-by-side differences
-
-| Aspect | Python | .NET |
-|--------|--------|------|
-| Key API | `ChatAgent` / `@tool` | `ChatClientAgent` / `AIFunctionFactory.Create` |
-| Async model | `async`/`await` with `asyncio` | `async`/`await` with `Task`/`ValueTask` |
-| Type hints | `Annotated[...]` + `Field` | `[Description]` attribute |
-
-## Gotchas
-
-- <Common mistake 1 + how to spot it>
-- <SDK version or Azure API version to avoid>
-- <Platform quirk>
-
-## Tests
-
-Both languages ship with unit tests exercising:
-
-1. **Happy path** — the canonical example produces the expected output with a fake chat client.
-2. **Edge case** — <describe>
-3. **Concept assertion** — <what specifically proves the MAF concept was exercised, e.g., "tool was invoked exactly once", "middleware observed the run">
+## 测试
 
 ```bash
 uv run --project tutorials pytest tutorials/<chapter>/python/tests -v
-cd tutorials/<chapter>/dotnet && dotnet test
 ```
 
-## How this shows up in the capstone
+单元测试覆盖三类断言：
 
-<Pointer into `agents/` or `dotnet/src/` where this pattern is used in the real app, with a file path and line number.>
+1. **正常路径** — 标准示例在受控客户端下产出预期输出。
+2. **边界情况** — <具体描述>
+3. **概念断言** — <具体证明该 MAF 概念确实被触发，例如「工具恰好被调用一次」「中间件观察到了这次运行」>
 
-## What's next
+## 在完整项目中的落点
 
-- Next chapter: [Chapter N+1 — &lt;title&gt;](../NN-next/)
-- [Full source on GitHub](https://github.com/nitin27may/e-commerce-agents/tree/main/tutorials/<chapter>)
+<指向 `agents/python/` 中实际用到该模式的位置，给出文件路径与行号。>
+
+## 下一步
+
+- 下一章：[第 N+1 章 — &lt;标题&gt;](../NN-next/)
+- [GitHub 上的完整源码](https://github.com/s1encisi/reliable-commerce-agents/tree/main/tutorials/<chapter>)

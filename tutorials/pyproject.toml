@@ -1,58 +1,53 @@
 [project]
 name = "maf-v1-tutorials"
 version = "0.1.0"
-description = "MAF v1 tutorials — runnable chapter examples and tests (companion to agents/python)"
+description = "MAF v1 教程 —— 可运行的章节示例与测试（配合 agents/python）"
 requires-python = ">=3.12"
 dependencies = [
-    # Microsoft Agent Framework — depend on the individual sub-packages the
-    # chapters actually import (agent-framework-core provides the
-    # `agent_framework` top-level package) instead of the `agent-framework`
-    # meta-package's `[all]` extra. `[all]` also drags in ag-ui / anthropic /
-    # bedrock / azure-cosmos / etc., some of which are pre-release-only and
-    # make the resolution unsatisfiable without --prerelease=allow — the
-    # same reason agents/python/pyproject.toml depends on
-    # agent-framework-core directly rather than the meta-package.
+    # 微软智能体框架 —— 依赖各章节实际导入的独立子包（agent-framework-core
+    # 提供 `agent_framework` 顶层包），而不是 `agent-framework` 元包的
+    # `[all]` extra。`[all]` 还会拖入 ag-ui / anthropic / bedrock /
+    # azure-cosmos 等，其中一些仅有预发布版本，不加 --prerelease=allow
+    # 就无法满足依赖解析 —— 这也是 agents/python/pyproject.toml 直接依赖
+    # agent-framework-core 而非元包的原因。
     #
-    # Pinned to the exact same versions as agents/python/pyproject.toml so
-    # the tutorials teach against the identical framework the capstone runs
-    # on. This resolves a version-skew history worth keeping for context:
-    #   - core==1.0.0 (an earlier agents/python pin) had a bug where a
-    #     Workflow whose first `run()` call is abandoned mid-stream (the
-    #     human-in-the-loop pattern in Chapter 17 — break out of the async
-    #     generator on a request_info event, await user input, then call
-    #     `run()` again to resume) left `_is_running` stuck True, so the
-    #     resuming `run()` raised "Workflow is already running." Fixed by
-    #     core>=1.11.0.
-    #   - agent-framework-orchestrations>=1.0.1 makes
-    #     `require_per_service_call_history_persistence=True` a hard
-    #     requirement for every HandoffBuilder participant agent — see the
-    #     same flag on orchestrator/agent.py::create_orchestrator_agent()
-    #     and shared/remote_agent.py::make_remote_specialist_agent() in
-    #     agents/python. Chapter 14's Agent construction needs the same flag.
+    # 版本与 agents/python/pyproject.toml 严格对齐，使教程所讲授的框架版本
+    # 与完整项目运行的完全一致。这里保留一段值得留存的版本错配历史作为背景：
+    #   - core==1.0.0（agents/python 早期的 pin）有一个缺陷：某个 Workflow
+    #     的首次 `run()` 调用若在流中途被放弃（第 17 章的人工参与模式 ——
+    #     在 request_info 事件处跳出异步生成器、等待用户输入，再调用
+    #     `run()` 恢复），会让 `_is_running` 卡在 True，导致恢复时的
+    #     `run()` 抛出 "Workflow is already running."。core>=1.11.0 已修复。
+    #   - agent-framework-orchestrations>=1.0.1 把
+    #     `require_per_service_call_history_persistence=True` 变为每个
+    #     HandoffBuilder 参与者智能体的硬性要求 —— 参见 agents/python 中
+    #     orchestrator/agent.py::create_orchestrator_agent() 与
+    #     shared/remote_agent.py::make_remote_specialist_agent() 上的同名
+    #     开关。第 14 章构造智能体时也需要该开关。
     "agent-framework-core==1.14.0",
     "agent-framework-openai==1.13.0",
-    # Chapters 12-16 — orchestration builders (Sequential, Concurrent,
-    # Handoff, GroupChat, Magentic)
+    # 第 12-16 章 —— 编排构建器（Sequential、Concurrent、Handoff、
+    # GroupChat、Magentic）
     "agent-framework-orchestrations==1.1.0",
-    # Chapter 20b — DevUI (also has its own standalone pyproject.toml;
-    # declared here too so `pytest tutorials/` can collect its tests without
-    # a second venv). No stable release exists yet — pinned to the latest beta.
+    # 第 20b 章 —— DevUI（它同时有自己的独立 pyproject.toml；这里也声明
+    # 一份，好让 `pytest tutorials/` 无需第二个 venv 就能收集它的测试）。
+    # 尚无稳定版本 —— 固定到最新的 beta。
     "agent-framework-devui==1.0.0b260813",
-    # Chapter 08 — MCP tools (stdio weather server + MCPStdioTool client).
-    # Capped below 2.0.0 to match agents/python — mcp==2.0.0 relocates
-    # mcp.server.fastmcp to mcp.server.mcpserver (FastMCP renamed to
-    # MCPServer) and agent-framework-core itself pins mcp<2, so this stays
-    # capped until that unblocks. See
-    # .claude/plans/enhancements/12-mcp-2x-migration.md.
+    # 第 08 章 —— MCP 工具（stdio 天气服务器 + MCPStdioTool 客户端）。
+    # 上限压在 2.0.0 以下以对齐 agents/python —— mcp==2.0.0 把
+    # mcp.server.fastmcp 迁到了 mcp.server.mcpserver（FastMCP 更名为
+    # MCPServer），而 agent-framework-core 自身又 pin 了 mcp<2，所以在解除
+    # 该阻塞之前一直保持这个上限。参见
+    # .claude/plans/enhancements/12-mcp-2x-migration.md。
     "mcp[cli]>=1.27.0,<2",
-    # Chapter 19 — declarative workflows parse workflow.yaml directly
+    # 第 19 章 —— 声明式工作流直接解析 workflow.yaml
     "pyyaml==6.0.3",
-    # Chapters 02, 06 — tool argument schemas
+    # 第 02、06 章 —— 工具参数模式
     "pydantic==2.13.4",
-    # Chapter 07 — observability: chapter code builds its own TracerProvider
-    # and span exporters, so the SDK (not just the API) is a direct import.
+    # 第 07 章 —— 可观测性：章节代码自己构建 TracerProvider 与跨度导出器，
+    # 因此 SDK（而不只是 API）是直接导入项。
     "opentelemetry-sdk==1.44.0",
-    # Honor SOCKS proxies used by local development environments.
+    # 支持本地开发环境使用的 SOCKS 代理。
     "httpx[socks]>=0.28",
 ]
 
@@ -76,12 +71,11 @@ select = ["E", "F", "I", "N", "W", "UP"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["."]
-# Every chapter's tests/ dir is its own `tests` package (tests/__init__.py),
-# so the default "prepend" import mode collides module names once more than
-# one chapter is collected in the same session (`tests.test_x` ambiguous
-# across chapters). importlib mode imports each test file by file path
-# instead, so identically-named packages/modules across chapters don't clash.
+# 每个章节的 tests/ 目录都是独立的 `tests` 包（tests/__init__.py），
+# 因此同一会话中收集超过一个章节时，默认的 "prepend" 导入模式会再次造成
+# 模块名冲突（`tests.test_x` 在各章之间产生歧义）。改用 importlib 模式后
+# pytest 按文件路径导入每个测试文件，各章之间同名的包/模块就不会打架。
 addopts = ["--import-mode=importlib"]
 markers = [
-    "integration: test hits a real LLM; skipped when credentials are missing",
+    "integration: 该测试会访问真实 LLM；缺少凭据时跳过",
 ]

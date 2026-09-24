@@ -1,9 +1,8 @@
 """
-Chapter 06 — Middleware: tests.
+第 06 章 —— 中间件：测试。
 
-Integration-only (the middleware chain is tightly coupled to MAF's
-invocation machinery; stubbing it out defeats the point). Every test hits
-real Azure OpenAI via .env.
+仅集成测试（中间件链与 MAF 的调用机制紧耦合；把它打桩掉就失去了意义）。
+每个测试都通过 .env 访问真实的 Azure OpenAI。
 """
 
 from __future__ import annotations
@@ -29,22 +28,22 @@ from main import (  # noqa: E402
     build_agent,
 )
 
-# ─────────────────── Replay test (no credentials, runs in CI) ────
+# ─────────────────── 回放测试（无需凭据，可在 CI 中运行） ────
 
 
 @pytest.mark.asyncio
 async def test_replay_agent_and_function_middleware_observe_weather_call(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Plays back tests/fixtures/replay/ — no network, no credentials.
+    """回放 tests/fixtures/replay/ —— 不走网络、不需凭据。
 
-    Recorded once against a real LLM (with RECORD=true) and committed. Mirrors
-    test_agent_middleware_observes_every_run and
-    test_function_middleware_intercepts_tool_calls, which share the same
-    "What's the weather in Paris?" input.
+    曾针对真实 LLM 录制过一次（以 RECORD=true 运行），随后提交入库。对应
+    test_agent_middleware_observes_every_run 与
+    test_function_middleware_intercepts_tool_calls，三者共用同一个
+    "What's the weather in Paris?" 输入。
     """
     if not any(FIXTURES_DIR.glob("*.json")):
-        pytest.skip(f"no recorded fixtures in {FIXTURES_DIR} — run with RECORD=true first")
+        pytest.skip(f"{FIXTURES_DIR} 中没有已录制的夹具 —— 请先以 RECORD=true 运行")
     monkeypatch.setenv("LLM_PROVIDER", "replay")
     logger = LoggingAgentMiddleware()
     validator = ArgValidatorMiddleware()
@@ -67,7 +66,7 @@ def _llm_available() -> bool:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-@pytest.mark.skipif(not _llm_available(), reason="no LLM credentials in .env")
+@pytest.mark.skipif(not _llm_available(), reason=".env 中没有 LLM 凭据")
 async def test_agent_middleware_observes_every_run() -> None:
     logger = LoggingAgentMiddleware()
     agent = build_agent(logger, ArgValidatorMiddleware(), PiiRedactionChatMiddleware())
@@ -77,7 +76,7 @@ async def test_agent_middleware_observes_every_run() -> None:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-@pytest.mark.skipif(not _llm_available(), reason="no LLM credentials in .env")
+@pytest.mark.skipif(not _llm_available(), reason=".env 中没有 LLM 凭据")
 async def test_function_middleware_intercepts_tool_calls() -> None:
     validator = ArgValidatorMiddleware()
     agent = build_agent(LoggingAgentMiddleware(), validator, PiiRedactionChatMiddleware())
@@ -87,30 +86,30 @@ async def test_function_middleware_intercepts_tool_calls() -> None:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-@pytest.mark.skipif(not _llm_available(), reason="no LLM credentials in .env")
+@pytest.mark.skipif(not _llm_available(), reason=".env 中没有 LLM 凭据")
 async def test_function_middleware_short_circuits_forbidden_city() -> None:
     validator = ArgValidatorMiddleware()
     agent = build_agent(LoggingAgentMiddleware(), validator, PiiRedactionChatMiddleware())
     answer = await ask(agent, "What's the weather in Atlantis?")
     assert "Atlantis" in validator.invocations
     assert validator.blocked == ["Atlantis"]
-    # The refusal message (or a natural-language rephrasing of it) should surface.
+    # 拒绝消息（或它的一句自然语言改写）应当浮现出来。
     assert any(token in answer.lower() for token in ("refused", "can't", "cannot", "not supported", "no weather"))
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-@pytest.mark.skipif(not _llm_available(), reason="no LLM credentials in .env")
+@pytest.mark.skipif(not _llm_available(), reason=".env 中没有 LLM 凭据")
 async def test_chat_middleware_redacts_card_number_before_llm() -> None:
     redactor = PiiRedactionChatMiddleware()
     agent = build_agent(LoggingAgentMiddleware(), ArgValidatorMiddleware(), redactor)
     await ask(agent, "My card is 4111-1111-1111-1111. What's the weather in Paris?")
-    assert redactor.redactions >= 1, "expected the card number to be redacted"
+    assert redactor.redactions >= 1, "期望卡号被脱敏"
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-@pytest.mark.skipif(not _llm_available(), reason="no LLM credentials in .env")
+@pytest.mark.skipif(not _llm_available(), reason=".env 中没有 LLM 凭据")
 async def test_middleware_do_not_leak_between_runs() -> None:
     logger1 = LoggingAgentMiddleware()
     logger2 = LoggingAgentMiddleware()

@@ -170,13 +170,13 @@
                 <mxCell id="redis" value="&lt;div style=&#39;line-height:1.2&#39;&gt;&lt;b style=&#39;font-size:13px&#39;&gt;Redis 7&lt;/b&gt;&lt;br/&gt;&lt;span style=&#39;font-size:10px&#39;&gt;Session &amp; Cache&lt;/span&gt;&lt;/div&gt;" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#0d9488;fontColor=#ffffff;strokeColor=#115e59;strokeWidth=2;shadow=1;" parent="1" vertex="1">
                     <mxGeometry x="320" y="695" width="160" height="70" as="geometry"/>
                 </mxCell>
-                <mxCell id="aspire" value="&lt;div style=&#39;line-height:1.2&#39;&gt;&lt;b style=&#39;font-size:13px&#39;&gt;.NET Aspire Dashboard&lt;/b&gt;&lt;br/&gt;&lt;span style=&#39;font-size:10px&#39;&gt;Traces · Logs · Metrics&lt;/span&gt;&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#64748b;fontColor=#ffffff;strokeColor=#475569;strokeWidth=2;arcSize=12;shadow=1;" parent="1" vertex="1">
+                <mxCell id="jaeger" value="&lt;div style=&#39;line-height:1.2&#39;&gt;&lt;b style=&#39;font-size:13px&#39;&gt;Jaeger&lt;/b&gt;&lt;br/&gt;&lt;span style=&#39;font-size:10px&#39;&gt;Traces · Spans · Services&lt;/span&gt;&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#64748b;fontColor=#ffffff;strokeColor=#475569;strokeWidth=2;arcSize=12;shadow=1;" parent="1" vertex="1">
                     <mxGeometry x="530" y="700" width="260" height="55" as="geometry"/>
                 </mxCell>
-                <mxCell id="aspire_port" value=":18888" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#cbd5e1;strokeColor=#94a3b8;fontSize=10;fontColor=#334155;arcSize=20;fontStyle=1;" parent="1" vertex="1">
+                <mxCell id="jaeger_port" value=":16686" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#cbd5e1;strokeColor=#94a3b8;fontSize=10;fontColor=#334155;arcSize=20;fontStyle=1;" parent="1" vertex="1">
                     <mxGeometry x="530" y="762" width="55" height="22" as="geometry"/>
                 </mxCell>
-                <mxCell id="aspire_detail" value="OpenTelemetry OTLP receiver&#xa;httpx · asyncpg · FastAPI auto-instrumented" style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontColor=#475569;whiteSpace=wrap;spacingLeft=4;" parent="1" vertex="1">
+                <mxCell id="jaeger_detail" value="OpenTelemetry OTLP receiver&#xa;httpx · asyncpg · FastAPI auto-instrumented" style="text;html=1;align=left;verticalAlign=top;fontSize=9;fontColor=#475569;whiteSpace=wrap;spacingLeft=4;" parent="1" vertex="1">
                     <mxGeometry x="595" y="760" width="195" height="30" as="geometry"/>
                 </mxCell>
                 <mxCell id="agents_to_pg" style="edgeStyle=orthogonalEdgeStyle;rounded=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#115e59;strokeWidth=2;" parent="1" source="agents_group" target="postgres" edge="1">
@@ -219,7 +219,7 @@
                         <mxPoint as="offset"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="agents_to_aspire" style="edgeStyle=orthogonalEdgeStyle;rounded=1;exitX=0.7;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#94a3b8;strokeWidth=1;dashed=1;dashPattern=4 4;" parent="1" source="agents_group" target="aspire" edge="1">
+                <mxCell id="agents_to_jaeger" style="edgeStyle=orthogonalEdgeStyle;rounded=1;exitX=0.7;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#94a3b8;strokeWidth=1;dashed=1;dashPattern=4 4;" parent="1" source="agents_group" target="jaeger" edge="1">
                     <mxGeometry relative="1" as="geometry">
                         <Array as="points">
                             <mxPoint x="838" y="620"/>
@@ -227,7 +227,7 @@
                         </Array>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="aspire_arrow_label" value="OTLP" style="edgeLabel;html=1;align=center;fontSize=9;fontColor=#94a3b8;fontStyle=2;labelBackgroundColor=#f8fafc;" parent="agents_to_aspire" connectable="0" vertex="1">
+                <mxCell id="jaeger_arrow_label" value="OTLP" style="edgeLabel;html=1;align=center;fontSize=9;fontColor=#94a3b8;fontStyle=2;labelBackgroundColor=#f8fafc;" parent="agents_to_jaeger" connectable="0" vertex="1">
                     <mxGeometry relative="1" as="geometry">
                         <mxPoint as="offset"/>
                     </mxGeometry>

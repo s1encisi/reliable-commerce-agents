@@ -1,10 +1,7 @@
-"""
-Phase 7 Refactor 06 — AgentSession / HistoryProvider backend tests.
+"""三种历史后端测试。
 
-Covers all three ``HistoryProvider`` backends exposed by
-``shared.session`` without touching a live database — the Postgres path
-uses an ``asyncpg``-shaped fake pool so we only exercise the SQL the
-provider emits.
+文件和内存直接验证，数据库路径使用形态替身检查生成 SQL 与参数；
+实际排序和隔离另有真实数据库测试。
 """
 
 from __future__ import annotations
@@ -67,7 +64,7 @@ async def test_file_provider_round_trip(tmp_path: Path) -> None:
     )
     out = await provider.get_messages("conv-1")
     assert [m.text for m in out] == ["hello", "hi back"]
-    # And the on-disk format is JSONL, one message per line.
+    # 磁盘格式为 JSONL，每条消息一行。
     lines = (tmp_path / "conv-1.jsonl").read_text().strip().splitlines()
     assert len(lines) == 2
     assert json.loads(lines[0])["type"] == "message"
@@ -125,7 +122,7 @@ async def test_postgres_provider_reads_messages_in_order() -> None:
     messages = await provider.get_messages("11111111-1111-1111-1111-111111111111")
 
     assert [m.text for m in messages] == ["hi", "hello"]
-    # SQL parameters: session_id + max_history
+    # SQL 参数为会话标识和历史上限。
     sql, args = pool.conn.fetched[0]
     assert "FROM messages" in sql
     assert args[0] == "11111111-1111-1111-1111-111111111111"
@@ -144,7 +141,7 @@ async def test_postgres_provider_skips_empty_contents_on_save() -> None:
             Message(role="assistant", contents=["also kept"]),
         ],
     )
-    # Only the two non-empty messages should reach the DB
+    # 仅两条非空消息应写入数据库。
     inserts = [call for call in pool.conn.executed if "INSERT INTO messages" in call[0]]
     assert len(inserts) == 2
     assert [row[1][2] for row in inserts] == ["kept", "also kept"]

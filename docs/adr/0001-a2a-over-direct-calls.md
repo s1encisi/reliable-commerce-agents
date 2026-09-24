@@ -1,54 +1,43 @@
-# ADR 0001 — Specialists talk over A2A HTTP, not in-process calls
+# ADR 0001 —— 专业智能体之间通过 A2A HTTP 通信，而非进程内调用
 
-**Status:** Accepted · **Date:** 2026-08-26 (recorded; decided much earlier)
+**状态：** 已接受 · **日期：** 2026 年 8 月 26 日（记录时间；决策时间远早于此）
 
-## Context
+## 背景
 
-Six agents share one domain. The orchestrator has to reach five specialists, and the
-obvious implementation is a Python function call: they are all in the same repository
-and could trivially be in the same process.
+六个智能体共享同一个领域。编排器必须能访问五个专业智能体，而显而易见的实现是一个 Python 函数
+调用：它们都在同一个仓库里，完全可以轻松地处在同一个进程中。
 
-They are not. Each specialist is an independent service behind an
-[A2A](https://a2aproject.github.io/A2A/) endpoint (`POST /message:send`,
-`POST /message:stream`, `GET /.well-known/agent-card.json`), reached over HTTP even
-when both ends are containers on the same Docker network.
+但它们没有。每个专业智能体都是一个独立服务，位于一个 [A2A](https://a2aproject.github.io/A2A/)
+端点之后（`POST /message:send`、`POST /message:stream`、`GET /.well-known/agent-card.json`），
+即使两端都是同一 Docker 网络上的容器，也通过 HTTP 访问。
 
-## Decision
+## 决策
 
-Specialists are separate services and every orchestrator→specialist hop is an A2A HTTP
-call.
+专业智能体是独立服务，编排器→专业智能体的每一跳都是一次 A2A HTTP 调用。
 
-## Why
+## 理由
 
-**It is the thing being demonstrated.** This repo exists to show multi-agent
-orchestration with Microsoft Agent Framework. In-process calls would demonstrate
-function composition, which nobody needs a framework for.
+**这正是要展示的东西。** 本仓库存在的意义是展示基于微软智能体框架的多智能体编排。进程内调用
+展示的会是函数组合，而那不需要任何框架。
 
-**It forces the boundary to be real.** Identity has to propagate as headers, history
-has to be rehydrated rather than shared, and failures have to be handled as network
-failures. Every one of those is a genuine distributed-systems problem that an
-in-process version would let us skip and a production deployment would not.
+**它迫使边界成为真实的。** 身份必须作为请求头传播，历史必须被重新水合而不是共享，失败必须当作
+网络失败来处理。以上每一条都是真实的分布式系统问题，进程内的版本会让我们跳过，而生产部署不会。
 
-**It is what makes the .NET stack possible.** Because the contract is HTTP and not a
-Python signature, a .NET orchestrator can call a Python specialist and vice versa. The
-dual-stack parity gate ([ADR 0005](0005-dual-stack-parity.md)) only exists because this
-boundary is a protocol.
+**它让契约成为一份协议，而不是一个函数签名。** 因为契约是 HTTP 而不是 Python 签名，任何遵循该
+协议的服务都能与任何专业智能体对话，无论它用什么语言、什么框架实现——这让日后替换某一端的实现
+不需要改动另一端，也使得这份契约本身可以被独立评审和版本化。
 
-## Consequences
+## 后果
 
-Every specialist call costs a network round trip, so the platform makes them
-**sequentially, one specialist at a time**, rather than fanning out. `docs/architecture.md`
-records the reasoning: each turn is fast enough that sequential stays within acceptable
-latency, and later specialists routinely need earlier results — pricing cannot optimise
-a cart before product discovery has said what is in it.
+每次专业智能体调用都要付出一次网络往返，因此平台**顺序地、一次一个**地调用它们，而不是扇出。
+`docs/architecture.md` 记录了这个理由：每一轮都足够快，顺序执行仍处在可接受的延迟内，而且后面
+的专业智能体常常需要前面的结果——在商品发现说出购物车里有什么之前，定价无法对它做优化。
 
-The cost is real and was paid twice during this project. The .NET orchestrator could not
-reach any specialist for an extended period because a tool parameter name did not match
-what the model emitted, and every container reported healthy throughout. An in-process
-call would have failed at compile time.
+这份代价是真实的，而且在这个项目期间付出过。曾有一段较长时间，编排器因为一个工具参数名与模型
+实际发出的不一致而无法访问任何专业智能体，而期间所有容器都报告健康。进程内调用会在编译期就
+失败。
 
-## What would make this wrong
+## 什么情况下这个决定是错的
 
-If the orchestrator and specialists were ever deployed as one unit with no independent
-scaling or independent failure, the HTTP hop would be pure overhead and this should be
-revisited. That is not the case today and is not planned.
+如果编排器和专业智能体曾经作为一个单元部署，没有独立伸缩、也没有独立故障，那么这次 HTTP 跳转
+就是纯粹的开销，这个决定应当被重新审视。今天不是这种情况，也没有这样的计划。

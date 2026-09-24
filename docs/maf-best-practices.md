@@ -1,44 +1,42 @@
-# Microsoft Agent Framework — Patterns & Best Practices
+# 微软智能体框架 —— 模式与最佳实践
 
-How this repo uses Microsoft Agent Framework (MAF v1.0) for agents and workflows,
-which orchestration pattern fits which problem, and the conventions that keep the
-code testable and portable across OpenAI / Azure OpenAI — and, via `LLM_BASE_URL`,
-any OpenAI-compatible endpoint (Ollama, LM Studio, vLLM, OpenRouter).
+本仓库如何使用微软智能体框架（Microsoft Agent Framework，MAF v1.0）构建智能体与工作流，
+哪种编排模式适合哪类问题，以及让代码保持可测试、并可在 OpenAI / Azure OpenAI 之间移植
+（以及通过 `LLM_BASE_URL` 接入任何兼容 OpenAI 的端点：Ollama、LM Studio、vLLM、OpenRouter）的约定。
 
-## Agent execution
+## 智能体执行
 
-Every specialist and the orchestrator is a MAF `Agent` built by a
-`create_*_agent()` factory (`agents/python/<agent>/agent.py`):
+每个专业智能体与编排器都是一个 MAF `Agent`，由 `create_*_agent()` 工厂函数构建
+（`agents/python/<agent>/agent.py`）：
 
 ```python
 Agent(
-    client=create_chat_client(),          # OpenAI or Azure OpenAI (shared.factory)
+    client=create_chat_client(),          # OpenAI 或 Azure OpenAI（shared.factory）
     name="product-discovery",
-    instructions=SYSTEM_PROMPT,            # composed from YAML (shared.prompt_loader)
-    tools=AGENT_TOOLS,                     # @tool functions
+    instructions=SYSTEM_PROMPT,            # 由 YAML 组装（shared.prompt_loader）
+    tools=AGENT_TOOLS,                     # @tool 函数
     context_providers=[ECommerceContextProvider()],
-    middleware=build_specialist_middleware(),  # observability + guardrails
+    middleware=build_specialist_middleware(),  # 可观测性 + 护栏
 )
 ```
 
-Requests run through MAF's native path — `agent.run(messages)` /
-`agent.run(messages, stream=True)` in `shared/agent_host.py`. The legacy custom
-chat-completions loop was retired once Azure compatibility was confirmed.
+请求走 MAF 的原生路径 —— `shared/agent_host.py` 中的 `agent.run(messages)` /
+`agent.run(messages, stream=True)`。在确认 Azure 兼容性之后，早期自定义的
+chat-completions 循环已被废弃。
 
-**Conventions**
+**约定**
 
-- Tools use the `@tool` decorator with `Annotated` type hints; identity comes from
-  ContextVars (`shared/context.py`), never from tool arguments.
-- Prompts live in YAML (`config/prompts/`), composed per request and per role by
-  `shared/prompt_loader.py` — no hardcoded prompt strings.
-- Middleware is composed once by `shared/middleware.build_specialist_middleware()`
-  (run logging, tool audit, injection detection, PII redaction, output
-  sanitization, timeline capture). See [`docs/security-guide.md`](security-guide.md).
+- 工具使用 `@tool` 装饰器配合 `Annotated` 类型标注；身份来自 ContextVars
+  （`shared/context.py`），绝不来自工具参数。
+- 提示词存放在 YAML 中（`config/prompts/`），由 `shared/prompt_loader.py` 按请求、按角色组装
+  —— 不存在硬编码的提示词字符串。
+- 中间件由 `shared/middleware.build_specialist_middleware()` 统一组装一次
+  （运行日志、工具审计、注入检测、PII 脱敏、输出净化、时间线采集）。见
+  [`docs/security-guide.md`](security-guide.md)。
 
-## Workflow primitives
+## 工作流原语
 
-MAF workflows are graphs of `Executor`s connected by edges. Each executor handles
-a typed message and either forwards it or yields output:
+MAF 工作流是由边连接的 `Executor` 图。每个执行器处理一条带类型的消息，然后转发它或产出结果：
 
 ```python
 from agent_framework._workflows._executor import Executor, handler
@@ -52,137 +50,128 @@ class MyExecutor(Executor):
     @handler
     async def run(self, state: State, ctx: WorkflowContext[State, State]) -> None:
         ...
-        await ctx.send_message(state)     # forward to the next executor
-        # or: await ctx.yield_output(state)   # emit a terminal result
+        await ctx.send_message(state)     # 转发给下一个执行器
+        # 或：await ctx.yield_output(state)   # 产出终止结果
 ```
 
-- Import from the `agent_framework._workflows` submodules — the v1.0 beta ships an
-  empty top-level `__init__` in a plain checkout.
-- A forwarding executor is typed `WorkflowContext[In, Out]`; a terminal executor
-  that only yields is typed `WorkflowContext[None, Out]`.
-- Build with `WorkflowBuilder(start_executor=..., name=...)` then `.add_edge(a, b)`
-  / `.add_fan_out_edges(a, [b, c])` / `.add_fan_in_edges([b, c], d)` and `.build()`.
-- Run with `async for event in workflow.run(state, stream=True)` and collect the
-  `event.type == "output"` payload.
+- 从 `agent_framework._workflows` 的子模块导入 —— 在普通检出中，v1.0 beta 的顶层
+  `__init__` 是空的。
+- 转发型执行器的类型是 `WorkflowContext[In, Out]`；只产出结果的终止型执行器类型是
+  `WorkflowContext[None, Out]`。
+- 用 `WorkflowBuilder(start_executor=..., name=...)` 构建，然后调用 `.add_edge(a, b)`
+  / `.add_fan_out_edges(a, [b, c])` / `.add_fan_in_edges([b, c], d)`，最后 `.build()`。
+- 用 `async for event in workflow.run(state, stream=True)` 运行，并收集
+  `event.type == "output"` 的载荷。
 
-## Pattern catalog
+## 模式目录
 
-| Pattern | When to use | Implementation |
+| 模式 | 适用场景 | 实现位置 |
 |---------|-------------|----------------|
-| **Concurrent** (fan-out / fan-in) | Independent data gathering that merges once | `workflows/pre_purchase.py` |
-| **Sequential + HITL** | Ordered steps where a step needs human approval | `workflows/return_replace.py` |
-| **Round-table group chat** | Multiple perspectives debate over a shared transcript, then synthesize | `workflows/group_chat.py` |
-| **Handoff** | LLM-driven hand-off of control between agents | `orchestrator/handoff.py` (`HandoffBuilder`), reachable via `orchestrator/modes/handoff_mode.py` (`ORCHESTRATION_MODE=handoff` or per-request `mode`) |
-| **Declarative (YAML)** | Simple, config-defined pipelines without code | `shared/workflow_loader.py` + `config/workflows/*.yaml` |
-| **Tool routing** | Front-door orchestrator picks a specialist per turn | `orchestrator/agent.py` `call_specialist_agent` (default) |
+| **并发**（扇出 / 扇入） | 相互独立的数据采集，最后合并一次 | `workflows/pre_purchase.py` |
+| **顺序 + 人工参与** | 有序步骤，其中某一步需要人工审批 | `workflows/return_replace.py` |
+| **圆桌群聊** | 多个视角在共享会议记录上辩论，随后综合 | `workflows/group_chat.py` |
+| **处理权交接** | 由 LLM 驱动在智能体之间移交控制权 | `orchestrator/handoff.py`（`HandoffBuilder`），可经 `orchestrator/modes/handoff_mode.py` 触达（`ORCHESTRATION_MODE=handoff` 或按请求传 `mode`） |
+| **声明式（YAML）** | 简单、由配置定义的流水线，无需写代码 | `shared/workflow_loader.py` + `config/workflows/*.yaml` |
+| **工具路由** | 前门编排器每轮挑选一个专业智能体 | `orchestrator/agent.py` 的 `call_specialist_agent`（默认） |
 
-### Concurrent — pre-purchase research
+### 并发 —— 购买前调研
 
-Fan three independent probes out in parallel, fan them into a merge that runs a
-dependent step, then synthesize.
+把三个相互独立的探测并行扇出，扇入到一个合并节点执行依赖步骤，最后综合。
 
 ```mermaid
 flowchart LR
-    FO[fan-out] --> R[reviews]
-    FO --> S[stock]
-    FO --> P[price-history]
-    R --> M[merge + shipping]
+    FO[扇出] --> R[评论]
+    FO --> S[库存]
+    FO --> P[价格历史]
+    R --> M[合并 + 运费]
     S --> M
     P --> M
-    M --> SY[synthesis]
+    M --> SY[综合]
 ```
 
-Use when sub-tasks don't depend on each other and you want the wall-clock of the
-slowest probe, not their sum. Built with `add_fan_out_edges` + `add_fan_in_edges`;
-the fan-in handler receives `list[State]` and merges.
+适用于子任务之间互不依赖、且你希望总耗时取决于最慢的那个探测而非它们之和的场景。
+用 `add_fan_out_edges` + `add_fan_in_edges` 构建；扇入处理器收到 `list[State]` 并做合并。
 
-### Sequential + human-in-the-loop — return & replace
+### 顺序 + 人工参与 —— 退货与换购
 
-Ordered chain that pauses for approval above a value threshold.
+一条有序链路，在超过金额阈值时暂停等待审批。
 
 ```mermaid
 flowchart LR
-    C[check-eligibility] --> I[initiate-return]
-    I --> SR[search-replacements]
-    SR --> G{hitl-gate}
-    G -- below threshold --> D[apply-discount]
-    G -- above threshold --> RI[[request_info: approval]]
-    RI -- approved --> D
-    RI -- rejected --> X[yield: rejected]
-    D --> F[finalize]
+    C[检查资格] --> I[发起退货]
+    I --> SR[检索替代品]
+    SR --> G{人工审批门}
+    G -- 低于阈值 --> D[应用折扣]
+    G -- 高于阈值 --> RI[[request_info: 审批]]
+    RI -- 批准 --> D
+    RI -- 拒绝 --> X[yield: 已拒绝]
+    D --> F[收尾]
 ```
 
-The gate uses `ctx.request_info(ReturnApprovalRequest, response_type=bool)` to
-pause, and a `@response_handler` resumes the chain when the approval arrives.
+该门控使用 `ctx.request_info(ReturnApprovalRequest, response_type=bool)` 暂停，
+审批到达时由 `@response_handler` 恢复链路。
 
-### Round-table group chat — debate then synthesize
+### 圆桌群聊 —— 先辩论再综合
 
-Panelists take turns over a **shared transcript** (each sees prior turns); a
-moderator synthesizes the verdict. Distinct from the concurrent pattern: turns are
-sequential and context-aware, not independent.
+参与者轮流在**共享会议记录**上发言（每人都能看到此前的发言）；主持人综合出结论。
+与并发模式的区别在于：发言是顺序且带上下文的，而非相互独立。
 
 ```mermaid
 flowchart LR
-    V[panelist: value] --> Q[panelist: quality]
-    Q --> MOD[moderator: synthesize verdict]
+    V[参与者：性价比] --> Q[参与者：品质]
+    Q --> MOD[主持人：综合结论]
 ```
 
-Panelist behavior is a `Responder` callable, so the workflow is deterministic and
-unit-testable without an LLM; production wires panelists to agents. See
-`tutorials/22-group-chat-debate/`.
+参与者的行为是一个 `Responder` 可调用对象，因此该工作流是确定性的，且无需 LLM 即可单元测试；
+生产环境把参与者接到真实智能体上。见 `tutorials/22-group-chat-debate/`。
 
-### Handoff & tool-routing — orchestration
+### 处理权交接与工具路由 —— 编排
 
-The orchestrator routes user requests to specialists. Multiple interchangeable modes
-live behind `orchestrator/modes/` (see `GET /api/orchestration/modes`); as of this
-writing:
+编排器把用户请求路由到专业智能体。多种可互换的模式位于 `orchestrator/modes/` 之下
+（见 `GET /api/orchestration/modes`）；截至本文撰写时：
 
-- **Tool routing (default):** the orchestrator LLM calls the `call_specialist_agent`
-  tool over A2A. Simple, observable, and what the routing eval scores.
-- **MAF Handoff (`mode=handoff`, or `ORCHESTRATION_MODE=handoff` as the default):**
-  a `HandoffBuilder` mesh where the orchestrator mechanically hands control to a
-  specialist and back.
+- **工具路由（默认）：** 编排器的 LLM 通过 A2A 调用 `call_specialist_agent` 工具。
+  简单、可观测，也是路由评测所评分的对象。
+- **MAF 处理权交接（`mode=handoff`，或以 `ORCHESTRATION_MODE=handoff` 作为默认值）：**
+  一个 `HandoffBuilder` 网格，编排器机械地把控制权交给某个专业智能体再收回。
 
-Per-request selection takes priority over the `ORCHESTRATION_MODE` env default —
-see `orchestrator/modes/__init__.py::get_mode` for the resolution order.
+按请求的选择优先于 `ORCHESTRATION_MODE` 环境变量默认值 ——
+解析顺序见 `orchestrator/modes/__init__.py::get_mode`。
 
-### Declarative — YAML pipelines
+### 声明式 —— YAML 流水线
 
-`shared/workflow_loader.py` builds a `WorkflowBuilder` graph from a YAML spec
-(`config/workflows/*.yaml`) using a small op registry. Use for simple,
-non-branching pipelines that shouldn't require code. `scripts/visualize_workflows.py`
-renders these to Mermaid + Graphviz under `docs/workflows/`.
+`shared/workflow_loader.py` 借助一个小型算子注册表，从 YAML 规格
+（`config/workflows/*.yaml`）构建 `WorkflowBuilder` 图。适用于简单的、无分支、
+不应要求写代码的流水线。`scripts/visualize_workflows.py` 会把它们渲染为 Mermaid + Graphviz，
+输出到 `docs/workflows/`。
 
-## Best practices
+## 最佳实践
 
-- **Preserve the public surface.** Each workflow exposes a class with an
-  `execute(state) -> state` method and builds a *fresh* MAF workflow per call —
-  callers never touch MAF types.
-- **Keep executors deterministic and injectable.** Pass tools / responders in so
-  workflows can be unit-tested with `FakeChatClient` or plain callables — no live
-  LLM in unit tests (`tests/test_*_workflow*.py`).
-- **Type the context correctly.** Forwarders `WorkflowContext[In, Out]`; terminals
-  `WorkflowContext[None, Out]`. A wrong terminal type can stop a chain early.
-- **Carry state as a dataclass.** One state object threads through the graph;
-  accumulate `completed_steps` / `errors` for observability.
-- **Pick the simplest pattern that fits.** Tool routing < declarative YAML <
-  sequential < concurrent < handoff, in rough order of complexity.
+- **保持对外接口稳定。** 每个工作流都暴露一个带有 `execute(state) -> state` 方法的类，
+  并在每次调用时构建一个*全新的* MAF 工作流 —— 调用方永远不接触 MAF 类型。
+- **让执行器保持确定性且可注入。** 把工具 / 响应器作为参数传入，这样工作流就能用
+  `FakeChatClient` 或普通可调用对象做单元测试 —— 单元测试中不接真实 LLM
+  （`tests/test_*_workflow*.py`）。
+- **正确标注上下文类型。** 转发器用 `WorkflowContext[In, Out]`；终止器用
+  `WorkflowContext[None, Out]`。终止类型写错会让链路提前终止。
+- **用 dataclass 承载状态。** 一个状态对象贯穿整张图；累积 `completed_steps` / `errors`
+  以便观测。
+- **选择能满足需求的最简模式。** 按复杂度大致递增：工具路由 < 声明式 YAML <
+  顺序 < 并发 < 处理权交接。
 
-## Gotchas
+## 易踩的坑
 
-- Import workflow types from `agent_framework._workflows.*` submodules, not the
-  package root (empty `__init__` in v1.0 beta; `patch_maf.py` only re-exports
-  inside the Docker image).
-- Do not add `from __future__ import annotations` to a module using
-  `@response_handler` — MAF resolves its parameter types via `inspect.signature`
-  at import time, and stringified annotations break that.
-- `scripts/visualize_workflows.py` renders **declarative YAML** workflows; Python
-  `WorkflowBuilder` graphs (pre-purchase, return-replace, group-chat) are
-  diagrammed by hand in this doc and the tutorials.
+- 工作流类型要从 `agent_framework._workflows.*` 子模块导入，而不是包根
+  （v1.0 beta 中 `__init__` 为空；`patch_maf.py` 只在 Docker 镜像内做重新导出）。
+- 不要给使用 `@response_handler` 的模块添加 `from __future__ import annotations` ——
+  MAF 在导入时通过 `inspect.signature` 解析其参数类型，字符串化的标注会破坏这一点。
+- `scripts/visualize_workflows.py` 渲染的是**声明式 YAML** 工作流；Python 的
+  `WorkflowBuilder` 图（pre-purchase、return-replace、group-chat）在本文件和教程中
+  以手工方式绘制。
 
-## Related documents
+## 相关文档
 
-- [`docs/security-guide.md`](security-guide.md) — guardrails middleware stack, auth, SQL controls, threat model
-- [`docs/agent-audit-matrix.md`](agent-audit-matrix.md) — per-agent security posture and open hardening items
-- [`docs/agent-quality.md`](agent-quality.md) — eval methodology, red-team suite, CI gate
-- [`docs/architecture.md`](architecture.md) — full system architecture and agent communication patterns
+- [`docs/security-guide.md`](security-guide.md) —— 护栏中间件栈、认证、SQL 管控、威胁模型
+- [`docs/agent-audit-matrix.md`](agent-audit-matrix.md) —— 各智能体的安全状况与待完成的加固项
+- [`docs/agent-quality.md`](agent-quality.md) —— 评测方法论、红队套件、CI 门禁
+- [`docs/architecture.md`](architecture.md) —— 完整系统架构与智能体通信模式

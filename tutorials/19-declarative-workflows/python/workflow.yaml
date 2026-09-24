@@ -1,16 +1,16 @@
-# A minimal declarative workflow spec loaded at runtime.
-# Same three-executor pipeline as Ch09, but data-driven.
+# 一份在运行时加载的最小声明式工作流规格。
+# 与第 09 章相同的三执行器流水线，但改为数据驱动。
 
 name: text-pipeline
 start: uppercase
 executors:
   - id: uppercase
-    op: upper        # built-in ops: upper, lower, strip, reverse
+    op: upper        # 内置算子：upper、lower、strip、reverse
   - id: validate
-    op: non_empty    # emits a final output when input is blank
+    op: non_empty    # 输入为空白时产出一个最终输出
   - id: log
     op: prefix
-    prefix: "LOGGED: "
+    prefix: "已记录："
 edges:
   - from: uppercase
     to: validate

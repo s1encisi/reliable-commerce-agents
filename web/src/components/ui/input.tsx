@@ -1,3 +1,5 @@
+// 单行输入框基础原语：基于 base-ui Input。
+
 import * as React from "react"
 import { Input as InputPrimitive } from "@base-ui/react/input"
 

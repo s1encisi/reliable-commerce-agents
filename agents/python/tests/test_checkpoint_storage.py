@@ -1,9 +1,6 @@
-"""
-Phase 7 Refactor 11 — PostgresCheckpointStorage tests.
+"""PostgresCheckpointStorage 的真实数据库测试。
 
-Uses the shared Postgres testcontainer fixture (never mock the DB —
-schema drift has burned us before). Each test rolls through the full
-save/load/list/get_latest/delete cycle against a real table.
+每例覆盖保存、加载、列表、最新记录与删除，避免模拟数据库掩盖模式漂移。
 """
 
 from __future__ import annotations
@@ -14,18 +11,18 @@ from agent_framework._workflows._checkpoint import (
     WorkflowCheckpointException,
 )
 
-# Reuse the conftest fixtures (postgres_pool + clean_db) defined at
-# agents/tests/conftest.py.
+# 复用本目录 conftest.py 中的
+# postgres_pool 和 clean_db 夹具。
 pytestmark = pytest.mark.asyncio
 
 
 @pytest.fixture
 async def storage(postgres_pool):
-    """Return a PostgresCheckpointStorage backed by the testcontainer pool."""
+    """返回连接测试容器的检查点存储。"""
     from shared.checkpoint_storage import PostgresCheckpointStorage
 
-    # Clear any prior checkpoints from other tests. CASCADE because
-    # hitl_requests now carries an FK to workflow_checkpoints (Phase 1.5).
+    # 清理此前检查点；审批表有外键引用，
+    # 因此在隔离测试库使用 CASCADE。
     async with postgres_pool.acquire() as conn:
         await conn.execute("TRUNCATE TABLE workflow_checkpoints CASCADE")
     return PostgresCheckpointStorage(postgres_pool)
@@ -79,7 +76,7 @@ async def test_list_checkpoint_ids_ordered_newest_first(storage) -> None:
 
     ids = await storage.list_checkpoint_ids(workflow_name="wf-ids")
     assert len(ids) == 3
-    # Newest-first by created_at; in our rapid-fire test that equals insertion order reversed.
+    # 按创建时间倒序返回最新记录。
     assert ids[0] == saved_ids[-1]
 
 
@@ -116,7 +113,7 @@ async def test_delete_missing_returns_false(storage) -> None:
 async def test_save_upserts_existing_checkpoint(storage) -> None:
     cp = _checkpoint(iteration=1)
     await storage.save(cp)
-    # Mutate in place and save again — DB row must update, not duplicate.
+    # 原地修改后再次保存，应更新记录而非新增重复项。
     cp.iteration_count = 99
     cp.state = {"total": 99}
     await storage.save(cp)
@@ -127,8 +124,7 @@ async def test_save_upserts_existing_checkpoint(storage) -> None:
 
 
 async def test_factory_returns_postgres_storage_when_backend_is_postgres(postgres_pool, monkeypatch) -> None:
-    """Passing the pool explicitly bypasses shared.db.get_pool(), which
-    may not be initialized in the test runner."""
+    """显式传入池，绕开测试中可能尚未初始化的全局 get_pool。"""
     import importlib
 
     monkeypatch.setenv("MAF_CHECKPOINT_BACKEND", "postgres")
@@ -157,7 +153,7 @@ async def test_recording_storage_records_every_save_in_order(storage) -> None:
     cp2 = await recorder.save(_checkpoint("rec", iteration=1))
 
     assert recorder.saved == [cp1, cp2]
-    # Delegates to the wrapped storage for real, not just bookkeeping.
+    # 确认实际调用被包装存储，而非只记录标识。
     loaded = await recorder.load(cp2)
     assert loaded.iteration_count == 1
 

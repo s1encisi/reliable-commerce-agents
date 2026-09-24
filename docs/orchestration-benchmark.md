@@ -1,117 +1,85 @@
-# Orchestration mode benchmark
+# 编排模式基准测试
 
-The same question, routed five ways, with numbers attached.
+同一个问题，五种路由方式，并附上数据。
 
-This repository's thesis is that one domain can be orchestrated five different ways and
-that the choice has real consequences. That claim has been asserted here for a long time
-and never measured. This page is the measurement.
+本仓库的核心论点是：同一个业务域可以用五种不同方式编排，而且这个选择会产生真实后果。这个论断在这里被提了很久，却从未被量化。本页就是这次量化。
 
-## Conditions
+## 测试条件
 
-Everything needed to reproduce or to distrust it:
+复现（或质疑）本结果所需的全部信息：
 
 | | |
 |---|---|
-| **Model** | `gpt-4.1` (Azure OpenAI) |
-| **Stack** | Python backend, local Docker Compose |
-| **Prompts** | 4 (product search, order status, pre-purchase advice, return request) |
-| **Repetitions** | 2 per mode per prompt — 40 requests total |
-| **Pacing** | 8 s between requests; the chat routes sit behind a Redis sliding-window limiter and firing back-to-back measures 429s instead of orchestration |
-| **Measured** | 2026-08-27, commit `b53d20b` |
-| **Harness** | [`agents/python/evals/benchmark_modes.py`](https://github.com/nitin27may/e-commerce-agents/blob/main/agents/python/evals/benchmark_modes.py) |
+| **模型** | `gpt-4.1`（Azure OpenAI） |
+| **技术栈** | Python 后端，本地 Docker Compose |
+| **提示词** | 4 条（商品检索、订单状态、购买建议、退货申请） |
+| **重复次数** | 每条提示词每种模式 2 次 —— 共 40 次请求 |
+| **请求间隔** | 8 秒；对话路由位于 Redis 滑动窗口限流器之后，连续快速发送测到的是 429 而不是编排行为 |
+| **测量时间** | 2026 年 8 月 27 日，提交 `b53d20b` |
+| **运行框架** | [`agents/python/evals/benchmark_modes.py`](https://github.com/s1encisi/reliable-commerce-agents/blob/main/agents/python/evals/benchmark_modes.py) |
 
-The harness drives `POST /api/chat` rather than calling modes in-process, so every run
-passes through auth, guardrails, sanitization, grounding and usage logging — the real
-path, not a copy of it. It cannot run under `LLM_PROVIDER=replay`: fixtures return
-instantly, which makes latency meaningless.
+该运行框架驱动的是 `POST /api/chat`，而不是在进程内直接调用各模式，因此每一次运行都会经过认证、护栏、内容净化、事实核验与用量日志 —— 走的是真实路径，而非其副本。它无法在 `LLM_PROVIDER=replay` 下运行：回放夹具会瞬时返回，使延迟数据失去意义。
 
-## Results
+## 结果
 
-| Mode | p50 | p95 | Response | LLM calls | What ran |
+| 模式 | p50 | p95 | 回复长度 | LLM 调用 | 实际执行内容 |
 |---|---|---|---|---|---|
-| `tool` | 10.6 s | 21.4 s | 878 chars | orchestrator + specialist | orchestrator, order-management, product-discovery |
-| `handoff` | 5.1 s | 7.2 s | 970 chars | triage + specialist | order-management, product-discovery |
-| `group-chat` | 3.2 s | 10.8 s | 110 chars | 2 panelists + moderator | value, quality, moderator |
-| `workflow:pre-purchase` | 0.26 s | 0.28 s | 127 chars | **none** | reviews, stock, price_history, shipping |
-| `workflow:return-replace` | 0.10 s | 0.11 s | 82 chars | **none** | check_eligibility |
+| `tool` | 10.6 秒 | 21.4 秒 | 878 字符 | 编排器 + 专业智能体 | orchestrator、order-management、product-discovery |
+| `handoff` | 5.1 秒 | 7.2 秒 | 970 字符 | 分诊 + 专业智能体 | order-management、product-discovery |
+| `group-chat` | 3.2 秒 | 10.8 秒 | 110 字符 | 2 位参与者 + 主持人 | value、quality、moderator |
+| `workflow:pre-purchase` | 0.26 秒 | 0.28 秒 | 127 字符 | **无** | reviews、stock、price_history、shipping |
+| `workflow:return-replace` | 0.10 秒 | 0.11 秒 | 82 字符 | **无** | check_eligibility |
 
-## Read the last two rows carefully
+## 请仔细看最后两行
 
-**The workflow modes make no LLM call at all.** They are deterministic graphs over tool
-calls, and their "recommendation" is a formatted string, not generated prose. Comparing
-0.26 s against `tool`'s 10.6 s and concluding that workflows are forty times faster would
-be wrong — they are doing different work. What the number honestly says is: *when the
-answer can be assembled from tool output without a model, it costs milliseconds.*
+**工作流模式完全没有调用 LLM。** 它们是建立在工具调用之上的确定性图，其「建议」是一段格式化字符串，而不是生成的文本。拿 0.26 秒与 `tool` 的 10.6 秒相比、并得出「工作流快四十倍」的结论是错误的 —— 它们做的是不同的工作。这个数字诚实的含义是：*当答案可以由工具输出直接拼装、无需模型参与时，成本就是毫秒级。*
 
-That is a genuinely useful result. It is not a latency win over `tool` mode; it is an
-argument for noticing when you did not need a model.
+这是一个真正有用的结论。它不是对 `tool` 模式的延迟优势，而是一个提醒：要意识到自己什么时候其实不需要模型。
 
-**`workflow:return-replace` only reached `check_eligibility`.** The seeded order used by
-the return prompt is in `shipped` status, and returns require `delivered` — so the
-workflow correctly refused and stopped at its first gate. That 0.10 s measures a
-rejection, not a return flow. The number is real; it is not representative.
+**`workflow:return-replace` 只走到了 `check_eligibility`。** 退货提示词所用的种子订单处于 `shipped` 状态，而退货要求 `delivered` —— 因此工作流正确地拒绝了，并在第一道门就停下。那 0.10 秒测到的是一次拒绝，而不是一次完整的退货流程。这个数字是真实的，但它不具备代表性。
 
-## Tokens and cost are mostly absent, deliberately
+## token 与成本大多缺失，这是刻意的
 
-Only `tool` mode logged usage rows: **7,106 tokens and $0.0167 per run at gpt-4.1 rates**.
-Every other mode reports *not captured*, which the harness distinguishes from zero because
-they are very different claims.
+只有 `tool` 模式写入了用量记录：**在 gpt-4.1 的价格下，每次运行 7,106 token 与 0.0167 美元**。
+其余所有模式都报告为*未采集*，运行框架把「未采集」与「零」区分开来，因为这是两种截然不同的结论。
 
-The gap is real: modes that stream through MAF workflow events do not currently write
-`usage_logs` rows the way the tool router does. Reporting them as `$0.00` would have made
-this table look complete and been a lie. Closing it is tracked as its own piece of work.
+这个缺口是真实存在的：通过 MAF 工作流事件流式输出的模式，目前不会像工具路由那样写入 `usage_logs` 记录。把它们报成 `$0.00` 会让这张表看起来完整，但那是撒谎。填补该缺口已作为一项独立工作跟踪。
 
-## What actually changed while measuring this
+## 测量过程中实际改变了什么
 
-Two of these five modes were broken when the benchmark was first attempted, and the
-attempt is what proved it.
+这五种模式里，有两种在首次尝试基准测试时是坏的，而正是这次尝试证明了这一点。
 
-**`handoff` was 100–200 s and 19,000–25,000 characters per turn.** It is now 5.1 s and 970
-characters — the fastest LLM-backed mode here. The cause was not performance: the mesh's
-start agent was the *tool-router* orchestrator, carrying `call_specialist_agent` and a
-prompt naming it, so it never called a handoff tool. MAF's autonomous mode then fed it a
-continuation prompt and re-ran it, up to a 50-turn default. Measured before the fix: 5,403
-streamed updates, no specialist ever invoked.
+**`handoff` 曾经每轮耗时 100–200 秒、输出 19,000–25,000 个字符。** 现在是 5.1 秒、970 个字符 —— 是本表中最快的 LLM 模式。原因不在性能：该网格的起始智能体是*工具路由*编排器，它带着 `call_specialist_agent` 和一份点名该工具的提示词，因此它从未调用处理权交接工具。随后 MAF 的自主模式给它喂了一个续写提示词并重新运行它，默认上限高达 50 轮。修复前实测：流式输出 5,403 次更新，从未调用任何专业智能体。
 
-**`workflow:pre-purchase` returned 48 characters** from a four-executor fan-out:
-`Stock: 348 units available | Price trend: stable`. The fan-out was real; the synthesis
-read field names its own tools never returned (`sentiment` for `overall_sentiment`,
-`options` for `shipping_options`). Every line was guard-claused, so two of four
-contributions vanished with no error, on every run since the workflow was written. It now
-returns all four:
+**`workflow:pre-purchase` 从一个四执行器扇出中只返回了 48 个字符**：
+`Stock: 348 units available | Price trend: stable`。扇出是真实的；问题在于综合环节读取的字段名，其自身的工具从未返回过（用 `sentiment` 去取 `overall_sentiment`，用 `options` 去取 `shipping_options`）。每一行都有守卫分支，因此四路输入中有两路在没有任何报错的情况下消失了，而且自该工作流写出以来每次运行都是如此。现在它返回全部四路：
 
 ```
 Reviews: very_positive (4.7/5 avg) | Stock: 203 units available |
-Price trend: stable | Shipping: from $5.99, 5-7 business days
+Price trend: stable | Shipping: from ¥5.99, 5-7 business days
 ```
 
-Publishing the first run's numbers would have shipped a table describing two broken modes
-as if they were design characteristics.
+如果直接发布首次运行的数据，就会交付一张把两个坏掉的模式描述成设计特性的表。
 
-## Choosing a mode
+## 如何选择模式
 
-- **`tool`** — the default, and the right one when the orchestrator should compose the
-  answer. Most expensive per turn because the orchestrator round-trips.
-- **`handoff`** — when a specialist should own the answer outright. Cheaper and faster than
-  `tool` precisely because nobody re-writes the specialist's reply.
-- **`group-chat`** — when several fixed perspectives must react to each other before a
-  verdict. Cost scales with panelists.
-- **`workflow:*`** — when the shape of the work is known in advance. No model, no
-  variance, milliseconds — and no ability to handle anything the graph did not anticipate.
+- **`tool`** —— 默认选项，当需要由编排器来组织答案时它是正确选择。因为编排器要往返调用，所以每轮成本最高。
+- **`handoff`** —— 当某个专业智能体应当独占答案时。之所以比 `tool` 更便宜也更快，正是因为没有人再重写专业智能体的回复。
+- **`group-chat`** —— 当需要几种固定视角相互交锋后才得出结论时。成本随参与者数量增长。
+- **`workflow:*`** —— 当工作形态可以事先确定时。没有模型、没有波动、毫秒级 —— 但也无法处理图未预见到的任何情况。
 
-## Reproduce it
+## 复现方式
 
 ```bash
-./scripts/dev.sh                         # Python stack, real LLM key in .env
+./scripts/dev.sh                         # Python 技术栈，.env 中填真实 LLM 密钥
 cd agents/python
 uv run python -m evals.benchmark_modes --reps 2 --delay 8
 ```
 
-Results land in `agents/python/evals/results/` as timestamped JSON, with the commit
-recorded. Costs real money — roughly $0.50 for the run above.
+结果会以带时间戳的 JSON 落到 `agents/python/evals/results/`，其中记录了提交号。这会花费真实费用 —— 上面那次运行约 0.50 美元。
 
-## Related
+## 相关内容
 
-- [Orchestration patterns](concepts/06-orchestration-patterns.md) — what each mode *is*
-- [Reported vs actual](reported-vs-actual.md) — how both defects above were found
-- [Chapter 21 — Capstone Tour](https://nitinksingh.com/e-commerce-agents/tutorials/21-capstone-tour/) — where each mode lives in the code
+- [编排模式](concepts/06-orchestration-patterns.md) —— 每种模式*是什么*
+- [报告与实际](reported-vs-actual.md) —— 上述两个缺陷是如何被发现的
+- [第 21 章 —— 综合演练](../tutorials/21-capstone-tour/) —— 每种模式在代码中的位置

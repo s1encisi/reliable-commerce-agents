@@ -1,26 +1,26 @@
-# Deployment & Development
+# 部署与开发
 
-## 1. Prerequisites
+## 1. 前置条件
 
-| Tool | Minimum Version | Notes |
+| 工具 | 最低版本 | 说明 |
 |------|----------------|-------|
-| Docker | 24+ | Desktop or Engine |
-| Docker Compose | v2 | Bundled with Docker Desktop; verify with `docker compose version` |
-| OpenAI API key **or** Azure OpenAI credentials | -- | At least one LLM provider must be configured |
-| Git | 2.x | For cloning the repo |
+| Docker | 24+ | 桌面版或 Engine |
+| Docker Compose | v2 | 随 Docker Desktop 捆绑；用 `docker compose version` 校验 |
+| OpenAI API key **或** Azure OpenAI 凭据 | -- | 至少需要配置一个 LLM 提供方 |
+| Git | 2.x | 用于克隆仓库 |
 
-Optional for local (non-Docker) development:
+本地（非 Docker）开发的可选项：
 
-| Tool | Version | Notes |
+| 工具 | 版本 | 说明 |
 |------|---------|-------|
-| Python | 3.12 | Required only for running agents outside Docker |
-| uv | latest | Python package manager (`pip install uv` or `brew install uv`) |
-| Node.js | 22+ | Required only for running the frontend outside Docker |
-| pnpm | 9+ | Enable via `corepack enable && corepack prepare pnpm@latest --activate` |
+| Python | 3.12 | 仅在 Docker 之外运行智能体时需要 |
+| uv | latest | Python 包管理器（`pip install uv` 或 `brew install uv`） |
+| Node.js | 22+ | 仅在 Docker 之外运行前端时需要 |
+| pnpm | 9+ | 通过 `corepack enable && corepack prepare pnpm@latest --activate` 启用 |
 
-## 2. Docker Compose Architecture
+## 2. Docker Compose 架构
 
-The platform runs 11 services organized into 4 profile groups. Services without a profile start by default.
+平台运行 11 个服务，组织为 4 个 profile 分组。没有 profile 的服务默认启动。
 
 ```mermaid
 graph TB
@@ -28,7 +28,7 @@ graph TB
         style defaultGroup fill:#f8fafc,stroke:#e2e8f0,stroke-width:2px
         db["PostgreSQL 16 + pgvector<br/>:5432"]
         redis["Redis 7<br/>:6379"]
-        aspire["Aspire Dashboard<br/>:18888"]
+        jaeger["Jaeger<br/>:16686"]
     end
 
     subgraph seed["Profile: seed"]
@@ -54,17 +54,17 @@ graph TB
     seeder -->|depends_on| db
     orchestrator -->|depends_on| db
     orchestrator -->|depends_on| redis
-    orchestrator -->|depends_on| aspire
+    orchestrator -->|depends_on| jaeger
     product -->|depends_on| db
-    product -->|depends_on| aspire
+    product -->|depends_on| jaeger
     order -->|depends_on| db
-    order -->|depends_on| aspire
+    order -->|depends_on| jaeger
     pricing -->|depends_on| db
-    pricing -->|depends_on| aspire
+    pricing -->|depends_on| jaeger
     review -->|depends_on| db
-    review -->|depends_on| aspire
+    review -->|depends_on| jaeger
     inventory -->|depends_on| db
-    inventory -->|depends_on| aspire
+    inventory -->|depends_on| jaeger
     frontend -->|depends_on| orchestrator
 
     orchestrator -- "A2A Protocol" --> product
@@ -74,18 +74,18 @@ graph TB
     orchestrator -- "A2A Protocol" --> inventory
 ```
 
-## 3. Service Profiles
+## 3. 服务 Profile
 
-Docker Compose profiles control which services start. Services without a profile always start.
+Docker Compose profile 控制哪些服务启动。没有 profile 的服务总是启动。
 
-| Profile | Services | When to Use |
+| Profile | 服务 | 使用场景 |
 |---------|----------|-------------|
-| *(none)* | `db`, `redis`, `aspire` | Always started -- infrastructure baseline |
-| `seed` | `seeder` | Populates the database with sample data. Runs once and exits. |
-| `agents` | `orchestrator`, `product-discovery`, `order-management`, `pricing-promotions`, `review-sentiment`, `inventory-fulfillment` | The 6 AI agent microservices |
-| `frontend` | `frontend` | Next.js web application |
+| *（无）* | `db`、`redis`、`jaeger` | 总是启动 —— 基础设施基线 |
+| `seed` | `seeder` | 用示例数据填充数据库。运行一次后退出。 |
+| `agents` | `orchestrator`, `product-discovery`, `order-management`, `pricing-promotions`, `review-sentiment`, `inventory-fulfillment` | 6 个 AI 智能体微服务 |
+| `frontend` | `frontend` | Next.js Web 应用 |
 
-**Usage examples:**
+**用法示例：**
 
 ```bash
 # Infrastructure only
@@ -101,27 +101,23 @@ docker compose --profile agents --profile frontend up -d
 docker compose --profile seed run --rm seeder
 ```
 
-## 4. dev.sh Script
+## 4. dev.sh 脚本
 
-The `scripts/dev.sh` script is the recommended way to start the development environment. It handles build ordering, health checks, seeding, and prints a summary when ready.
+`scripts/dev.sh` 脚本是启动开发环境的推荐方式。它处理构建顺序、健康检查、种子数据填充，并在就绪时打印摘要。
 
-**On Windows, use `scripts/dev.ps1`** — a PowerShell script with identical behaviour: same profiles,
-same ordering, same health gates, and the same flags in PowerShell form (`--clean` → `-Clean`,
-`--seed-only` → `-SeedOnly`, `--infra-only` → `-InfraOnly`, `--dotnet` → `-Dotnet`). It also runs on
-macOS and Linux under PowerShell 7, though `dev.sh` is the more idiomatic choice there. Everything
-documented in this section applies to both.
+**在 Windows 上请使用 `scripts/dev.ps1`** —— 一个行为完全相同的 PowerShell 脚本：相同的 profile、相同的顺序、相同的健康检查关卡，以及以 PowerShell 形式表达的相同参数（`--clean` → `-Clean`，`--seed-only` → `-SeedOnly`，`--infra-only` → `-InfraOnly`）。它也能在 PowerShell 7 下的 macOS 和 Linux 上运行，不过在那里 `dev.sh` 是更地道的选择。本节记录的所有内容对两者都适用。
 
-### Flags
+### 参数
 
-| Flag | Description |
+| 参数 | 说明 |
 |------|-------------|
-| *(no flags)* | Full rebuild: stops existing containers, builds all images, starts infrastructure, seeds the database, starts all agents, starts the frontend |
-| `--clean` | Nuclear option: removes all containers, volumes (including DB data), and orphans, then does a full rebuild |
-| `--seed-only` | Ensures infrastructure is running, then re-runs the seeder against the existing database. Useful after schema changes or to reset sample data. |
-| `--infra-only` | Starts only `db`, `redis`, and `aspire`. Does not start agents or frontend. Use this when running agents locally via `uvicorn`. |
-| `--help`, `-h` | Prints usage information |
+| *（无参数）* | 完整重建：停止已有容器、构建所有镜像、启动基础设施、填充数据库种子数据、启动全部智能体、启动前端 |
+| `--clean` | 核选项：移除所有容器、卷（含数据库数据）和孤儿资源，然后执行完整重建 |
+| `--seed-only` | 确保基础设施在运行，然后针对已有数据库重新运行种子数据生成器。在模式变更后或需要重置示例数据时很有用。 |
+| `--infra-only` | 只启动 `db`、`redis` 和 `jaeger`。不启动智能体和前端。当你用 `uvicorn` 在本地运行智能体时使用。 |
+| `--help`、`-h` | 打印用法信息 |
 
-### Script Flow
+### 脚本流程
 
 ```mermaid
 flowchart TD
@@ -137,14 +133,14 @@ flowchart TD
     is_clean -- No --> is_seed_only
 
     clean --> is_seed_only{--seed-only?}
-    is_seed_only -- Yes --> start_infra_seed[Start db + redis + aspire]
+    is_seed_only -- Yes --> start_infra_seed[Start db + redis + jaeger]
     start_infra_seed --> health_infra_seed[Wait for health checks]
     health_infra_seed --> run_seeder_only[Run seeder]
     run_seeder_only --> exit_seed([Exit])
 
     is_seed_only -- No --> stop_existing[Stop existing containers]
     stop_existing --> build[Build agent images]
-    build --> start_infra[Start db + redis + aspire]
+    build --> start_infra[Start db + redis + jaeger]
     start_infra --> health_infra[Wait for health checks]
     health_infra --> run_seeder[Run database seeder]
 
@@ -160,142 +156,142 @@ flowchart TD
     summary_full --> done([Done])
 ```
 
-## 5. Environment Configuration
+## 5. 环境配置
 
-Copy `.env.example` to `.env` and configure:
+把 `.env.example` 复制为 `.env` 并配置：
 
 ```bash
 cp .env.example .env
 ```
 
-### LLM Provider
+### LLM 提供方
 
-| Variable | Required | Default | Description |
+| 变量 | 必填 | 默认值 | 说明 |
 |----------|----------|---------|-------------|
-| `LLM_PROVIDER` | Yes | `openai` | LLM provider: `openai`, `azure`, or `replay` (plays back recorded fixtures, no credentials — see `shared/replay_client.py`) |
+| `LLM_PROVIDER` | 是 | `openai` | LLM 提供方：`openai`、`azure` 或 `replay`（回放录制的 fixture，无需凭据 —— 见 `shared/replay_client.py`） |
 
-### OpenAI Configuration
+### OpenAI 配置
 
-| Variable | Required | Default | Description |
+| 变量 | 必填 | 默认值 | 说明 |
 |----------|----------|---------|-------------|
-| `OPENAI_API_KEY` | Yes (if `openai`) | -- | Your OpenAI API key. Any non-empty string works against a local server that doesn't check it (Ollama, LM Studio) |
-| `LLM_MODEL` | No | `gpt-4.1` | Chat completion model name |
-| `LLM_BASE_URL` | No | unset (uses `api.openai.com`) | Only takes effect when `LLM_PROVIDER=openai`. Points `OpenAIChatClient` at any OpenAI-compatible endpoint instead — GitHub Models, OpenRouter, vLLM, LM Studio, or a local Ollama server (`http://localhost:11434/v1`). See `tutorials/00-setup/README.md` for worked examples and a tool-calling-support gotcha before picking a local model. |
+| `OPENAI_API_KEY` | 是（当 `openai` 时） | -- | 你的 OpenAI API 密钥。对不校验密钥的本地服务器（Ollama、LM Studio）而言，任何非空字符串都可以 |
+| `LLM_MODEL` | 否 | `gpt-4.1` | 对话补全模型名称 |
+| `LLM_BASE_URL` | 否 | 未设置（使用 `api.openai.com`） | 仅在 `LLM_PROVIDER=openai` 时生效。改为把 `OpenAIChatClient` 指向任何 OpenAI 兼容端点 —— GitHub Models、OpenRouter、vLLM、LM Studio，或本地 Ollama 服务器（`http://localhost:11434/v1`）。在选择本地模型之前，请先看 `tutorials/00-setup/README.md` 中的示例，以及一个关于工具调用支持的易错点。 |
 
-### Azure OpenAI Configuration
+### Azure OpenAI 配置
 
-| Variable | Required | Default | Description |
+| 变量 | 必填 | 默认值 | 说明 |
 |----------|----------|---------|-------------|
-| `AZURE_OPENAI_ENDPOINT` | Yes (if `azure`) | -- | Azure OpenAI resource endpoint URL |
-| `AZURE_OPENAI_KEY` | Yes (if `azure`) | -- | Azure OpenAI API key |
-| `AZURE_OPENAI_DEPLOYMENT` | Yes (if `azure`) | -- | Deployment name for chat completions |
-| `AZURE_OPENAI_API_VERSION` | No | `2024-12-01-preview` | Azure OpenAI API version |
+| `AZURE_OPENAI_ENDPOINT` | 是（当 `azure` 时） | -- | Azure OpenAI 资源端点 URL |
+| `AZURE_OPENAI_KEY` | 是（当 `azure` 时） | -- | Azure OpenAI API 密钥 |
+| `AZURE_OPENAI_DEPLOYMENT` | 是（当 `azure` 时） | -- | 用于对话补全的部署名称 |
+| `AZURE_OPENAI_API_VERSION` | 否 | `2024-12-01-preview` | Azure OpenAI API 版本 |
 
-### Embeddings
+### 嵌入（Embeddings）
 
-| Variable | Required | Default | Description |
+| 变量 | 必填 | 默认值 | 说明 |
 |----------|----------|---------|-------------|
-| `EMBEDDING_MODEL` | No | `text-embedding-3-small` | OpenAI embedding model for product semantic search (pgvector) |
-| `AZURE_EMBEDDING_DEPLOYMENT` | No (if `azure`) | -- | Azure OpenAI deployment for embeddings |
+| `EMBEDDING_MODEL` | 否 | `text-embedding-3-small` | 用于商品语义检索（pgvector）的 OpenAI 嵌入模型 |
+| `AZURE_EMBEDDING_DEPLOYMENT` | 否（当 `azure` 时） | -- | 用于嵌入的 Azure OpenAI 部署 |
 
-### Database
+### 数据库
 
-| Variable | Required | Default | Description |
+| 变量 | 必填 | 默认值 | 说明 |
 |----------|----------|---------|-------------|
-| `POSTGRES_DB` | No | `ecommerce_agents` | PostgreSQL database name |
-| `POSTGRES_USER` | No | `ecommerce` | PostgreSQL user |
-| `POSTGRES_PASSWORD` | No | `ecommerce_secret` | PostgreSQL password |
-| `DATABASE_URL` | No | `postgresql://ecommerce:ecommerce_secret@db:5432/ecommerce_agents` | Full connection string. In Docker, `db` resolves to the Compose service. For local dev, use `localhost`. |
+| `POSTGRES_DB` | 否 | `ecommerce_agents` | PostgreSQL 数据库名 |
+| `POSTGRES_USER` | 否 | `ecommerce` | PostgreSQL 用户 |
+| `POSTGRES_PASSWORD` | 否 | `ecommerce_secret` | PostgreSQL 密码 |
+| `DATABASE_URL` | 否 | `postgresql://ecommerce:ecommerce_secret@db:5432/ecommerce_agents` | 完整连接字符串。在 Docker 中，`db` 解析到 Compose 服务。本地开发请使用 `localhost`。 |
 
 ### Redis
 
-| Variable | Required | Default | Description |
+| 变量 | 必填 | 默认值 | 说明 |
 |----------|----------|---------|-------------|
-| `REDIS_URL` | No | `redis://redis:6379` | Redis connection string. In Docker, `redis` resolves to the Compose service. |
+| `REDIS_URL` | 否 | `redis://redis:6379` | Redis 连接字符串。在 Docker 中，`redis` 解析到 Compose 服务。 |
 
-### Auth
+### 认证
 
-| Variable | Required | Default | Description |
+| 变量 | 必填 | 默认值 | 说明 |
 |----------|----------|---------|-------------|
-| `JWT_SECRET` | Yes | `change-me-...` | Secret key for signing JWTs. Generate with: `python -c "import secrets; print(secrets.token_hex(32))"` |
-| `AGENT_SHARED_SECRET` | No | `agent-internal-shared-secret` | Shared secret for inter-agent authentication (orchestrator to specialists) |
+| `JWT_SECRET` | 是 | `change-me-...` | 用于签名 JWT 的密钥。生成方式：`python -c "import secrets; print(secrets.token_hex(32))"` |
+| `AGENT_SHARED_SECRET` | 否 | `agent-internal-shared-secret` | 用于智能体间认证的共享密钥（编排器到专业智能体） |
 
-### Telemetry
+### 遥测
 
-| Variable | Required | Default | Description |
+| 变量 | 必填 | 默认值 | 说明 |
 |----------|----------|---------|-------------|
-| `OTEL_ENABLED` | No | `true` | Enable/disable OpenTelemetry export |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | No | `http://aspire:18889` | OTLP receiver endpoint (Aspire Dashboard) |
-| `OTEL_SERVICE_NAME` | No | `ecommerce.orchestrator` | Service name reported to OTLP. Each agent overrides this in `docker-compose.yml`. |
+| `OTEL_ENABLED` | 否 | `true` | 启用/禁用 OpenTelemetry 导出 |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | 否 | `http://jaeger:4317` | OTLP 接收端端点（Jaeger） |
+| `OTEL_SERVICE_NAME` | 否 | `ecommerce.orchestrator` | 上报给 OTLP 的服务名。每个智能体在 `docker-compose.yml` 中覆盖此项。 |
 
-### General
+### 通用
 
-| Variable | Required | Default | Description |
+| 变量 | 必填 | 默认值 | 说明 |
 |----------|----------|---------|-------------|
-| `ENVIRONMENT` | No | `development` | Runtime environment identifier |
-| `AGENT_REGISTRY` | No | *(JSON map)* | JSON object mapping agent names to their internal Docker network URLs. Used by the orchestrator to discover specialist agents. |
-| `ORCHESTRATOR_URL` | No | `http://localhost:8080` | Where the frontend's server-side `/api/*` proxy forwards to. Read at runtime, so one image works in every environment. The browser never sees it. |
+| `ENVIRONMENT` | 否 | `development` | 运行时环境标识 |
+| `AGENT_REGISTRY` | 否 | *（JSON 映射）* | 把智能体名称映射到其内部 Docker 网络 URL 的 JSON 对象。编排器用它来发现专业智能体。 |
+| `ORCHESTRATOR_URL` | 否 | `http://localhost:8080` | 前端服务端 `/api/*` 代理转发到的目标。在运行时读取，因此同一个镜像可在任何环境工作。浏览器永远看不到它。 |
 
-## 6. Dockerfile Architecture
+## 6. Dockerfile 架构
 
-### Agent Dockerfile (Multi-Target)
+### 智能体 Dockerfile（多目标）
 
-All 6 agents share a single `agents/Dockerfile`. The build target is controlled via two `ARG` values:
+全部 6 个智能体共用同一个 `agents/Dockerfile`。构建目标由两个 `ARG` 值控制：
 
-| ARG | Default | Purpose |
+| ARG | 默认值 | 用途 |
 |-----|---------|---------|
-| `AGENT_NAME` | `orchestrator` | Python package directory to copy (e.g., `product_discovery`, `order_management`) |
-| `AGENT_PORT` | `8080` | Port the agent listens on |
+| `AGENT_NAME` | `orchestrator` | 要复制的 Python 包目录（例如 `product_discovery`、`order_management`） |
+| `AGENT_PORT` | `8080` | 智能体监听的端口 |
 
-**Build flow:**
+**构建流程：**
 
-1. **Base image**: `python:3.12-slim` with system dependencies (`gcc`, `libpq-dev`, `curl`)
-2. **Install uv**: Copied from the official `ghcr.io/astral-sh/uv` image
-3. **Create non-root user**: `agent` user and group
-4. **Install Python deps**: `uv sync --no-dev --no-install-project` (cached layer -- only re-runs when `pyproject.toml` changes)
-5. **Copy shared library**: `shared/` directory used by all agents
-6. **Copy agent module**: Only the `${AGENT_NAME}/` directory for this specific agent
-7. **Switch to non-root user**
-8. **Health check**: `curl -f http://localhost:${AGENT_PORT}/health`
-9. **Entrypoint**: `uv run uvicorn ${AGENT_NAME}.main:app --host 0.0.0.0 --port ${AGENT_PORT}`
+1. **基础镜像**：`python:3.12-slim`，含系统依赖（`gcc`、`libpq-dev`、`curl`）
+2. **安装 uv**：从官方 `ghcr.io/astral-sh/uv` 镜像复制
+3. **创建非 root 用户**：`agent` 用户与用户组
+4. **安装 Python 依赖**：`uv sync --no-dev --no-install-project`（带缓存的层 —— 仅在 `pyproject.toml` 变化时重跑）
+5. **复制共享库**：所有智能体共用的 `shared/` 目录
+6. **复制智能体模块**：只复制该智能体对应的 `${AGENT_NAME}/` 目录
+7. **切换到非 root 用户**
+8. **健康检查**：`curl -f http://localhost:${AGENT_PORT}/health`
+9. **入口点**：`uv run uvicorn ${AGENT_NAME}.main:app --host 0.0.0.0 --port ${AGENT_PORT}`
 
-The seeder service reuses the orchestrator image but overrides the `command` to run `uv run python -m scripts.seed` with the `scripts/` directory mounted as a read-only volume.
+seeder 服务复用 orchestrator 镜像，但覆盖了 `command` 以运行 `uv run python -m scripts.seed`，并把 `scripts/` 目录以只读卷挂载。
 
-### Frontend Dockerfile (Multi-Stage)
+### 前端 Dockerfile（多阶段）
 
-The `web/Dockerfile` uses a 3-stage build for minimal production images:
+`web/Dockerfile` 使用 3 阶段构建以获得最小的生产镜像：
 
-| Stage | Base | Purpose |
+| 阶段 | 基础镜像 | 用途 |
 |-------|------|---------|
-| `deps` | `node:22-alpine` | Install dependencies with `pnpm install --frozen-lockfile` |
-| `builder` | `node:22-alpine` | Build Next.js (`pnpm build`). No backend address is compiled in — see `ORCHESTRATOR_URL` above |
-| `runner` | `node:22-alpine` | Production runtime with standalone output only. Non-root `nextjs` user. |
+| `deps` | `node:22-alpine` | 用 `pnpm install --frozen-lockfile` 安装依赖 |
+| `builder` | `node:22-alpine` | 构建 Next.js（`pnpm build`）。不会编译进任何后端地址 —— 见上文 `ORCHESTRATOR_URL` |
+| `runner` | `node:22-alpine` | 仅含 standalone 产物的生产运行时。非 root 的 `nextjs` 用户。 |
 
-The final image contains only the standalone server, static assets, and public directory -- no `node_modules` or source code.
+最终镜像只包含 standalone 服务器、静态资源和 public 目录 —— 不含 `node_modules` 或源代码。
 
-## 7. Local Development
+## 7. 本地开发
 
-For faster iteration, run infrastructure in Docker and agents/frontend locally.
+为了更快迭代，把基础设施放在 Docker 中运行，智能体/前端在本地运行。
 
-**Start infrastructure:**
+**启动基础设施：**
 
 ```bash
 ./scripts/dev.sh --infra-only
 ```
 
-**Run a single agent:**
+**运行单个智能体：**
 
 ```bash
 cd agents
 export DATABASE_URL=postgresql://ecommerce:ecommerce_secret@localhost:5432/ecommerce_agents
 export REDIS_URL=redis://localhost:6379
 export OPENAI_API_KEY=sk-your-key
-export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:18890
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
 
 uv run uvicorn product_discovery.main:app --port 8081 --reload
 ```
 
-**Run the orchestrator** (needs `AGENT_REGISTRY` pointing to local ports):
+**运行编排器**（需要 `AGENT_REGISTRY` 指向本地端口）：
 
 ```bash
 cd agents
@@ -304,7 +300,7 @@ export AGENT_REGISTRY='{"product-discovery":"http://localhost:8081","order-manag
 uv run uvicorn orchestrator.main:app --port 8080 --reload
 ```
 
-**Run the frontend:**
+**运行前端：**
 
 ```bash
 cd web
@@ -312,9 +308,9 @@ pnpm install
 pnpm dev
 ```
 
-The frontend starts on `http://localhost:3000` and forwards its `/api/*` calls to `http://localhost:8080` (configurable via `ORCHESTRATOR_URL`).
+前端在 `http://localhost:3000` 启动，并把其 `/api/*` 调用转发到 `http://localhost:8080`（可通过 `ORCHESTRATOR_URL` 配置）。
 
-**Seed the database locally:**
+**在本地填充数据库种子数据：**
 
 ```bash
 cd agents
@@ -322,7 +318,7 @@ DATABASE_URL=postgresql://ecommerce:ecommerce_secret@localhost:5432/ecommerce_ag
   uv run python -m scripts.seed
 ```
 
-**Generate embeddings locally:**
+**在本地生成嵌入：**
 
 ```bash
 cd agents
@@ -331,35 +327,36 @@ OPENAI_API_KEY=sk-your-key \
   uv run python -m scripts.generate_embeddings
 ```
 
-## 8. Port Map
+## 8. 端口映射
 
-| Port | Service | Protocol | Notes |
+| 端口 | 服务 | 协议 | 说明 |
 |------|---------|----------|-------|
-| 3000 | Next.js Frontend | HTTP | Browser-facing UI |
-| 5432 | PostgreSQL | TCP | pgvector enabled |
-| 6379 | Redis | TCP | Session cache (rate limiting is not implemented yet — planned) |
-| 8080 | Orchestrator (Customer Support Agent) | HTTP | API gateway -- all user requests enter here |
-| 8081 | Product Discovery Agent | HTTP | A2A endpoint, called by orchestrator |
-| 8082 | Order Management Agent | HTTP | A2A endpoint, called by orchestrator |
-| 8083 | Pricing & Promotions Agent | HTTP | A2A endpoint, called by orchestrator |
-| 8084 | Review & Sentiment Agent | HTTP | A2A endpoint, called by orchestrator |
-| 8085 | Inventory & Fulfillment Agent | HTTP | A2A endpoint, called by orchestrator |
-| 18888 | Aspire Dashboard | HTTP | OpenTelemetry traces and logs UI |
-| 18890 | Aspire OTLP Receiver | gRPC | Mapped from container port 18889 |
+| 3000 | Next.js 前端 | HTTP | 面向浏览器的 UI |
+| 5432 | PostgreSQL | TCP | 已启用 pgvector |
+| 6379 | Redis | TCP | 会话缓存（限流尚未实现 —— 已规划） |
+| 8080 | 编排器（客户支持智能体） | HTTP | API 网关 —— 所有用户请求从这里进入 |
+| 8081 | 商品发现智能体 | HTTP | A2A 端点，由编排器调用 |
+| 8082 | 订单管理智能体 | HTTP | A2A 端点，由编排器调用 |
+| 8083 | 定价与促销智能体 | HTTP | A2A 端点，由编排器调用 |
+| 8084 | 评论与情感分析智能体 | HTTP | A2A 端点，由编排器调用 |
+| 8085 | 库存与履约智能体 | HTTP | A2A 端点，由编排器调用 |
+| 16686 | Jaeger UI | HTTP | OpenTelemetry 分布式追踪界面 |
+| 4317 | Jaeger OTLP 接收端 | gRPC | OTLP gRPC 接收端口 |
+| 4318 | Jaeger OTLP 接收端 | HTTP | OTLP HTTP 接收端口 |
 
-## 9. Health Checks
+## 9. 健康检查
 
-### Docker Health Checks
+### Docker 健康检查
 
-All services have built-in health checks defined in `docker-compose.yml` or the Dockerfile:
+所有服务都在 `docker-compose.yml` 或 Dockerfile 中定义了内置健康检查：
 
-| Service | Check | Interval | Timeout | Retries |
+| 服务 | 检查 | 间隔 | 超时 | 重试次数 |
 |---------|-------|----------|---------|---------|
 | PostgreSQL | `pg_isready -U ecommerce` | 5s | 3s | 5 |
 | Redis | `redis-cli ping` | 5s | 3s | 5 |
-| All agents | `curl -f http://localhost:{PORT}/health` | 15s | 5s | 3 (30s start period) |
+| 所有智能体 | `curl -f http://localhost:{PORT}/health` | 15s | 5s | 3（30s 启动期） |
 
-### Manual Verification
+### 手动验证
 
 ```bash
 # Check all container statuses
@@ -380,40 +377,40 @@ docker compose exec db pg_isready -U ecommerce
 docker compose exec redis redis-cli ping
 
 # View OpenTelemetry traces
-open http://localhost:18888
+open http://localhost:16686
 ```
 
-## 10. Troubleshooting
+## 10. 故障排查
 
-For common issues — port conflicts, missing API keys, empty data, Aspire traces, build failures, and frontend errors — see **[troubleshooting.md](./troubleshooting.md)**.
+常见问题 —— 端口冲突、缺少 API 密钥、数据为空、Jaeger 追踪、构建失败以及前端错误 —— 请参见 **[troubleshooting.md](./troubleshooting.md)**。
 
-Deployment-specific issues are below.
+部署特有的问题见下文。
 
-### Database volume out of date after schema changes
+### 模式变更后数据库卷过期
 
-**Cause**: `init.sql` only runs on the first volume creation. Modifying the schema after the volume exists has no effect.
+**原因**：`init.sql` 只在卷首次创建时运行。卷已存在后再修改模式不会有任何效果。
 
-**Fix**: Destroy the volume and re-initialize:
+**修复**：销毁卷并重新初始化：
 
 ```bash
 ./scripts/dev.sh --clean
 ```
 
-This removes the `pgdata` volume, re-creates the database from `init.sql`, and re-seeds.
+这会移除 `pgdata` 卷、根据 `init.sql` 重建数据库并重新填充种子数据。
 
-### Seeder fails with "relation does not exist"
+### 种子数据生成器报 "relation does not exist"
 
-**Cause**: Same root cause — the database volume was created before the latest `init.sql`.
+**原因**：同样的根因 —— 数据库卷是在最新 `init.sql` 之前创建的。
 
-**Fix**: `./scripts/dev.sh --clean`.
+**修复**：`./scripts/dev.sh --clean`。
 
-### Docker build slow — dependency layer invalidated
+### Docker 构建缓慢 —— 依赖层缓存失效
 
-**Cause**: Changing `pyproject.toml` triggers a full `uv sync` reinstall.
+**原因**：修改 `pyproject.toml` 会触发完整的 `uv sync` 重装。
 
-**Fix**: The Dockerfile is structured so the dependency layer is independent of source code. If you only changed `.py` files, `uv sync` is reused from cache. Avoid touching `pyproject.toml` unless you are adding or removing dependencies.
+**修复**：Dockerfile 的结构保证依赖层独立于源代码。如果你只改了 `.py` 文件，`uv sync` 会复用缓存。除非要增删依赖，否则避免改动 `pyproject.toml`。
 
-### "Permission denied" running dev.sh
+### 运行 dev.sh 时出现 "Permission denied"
 
 ```bash
 chmod +x scripts/dev.sh
@@ -421,8 +418,8 @@ chmod +x scripts/dev.sh
 
 ---
 
-## Related
+## 相关文档
 
-- [`docs/troubleshooting.md`](./troubleshooting.md) — runtime issues (port conflicts, LLM errors, DB connection, Aspire traces)
-- [`docs/architecture.md`](./architecture.md) — system overview and agent patterns
-- [Project README](../README.md)
+- [`docs/troubleshooting.md`](./troubleshooting.md) —— 运行时问题（端口冲突、LLM 错误、数据库连接、Jaeger 追踪）
+- [`docs/architecture.md`](./architecture.md) —— 系统概览与智能体模式
+- [项目 README](../README.md)

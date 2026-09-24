@@ -1,70 +1,60 @@
-# Concepts
+# 概念
 
-This is the foundations layer: the ideas behind multi-agent systems, explained for a developer
-who is competent but new to the AI/agent world. You do not need to know what an agent is, what
-"multi-agent" means, or what a guardrail is for before you start — every term is defined before
-it is used.
+这里是基础层：多智能体系统背后的思想，面向「会写代码、但刚接触 AI/智能体领域」的开发者。
+开始之前，你不需要知道什么是智能体、「多智能体」是什么意思、护栏有什么用——每个术语都会
+在用到之前先给出定义。
 
-Every page follows the same shape:
+每个页面都遵循同一套结构：
 
-- **What it is** — plain language, one honest analogy, no jargon in the definition itself.
-- **Why it matters** — the concrete problem it solves, and what breaks if you skip it.
-- **When to use it — and when not to.** Explicit non-use cases.
-- **How it works here** — the pattern running in *this* application, with a link to the real
-  source file and the symbol named in prose, plus a diagram of the real path.
+- **它是什么** —— 平实的语言，配一个贴切的类比，定义本身不堆术语。
+- **为什么重要** —— 它具体解决了什么问题，以及跳过它会出什么故障。
+- **什么时候用——什么时候不用。** 明确列出不适用的场景。
+- **本项目怎么实现** —— *本*应用里实际运行的模式，附上真实源码文件的链接、在正文中点名的
+  符号，以及真实路径的图示。
 
-The repository is the source of truth for these ideas. Nothing here depends on an external
-article — read this, then read the file it points at, and you have the whole picture.
+对于这些思想，本仓库就是唯一权威来源。这里不依赖任何外部文章——读完本页，再读它指向的
+文件，你就能掌握全貌。
 
-> **Not sure you are ready for this layer?** The
-> [AI Knowledge Hub](https://nitinksingh.com/ai-resources/) sits below it: eleven modules and ten
-> labs taking you from a model running on your laptop to an agent in production, free and local.
-> These pages assume you can read code and want to know why a pattern exists; the hub assumes
-> less and has you build each idea yourself first. Individual pages here link to the matching hub
-> module where one exists.
+## 两条阅读路径
 
-## Two reading paths
+**第一次接触智能体——从这里开始。** 按顺序读：
 
-**New to agents — start here.** Read in order:
+1. [什么是智能体](01-what-is-an-agent.md)
+2. [智能体循环](02-the-agentic-loop.md)
+3. [工具](03-tools.md)
+4. [智能体运行框架](04-agent-harness.md)
+5. [为什么要多智能体](05-why-multi-agent.md)
+6. [编排模式](06-orchestration-patterns.md)
+7. [智能体系统中的图](07-graphs-in-agent-systems.md)
 
-1. [What is an agent](01-what-is-an-agent.md)
-2. [The agentic loop](02-the-agentic-loop.md)
-3. [Tools](03-tools.md)
-4. [The agent harness](04-agent-harness.md)
-5. [Why multi-agent](05-why-multi-agent.md)
-6. [Orchestration patterns](06-orchestration-patterns.md)
-7. [Graphs in agent systems](07-graphs-in-agent-systems.md)
+读到第 7 页，你就掌握了本仓库使用的全部词汇，接下来既可以继续往下读，也可以直接跳到
+[`docs/architecture.md`](../architecture.md)，看看本代码库中的六个智能体究竟是怎么连起来的。
 
-By page 7 you have the full vocabulary this repo uses, and you can either keep going below or
-jump straight to [`docs/architecture.md`](../architecture.md) to see how the six agents in this
-codebase are actually wired together.
+**已经了解智能体——直接看系统。** 跳到 [`docs/architecture.md`](../architecture.md) 获取系统级
+视角，之后遇到需要展开的术语，再回到这里的单页查看。
 
-**Already know agents — show me the system.** Skip straight to
-[`docs/architecture.md`](../architecture.md) for the system-level view, and come back to
-individual pages here when a term needs unpacking.
+## 其余页面
 
-## The rest of the pages
-
-| Page | What it answers |
+| 页面 | 回答什么问题 |
 |---|---|
-| [08 — State, memory, and sessions](08-state-memory-and-sessions.md) | Why agents are stateless by default, and the three different things people call "memory" |
-| [09 — Grounding and RAG](09-grounding-and-rag.md) | Why models fabricate, and the difference between retrieving data and verifying a claim |
-| [10 — Guardrails](10-guardrails.md) | The threat model in plain terms, and what each defensive layer can and can't stop |
-| [11 — Human-in-the-loop](11-human-in-the-loop.md) | Why some actions must never run unsupervised, and two different ways to gate them |
-| [12 — Evaluation](12-evaluation.md) | Why "it looked right in the demo" isn't evidence, and what to measure instead |
-| [13 — Observability and cost](13-observability-and-cost.md) | Tracing a request across six services, and tokens as the unit of cost |
-| [14 — Production concerns](14-production-concerns.md) | Idempotency, retries, rate limits — what turns a demo into a system (and an honest look at what this repo does and doesn't have yet) |
+| [08 —— 状态、记忆与会话](08-state-memory-and-sessions.md) | 为什么智能体默认是无状态的，以及人们口中三种不同的「记忆」分别指什么 |
+| [09 —— 事实核验与 RAG](09-grounding-and-rag.md) | 模型为什么会编造，以及「检索数据」与「核实结论」的区别 |
+| [10 —— 护栏](10-guardrails.md) | 用平实的语言说明威胁模型，以及每层防御能挡住什么、挡不住什么 |
+| [11 —— 人工参与](11-human-in-the-loop.md) | 为什么有些操作绝不能在无人监督下执行，以及两种不同的拦截方式 |
+| [12 —— 评测](12-evaluation.md) | 为什么「demo 里看着没问题」不构成证据，以及该测什么 |
+| [13 —— 可观测性与成本](13-observability-and-cost.md) | 如何跨六个服务追踪一次请求，以及为什么 token 是成本的计量单位 |
+| [14 —— 生产环境关注点](14-production-concerns.md) | 幂等性、重试、限流——是什么把 demo 变成了系统（并诚实说明本仓库目前有、以及还没有什么） |
 
-## How this fits together with the rest of the repo
+## 与其他部分的关系
 
-Four layers, each answering a different question:
+四个层次，各自回答一个不同的问题：
 
 ```
-docs/concepts/       "What is this idea, and why would I reach for it?"
-tutorials/NN         "Show me — I'll build a tiny version myself."
-agents/python/       "Here it is doing real work, at scale, in production code."
-docs/architecture.md "How does the whole system fit together?"
+docs/concepts/       "这个思想是什么，为什么我会用到它？"
+tutorials/NN         "做给我看——我自己搭一个最小版本。"
+agents/python/       "它在这里真正跑起来了，在规模化、生产级代码中。"
+docs/architecture.md "整个系统是怎么拼在一起的？"
 ```
 
-Nothing here is a summary of a blog post. If a concept page and the code it points to ever
-disagree, the code is right and the page is out of date — please open an issue.
+这里的内容不是任何外部文章的摘要。如果某个概念页与它指向的代码出现分歧，以代码为准，
+页面即为过时——欢迎提 issue。

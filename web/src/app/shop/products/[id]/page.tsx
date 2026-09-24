@@ -58,9 +58,9 @@ export default function ProductDetailPage() {
   if (notFound) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-16 text-center sm:px-6">
-        <p className="text-muted-foreground">Product not found.</p>
+        <p className="text-muted-foreground">未找到该商品。</p>
         <Link href="/shop/products" className="mt-2 inline-block text-primary hover:underline">
-          Back to products
+          返回商品列表
         </Link>
       </div>
     );
@@ -77,7 +77,7 @@ export default function ProductDetailPage() {
         href="/shop/products"
         className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
       >
-        <ArrowLeft className="size-4" /> Back to products
+        <ArrowLeft className="size-4" /> 返回商品列表
       </Link>
 
       <div className="grid gap-8 lg:grid-cols-2">
@@ -111,7 +111,7 @@ export default function ProductDetailPage() {
                       {formatPrice(product.original_price!)}
                     </span>
                     <span className="rounded-full bg-destructive px-2 py-0.5 text-xs font-semibold text-white">
-                      -{discount}%
+                      省 {discount}%
                     </span>
                   </>
                 )}
@@ -120,7 +120,7 @@ export default function ProductDetailPage() {
                 <div className="mt-2 flex items-center gap-1 text-sm text-muted-foreground">
                   <Star className="size-4 fill-amber-400 text-amber-400" />
                   {product.rating.toFixed(1)}
-                  {product.review_count ? ` · ${product.review_count} reviews` : ""}
+                  {product.review_count ? ` · ${product.review_count} 条评价` : ""}
                 </div>
               )}
               {product.description && (
@@ -138,23 +138,23 @@ export default function ProductDetailPage() {
                   {adding ? (
                     <Loader2 className="size-4 animate-spin" />
                   ) : product.in_stock === false ? (
-                    "Out of stock"
+                    "缺货"
                   ) : user ? (
-                    "Add to cart"
+                    "加入购物车"
                   ) : (
-                    "Sign in to buy"
+                    "登录后购买"
                   )}
                 </Button>
                 <Button
                   render={
                     <Link
-                      href={`/shop/assistant?prompt=${encodeURIComponent(`Tell me more about ${product.name}`)}`}
+                      href={`/shop/assistant?prompt=${encodeURIComponent(`请介绍一下${product.name}`)}`}
                     />
                   }
                   variant="outline"
                   size="lg"
                 >
-                  <Sparkles className="size-4 text-primary" /> Ask the assistant
+                  <Sparkles className="size-4 text-primary" /> 咨询 AI 助手
                 </Button>
               </div>
             </>

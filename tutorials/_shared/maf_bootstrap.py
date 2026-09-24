@@ -1,17 +1,8 @@
-"""
-MAF bootstrap for tutorial chapters.
+"""教程启动辅助函数。
 
-Every chapter's main.py and tests call `bootstrap()` at import time to:
-1. Patch the agent-framework v1.0 __init__.py (packaging bug — the wheel ships
-   with an empty __init__.py; we re-export the public API in-place).
-2. Load environment variables from the repo-root .env so tutorials share the
-   same OpenAI / Azure OpenAI configuration as the capstone app.
-
-Usage:
-    from tutorials._shared import maf_bootstrap
-    maf_bootstrap.bootstrap()
-
-    from agent_framework import Agent   # now resolves
+各章导入时调用 bootstrap：按需修复早期 MAF 空 __init__.py 的
+公开导出，并加载仓库 .env。当前已修复版本通常无需补丁；显式传入
+的环境变量优先。
 """
 
 from __future__ import annotations
@@ -56,11 +47,9 @@ def _patch_init() -> None:
 
     init_path = pathlib.Path(agent_framework.__file__)
     current = init_path.read_text()
-    # Patch when empty (first run) OR when an older bootstrap installed an
-    # earlier patch that we now need to supersede with a newer export list.
-    if current.strip() == "" or (
-        _PATCH_MARKER not in current and "Microsoft Agent Framework — re-exports" in current
-    ):
+    # 只在文件为空，或含旧引导补丁时处理，
+    # 用当前导出清单替换旧补丁。
+    if current.strip() == "" or (_PATCH_MARKER not in current and "Microsoft Agent Framework — re-exports" in current):
         init_path.write_text(_PATCH)
         importlib.reload(agent_framework)
 
@@ -77,11 +66,11 @@ def _load_dotenv() -> None:
         key, value = line.split("=", 1)
         key = key.strip()
         value = value.strip().strip('"').strip("'")
-        # Don't overwrite explicit env passed by the caller.
+        # 不覆盖调用方显式设置的环境变量。
         os.environ.setdefault(key, value)
 
 
 def bootstrap() -> None:
-    """Idempotent — safe to call multiple times."""
+    """幂等初始化，可安全调用多次。"""
     _patch_init()
     _load_dotenv()

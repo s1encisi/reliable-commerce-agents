@@ -1,39 +1,34 @@
-## What changed
+## 改了什么
 
-<!-- What this does, and why. If it fixes an issue, "Fixes #N". -->
+<!-- 它做了什么，以及为什么。如果修复了某个 issue，写 "Fixes #N"。 -->
 
-## How it was verified
+## 如何验证
 
-<!-- Commands you ran and what they printed. "Tests pass" on its own is not
-     verification — this repo has a documented history of changes that passed
-     every test while being completely broken in a live run. -->
+<!-- 你运行了哪些命令、它们输出了什么。单说「测试通过」不算验证 ——
+     本仓库有据可查的历史里，出现过通过了所有测试、实跑却完全坏掉的改动。 -->
 
 ```
 ```
 
-## Checklist
+## 检查清单
 
-- [ ] Branched off `main` and kept focused to one concern
-- [ ] Tests added or adjusted — every change ships with tests
-- [ ] Docs updated if behaviour changed (`docs/` is the source for the site)
-- [ ] Definition of done passes locally:
+- [ ] 从 `main` 拉分支，且只聚焦一件事
+- [ ] 新增或调整了测试 —— 每一处改动都要随附测试
+- [ ] 行为变更时更新了文档（`docs/` 是站点的来源）
+- [ ] 本地通过了「完成定义」：
 
 ```bash
 cd agents/python && uv run ruff check . && uv run ruff format --check . && uv run pytest
 cd web && pnpm lint && pnpm exec tsc --noEmit && pnpm test && pnpm build
 ```
 
-## Stacks affected
+## 影响的层次
 
-<!-- Parity between Python and .NET is enforced by a dual-backend gate. If this
-     lands on only one, say why. -->
+- [ ] Python 后端
+- [ ] 前端
+- [ ] 仅文档 / 教程
 
-- [ ] Python
-- [ ] .NET
-- [ ] Frontend
-- [ ] Docs / tutorials only
+## 是否对着运行中的环境验证过？
 
-## Exercised against a running stack?
-
-- [ ] Yes — how: <!-- e.g. ./scripts/dev.sh --demo, then asked "..." -->
-- [ ] No — unit-testable change only
+- [ ] 是 —— 方式：<!-- 例如 ./scripts/dev.sh --demo，然后问「...」 -->
+- [ ] 否 —— 仅做了可单测的改动

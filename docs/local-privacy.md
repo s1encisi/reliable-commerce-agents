@@ -24,7 +24,7 @@ python3 scripts/audit_publication.py --ref HEAD
 本机推送检查限定到当前授权的 origin 和独立开发分支，扫描整段待推送历史；不使用 `git add -f`，
 不推送所有旧分支、标签或历史备份。`.gitignore` 不能代替历史审查和密钥扫描。
 
-本轮开发分支为 `feat/after-sales-reliability`，没有合并到 `main/master`。上游作者和 MIT 许可证保留。
+本轮开发分支为 `feat/after-sales-reliability`，尚未合并到 `main/master`。MIT 许可证予以保留。
 扫描可以识别常见密钥与禁止路径，但不能自动证明不存在所有商业秘密；二进制文件和新增数据仍需要人工核对。
 
 ## 自动化

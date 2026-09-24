@@ -1,17 +1,10 @@
-"""
-E-Commerce Agents — Database Seeder
+"""可靠电商多智能体平台的合成数据库初始化。
 
-Seeds the database with realistic e-commerce data:
-- 20 users (1 admin, 2 power_users, 2 sellers, 15 customers)
-- 50 products across 5 categories
-- 200 orders with status distribution
-- 500 reviews (5% fake)
-- 3 warehouses, 3 carriers, shipping rates
-- 15 coupons, 5 promotions, 3 loyalty tiers
-- 90-day price history
-- 6 agent catalog entries + permissions
+生成 20 个用户、五类共 50 个商品、200 笔订单、500 条评论、
+仓库、承运商、运费、优惠券、促销、会员等级、90 天价格历史及
+智能体目录和权限。数据仅用于开发和演示。
 
-Usage: uv run python -m scripts.seed
+运行：uv run python -m scripts.seed
 """
 
 from __future__ import annotations
@@ -37,13 +30,13 @@ DATABASE_URL = os.environ.get(
     "DATABASE_URL", "postgresql://ecommerce:ecommerce_secret@localhost:5432/ecommerce_agents"
 )
 
-# Dev-only shared knob (AUTH_MODE=oauth): every service derives its own
-# OAUTH_CLIENT_SECRET from this same value, so the seeder never has to
-# hand out or store plaintext per-service secrets. Production overrides
-# OAUTH_CLIENT_SECRET per service instead (see docs/security-guide.md).
+# 开发环境共享 OAuth 种子，
+# 各服务从同一值派生自己的客户端密钥，
+# 种子脚本无需分发或保存各服务明文密钥。
+# 生产环境逐服务覆盖 OAUTH_CLIENT_SECRET。
 OAUTH_SEED_KEY = os.environ.get("OAUTH_SEED_KEY", "dev-oauth-seed-change-me")
 
-# Deterministic seed for reproducible data
+# 固定随机种子，使合成数据可复现。
 random.seed(42)
 
 
@@ -52,11 +45,11 @@ def hash_pw(password: str) -> str:
 
 
 # ============================================================
-# DATA DEFINITIONS
+# 数据定义
 # ============================================================
 
 USERS = [
-    # (email, password, name, role, loyalty_tier, total_spend)
+    # 字段：邮箱、密码、姓名、角色、会员等级、累计消费。
     ("admin.demo@gmail.com", "admin123", "Admin User", "admin", "gold", 5000),
     ("power.demo@gmail.com", "power123", "Power User", "power_user", "gold", 3500),
     ("power2.demo@gmail.com", "power123", "Sam Power", "power_user", "silver", 1200),
@@ -80,7 +73,7 @@ USERS = [
 ]
 
 PRODUCTS = [
-    # Electronics
+    # 电子产品。
     {"name": "Sony WH-1000XM5", "description": "Premium wireless noise-cancelling headphones with 30-hour battery life, multipoint connection, and speak-to-chat.", "category": "Electronics", "brand": "Sony", "price": 299.99, "original_price": 349.99, "rating": 4.7, "review_count": 0, "specs": {"type": "Over-ear", "battery": "30 hours", "noise_cancelling": True, "weight": "250g", "connectivity": "Bluetooth 5.2"}, "image_url": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=400&fit=crop"},
     {"name": "AirPods Max", "description": "Apple's premium over-ear headphones with computational audio, Active Noise Cancellation, and spatial audio.", "category": "Electronics", "brand": "Apple", "price": 449.99, "original_price": 549.00, "rating": 4.5, "review_count": 0, "specs": {"type": "Over-ear", "battery": "20 hours", "noise_cancelling": True, "weight": "384g", "chip": "H1"}, "image_url": "https://images.unsplash.com/photo-1625245488600-f03fef636a3c?w=400&h=400&fit=crop"},
     {"name": "Logitech MX Master 3S", "description": "Advanced wireless mouse with 8K DPI, quiet clicks, MagSpeed scroll, and multi-device support.", "category": "Electronics", "brand": "Logitech", "price": 99.99, "original_price": 129.99, "rating": 4.8, "review_count": 0, "specs": {"type": "Mouse", "dpi": 8000, "battery": "70 days", "connectivity": "Bluetooth + USB-C"}, "image_url": "https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?w=400&h=400&fit=crop"},
@@ -92,7 +85,7 @@ PRODUCTS = [
     {"name": "JBL Charge 5", "description": "Portable Bluetooth speaker with IP67 rating, 20-hour playtime, and built-in powerbank.", "category": "Electronics", "brand": "JBL", "price": 139.99, "original_price": 179.95, "rating": 4.7, "review_count": 0, "specs": {"battery": "20 hours", "waterproof": "IP67", "output": "30W", "weight": "960g"}, "image_url": "https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=400&h=400&fit=crop"},
     {"name": "Raspberry Pi 5 8GB", "description": "Single-board computer with 2.4GHz quad-core Arm Cortex-A76, PCIe 2.0, dual 4K display.", "category": "Electronics", "brand": "Raspberry Pi", "price": 79.99, "original_price": 79.99, "rating": 4.6, "review_count": 0, "specs": {"cpu": "Cortex-A76 2.4GHz", "ram": "8GB", "ports": "2x USB3, 2x USB2, 2x HDMI"}, "image_url": "https://images.unsplash.com/photo-1612287230202-1ff1d85d1bdf?w=400&h=400&fit=crop"},
 
-    # Clothing
+    # 服饰。
     {"name": "North Face Thermoball Eco Jacket", "description": "Lightweight insulated jacket with recycled ThermoBall fill, packable design.", "category": "Clothing", "brand": "The North Face", "price": 179.99, "original_price": 230.00, "rating": 4.5, "review_count": 0, "specs": {"material": "Recycled polyester", "insulation": "ThermoBall Eco", "weight": "400g", "packable": True}, "image_url": "https://images.unsplash.com/photo-1551028719-00167b16eac5?w=400&h=400&fit=crop"},
     {"name": "Patagonia Better Sweater", "description": "Classic fleece jacket made from 100% recycled polyester, Fair Trade Certified.", "category": "Clothing", "brand": "Patagonia", "price": 139.00, "original_price": 139.00, "rating": 4.7, "review_count": 0, "specs": {"material": "100% recycled polyester", "weight": "539g", "fair_trade": True}, "image_url": "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=400&h=400&fit=crop"},
     {"name": "Nike Air Max 270", "description": "Lifestyle sneaker with large Air unit in the heel for all-day comfort.", "category": "Clothing", "brand": "Nike", "price": 129.99, "original_price": 160.00, "rating": 4.4, "review_count": 0, "specs": {"type": "Lifestyle", "sole": "Air Max 270", "closure": "Lace-up"}, "image_url": "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=400&fit=crop"},
@@ -104,7 +97,7 @@ PRODUCTS = [
     {"name": "Columbia Silver Ridge Cargo Pants", "description": "Quick-dry hiking pants with UPF 50 sun protection and cargo pockets.", "category": "Clothing", "brand": "Columbia", "price": 55.00, "original_price": 65.00, "rating": 4.2, "review_count": 0, "specs": {"material": "Nylon ripstop", "upf": 50, "quick_dry": True}, "image_url": "https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?w=400&h=400&fit=crop"},
     {"name": "Hoka Clifton 9", "description": "Cushioned running shoe with early-stage Meta-Rocker and breathable mesh.", "category": "Clothing", "brand": "Hoka", "price": 145.00, "original_price": 145.00, "rating": 4.6, "review_count": 0, "specs": {"type": "Running", "cushion": "EVA", "drop": "5mm", "weight": "248g"}, "image_url": "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?w=400&h=400&fit=crop"},
 
-    # Home
+    # 家居。
     {"name": "Dyson V15 Detect", "description": "Cordless vacuum with laser dust detection, piezo sensor, LCD screen showing particle count.", "category": "Home", "brand": "Dyson", "price": 649.99, "original_price": 749.99, "rating": 4.6, "review_count": 0, "specs": {"runtime": "60 min", "suction": "230 AW", "laser": True, "weight": "3.1kg"}, "image_url": "https://images.unsplash.com/photo-1563453392212-326f5e854473?w=400&h=400&fit=crop"},
     {"name": "Nespresso Vertuo Next", "description": "Centrifusion coffee machine brewing 5oz to 18oz cups with barcode recognition.", "category": "Home", "brand": "Nespresso", "price": 159.99, "original_price": 199.00, "rating": 4.3, "review_count": 0, "specs": {"brew_sizes": "5oz, 8oz, 14oz, 18oz", "system": "Centrifusion", "water_tank": "37oz"}, "image_url": "https://images.unsplash.com/photo-1517701550927-30cf4ba1dba5?w=400&h=400&fit=crop"},
     {"name": "Philips Hue Starter Kit", "description": "Smart lighting kit with 4 A19 color bulbs and Hue Bridge for 50+ lights.", "category": "Home", "brand": "Philips", "price": 129.99, "original_price": 199.99, "rating": 4.5, "review_count": 0, "specs": {"bulbs": 4, "type": "A19 Color", "hub_included": True, "max_lights": 50}, "image_url": "https://images.unsplash.com/photo-1558171813-4c088753af8f?w=400&h=400&fit=crop"},
@@ -116,7 +109,7 @@ PRODUCTS = [
     {"name": "KitchenAid Artisan Stand Mixer", "description": "Iconic tilt-head stand mixer with 5Qt bowl, 10 speeds, planetary mixing action.", "category": "Home", "brand": "KitchenAid", "price": 379.99, "original_price": 449.99, "rating": 4.8, "review_count": 0, "specs": {"capacity": "5Qt", "speeds": 10, "motor": "325W", "action": "Planetary"}, "image_url": "https://images.unsplash.com/photo-1574269909862-7e1d70bb8078?w=400&h=400&fit=crop"},
     {"name": "Casper Original Mattress Queen", "description": "All-foam mattress with zoned support, breathable cover, 100-night trial.", "category": "Home", "brand": "Casper", "price": 995.00, "original_price": 1295.00, "rating": 4.4, "review_count": 0, "specs": {"size": "Queen", "type": "All-foam", "layers": 4, "trial": "100 nights"}, "image_url": "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?w=400&h=400&fit=crop"},
 
-    # Sports
+    # 运动。
     {"name": "Garmin Forerunner 265", "description": "GPS running watch with AMOLED display, training readiness, race predictor.", "category": "Sports", "brand": "Garmin", "price": 349.99, "original_price": 449.99, "rating": 4.7, "review_count": 0, "specs": {"display": "AMOLED 1.3in", "battery": "13 days", "gps": True, "heart_rate": True}, "image_url": "https://images.unsplash.com/photo-1524592094714-0f0654e20314?w=400&h=400&fit=crop"},
     {"name": "Hydro Flask 32oz Wide Mouth", "description": "Double-wall vacuum insulated water bottle, keeps cold 24hr / hot 12hr.", "category": "Sports", "brand": "Hydro Flask", "price": 44.95, "original_price": 44.95, "rating": 4.8, "review_count": 0, "specs": {"capacity": "32oz", "insulation": "TempShield", "material": "18/8 stainless steel"}, "image_url": "https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=400&h=400&fit=crop"},
     {"name": "Manduka PRO Yoga Mat 6mm", "description": "Professional-grade yoga mat with closed-cell surface, lifetime guarantee.", "category": "Sports", "brand": "Manduka", "price": 120.00, "original_price": 136.00, "rating": 4.7, "review_count": 0, "specs": {"thickness": "6mm", "material": "PVC", "length": "71in", "weight": "7.5lbs"}, "image_url": "https://images.unsplash.com/photo-1601925260368-ae2f83cf8b7f?w=400&h=400&fit=crop"},
@@ -128,7 +121,7 @@ PRODUCTS = [
     {"name": "Black Diamond Spot 400 Headlamp", "description": "400-lumen rechargeable headlamp with red night vision mode, IPX8 waterproof.", "category": "Sports", "brand": "Black Diamond", "price": 49.95, "original_price": 49.95, "rating": 4.5, "review_count": 0, "specs": {"lumens": 400, "battery": "Rechargeable + AAA", "waterproof": "IPX8", "weight": "85g"}, "image_url": "https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?w=400&h=400&fit=crop"},
     {"name": "Nalgene Wide Mouth 32oz", "description": "BPA-free Tritan water bottle, legendary durability, made in USA.", "category": "Sports", "brand": "Nalgene", "price": 14.99, "original_price": 14.99, "rating": 4.7, "review_count": 0, "specs": {"capacity": "32oz", "material": "Tritan", "bpa_free": True, "dishwasher_safe": True}, "image_url": "https://images.unsplash.com/photo-1523362628745-0c100150b504?w=400&h=400&fit=crop"},
 
-    # Books
+    # 图书。
     {"name": "Designing Data-Intensive Applications", "description": "The big ideas behind reliable, scalable, and maintainable systems by Martin Kleppmann.", "category": "Books", "brand": "O'Reilly", "price": 45.49, "original_price": 59.99, "rating": 4.9, "review_count": 0, "specs": {"author": "Martin Kleppmann", "pages": 616, "format": "Paperback", "year": 2017}, "image_url": "https://images.unsplash.com/photo-1532012197267-da84d127e765?w=400&h=400&fit=crop"},
     {"name": "Staff Engineer", "description": "Leadership beyond the management track by Will Larson. Paths for senior IC engineers.", "category": "Books", "brand": "Self-published", "price": 35.00, "original_price": 35.00, "rating": 4.6, "review_count": 0, "specs": {"author": "Will Larson", "pages": 387, "format": "Paperback", "year": 2021}, "image_url": "https://images.unsplash.com/photo-1495446815901-a7297e633e8d?w=400&h=400&fit=crop"},
     {"name": "System Design Interview Vol 2", "description": "Step-by-step framework for system design interviews with 13 real-world systems.", "category": "Books", "brand": "ByteByteGo", "price": 39.99, "original_price": 39.99, "rating": 4.7, "review_count": 0, "specs": {"author": "Alex Xu", "pages": 434, "format": "Paperback", "year": 2022}, "image_url": "https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=400&h=400&fit=crop"},
@@ -154,7 +147,7 @@ CARRIERS = [
 ]
 
 COUPONS = [
-    # (code, description, type, value, min_spend, max_discount, usage_limit, valid_until, categories, user_email)
+    # 优惠券字段：代码、描述、类型、金额、门槛、上限、次数、期限、分类和用户。
     ("WELCOME10", "10% off your first order", "percentage", 10, 0, 50, None, None, None, None),
     ("TECHSAVE", "15% off Electronics", "percentage", 15, 100, 75, 200, None, ["Electronics"], None),
     ("TEAMGIFT", "Free gift wrapping for bulk orders", "fixed", 0, 0, None, None, None, None, None),
@@ -195,13 +188,13 @@ AGENT_CATALOG = [
     ("customer-support", "Customer Support", "Orchestrator agent that routes requests to specialist agents for comprehensive assistance.", "Support", "headphones", ["multi_agent_routing", "intent_classification", "conversation_management"], False),
 ]
 
-# OAuth2 client registry (AUTH_MODE=oauth) — fixed, seeded first-party
-# clients. client_id values match each service's OAUTH_CLIENT_ID env var in
-# docker-compose.yml / docker-compose.dotnet.yml. Third-party clients (MCP
-# consumers) may additionally self-register at runtime via
-# POST /oauth/register when AUTH_ALLOW_DYNAMIC_REGISTRATION=true — see
-# auth_server/register.py; that path never touches this static list.
-# (client_id, allowed_grant_types, allowed_scopes, allowed_audiences)
+# 固定第一方 OAuth2 客户端注册表。
+# client_id 与各服务环境变量中的身份一致，
+# 配置位于 docker-compose.yml。第三方 MCP 客户端
+# 可在允许动态注册时通过
+# POST /oauth/register 注册，
+# 该路径不修改此静态列表。
+# 字段：客户端标识、授权类型、权限范围和受众。
 OAUTH_CLIENTS = [
     (
         "orchestrator",
@@ -225,10 +218,10 @@ OAUTH_CLIENTS = [
     ("pricing-promotions", ["client_credentials"], ["agent:invoke"], ["ecommerce-agents"]),
     ("review-sentiment", ["client_credentials"], ["agent:invoke"], ["ecommerce-agents"]),
     (
-        # Admin-only credential for calling POST /oauth/register (RFC 7591)
-        # — kept separate from "orchestrator" so the broadly-scoped
-        # end-user-facing client isn't also the one trusted to mint new
-        # OAuth clients.
+        # 动态注册入口使用管理员专用客户端凭据，
+        # 与面向终端用户的编排器分离，
+        # 避免普通入口同时拥有
+        # 创建 OAuth 客户端的权限。
         "auth-admin",
         ["client_credentials"],
         ["client:register"],
@@ -288,11 +281,11 @@ ORDER_STATUSES_WEIGHTED = [
 
 
 # ============================================================
-# SEEDING FUNCTIONS
+# 数据初始化函数
 # ============================================================
 
 async def seed_users(conn: asyncpg.Connection) -> dict[str, uuid.UUID]:
-    """Insert users and return email -> id mapping."""
+    """插入用户，返回邮箱到标识的映射。"""
     user_ids = {}
     for email, password, name, role, tier, spend in USERS:
         pw_hash = hash_pw(password)
@@ -304,7 +297,7 @@ async def seed_users(conn: asyncpg.Connection) -> dict[str, uuid.UUID]:
             email, pw_hash, name, role, tier, Decimal(str(spend)),
         )
         user_ids[email] = row["id"]
-    logger.info("Seeded %d users", len(user_ids))
+    logger.info("已初始化 %d 个用户", len(user_ids))
     return user_ids
 
 
@@ -312,31 +305,23 @@ _PRODUCT_ID_NAMESPACE = uuid.UUID("6f2f7f0e-6b0b-4f0e-9f0e-6b0b4f0e9f0e")
 
 
 def product_id_for(name: str) -> uuid.UUID:
-    """Deterministic product id, derived from its (unique) name.
+    """根据唯一商品名生成确定性标识。
 
-    ``gen_random_uuid()`` (the products table's PK default) assigns a fresh
-    random id on every seed run, including CI's — which always starts from
-    an empty database. That silently breaks eval replay fixtures: a
-    recorded response references the exact id the model saw *when recorded*
-    (e.g. the Sony WH-1000XM5's card), and grounding verification checks
-    that id against whatever's live in the database at replay time. If a
-    reseed hands the same product a different id, a real, correct claim
-    starts scoring as "not_found" for no reason but seed-order luck. uuid5
-    against a fixed namespace + the product name makes every seed run —
-    local, CI, anyone's laptop — assign the exact same id to "Sony
-    WH-1000XM5", forever, as long as the name doesn't change.
+    固定命名空间和 uuid5 使重新初始化后同名商品仍有相同标识，
+    避免回放中已录制商品卡片因随机 UUID 变化被误判为不存在。
+    商品名变化会改变标识，因此本轮不翻译这些功能性种子值。
     """
     return uuid.uuid5(_PRODUCT_ID_NAMESPACE, name)
 
 
 async def seed_products(conn: asyncpg.Connection, user_ids: dict[str, uuid.UUID]) -> list[dict]:
-    """Insert products and return list with ids. Assigns seller ownership."""
+    """插入商品并指定商家归属，返回带标识的列表。"""
     seller1_id = user_ids["seller.demo@gmail.com"]
     seller2_id = user_ids["seller2.demo@gmail.com"]
 
     products_with_ids = []
     for i, p in enumerate(PRODUCTS):
-        # First 25 products -> seller.demo@gmail.com, remaining 25 -> seller2.demo@gmail.com
+        # 前 25 个商品分配给第一商家，其余分配给第二商家。
         seller_id = seller1_id if i < 25 else seller2_id
         product_id = product_id_for(p["name"])
         row = await conn.fetchrow(
@@ -352,12 +337,12 @@ async def seed_products(conn: asyncpg.Connection, user_ids: dict[str, uuid.UUID]
         )
         if row:
             products_with_ids.append({**p, "id": row["id"]})
-    logger.info("Seeded %d products", len(products_with_ids))
+    logger.info("已初始化 %d 个商品", len(products_with_ids))
     return products_with_ids
 
 
 async def seed_warehouses(conn: asyncpg.Connection) -> list[uuid.UUID]:
-    """Insert warehouses and return ids."""
+    """插入仓库，返回标识列表。"""
     ids = []
     for name, location, region in WAREHOUSES:
         row = await conn.fetchrow(
@@ -365,19 +350,19 @@ async def seed_warehouses(conn: asyncpg.Connection) -> list[uuid.UUID]:
             name, location, region,
         )
         ids.append(row["id"])
-    logger.info("Seeded %d warehouses", len(ids))
+    logger.info("已初始化 %d 个仓库", len(ids))
     return ids
 
 
 async def seed_warehouse_inventory(conn: asyncpg.Connection, warehouse_ids: list[uuid.UUID], products: list[dict]) -> None:
-    """Seed inventory with varied stock levels. Some products deliberately low/out of stock."""
+    """生成不同库存水平，部分商品故意缺货或库存偏低。"""
     count = 0
     for i, product in enumerate(products):
         for j, wh_id in enumerate(warehouse_ids):
-            # Dyson V15 = out of stock everywhere
+            # Dyson V15 在全部仓库缺货。
             if product["name"] == "Dyson V15 Detect":
                 qty = 0
-            # Sony WH-1000XM5 = low stock at West
+            # Sony WH-1000XM5 在西部仓库存量偏低。
             elif product["name"] == "Sony WH-1000XM5" and j == 2:
                 qty = 2
             else:
@@ -388,11 +373,11 @@ async def seed_warehouse_inventory(conn: asyncpg.Connection, warehouse_ids: list
                 wh_id, product["id"], qty,
             )
             count += 1
-    logger.info("Seeded %d warehouse inventory records", count)
+    logger.info("已初始化 %d 条仓库库存", count)
 
 
 async def seed_carriers(conn: asyncpg.Connection) -> list[uuid.UUID]:
-    """Insert carriers and return ids."""
+    """插入承运商并返回标识。"""
     ids = []
     for name, speed, rate in CARRIERS:
         row = await conn.fetchrow(
@@ -400,26 +385,26 @@ async def seed_carriers(conn: asyncpg.Connection) -> list[uuid.UUID]:
             name, speed, Decimal(str(rate)),
         )
         ids.append(row["id"])
-    logger.info("Seeded %d carriers", len(ids))
+    logger.info("已初始化 %d 家承运商", len(ids))
     return ids
 
 
 async def seed_shipping_rates(conn: asyncpg.Connection, carrier_ids: list[uuid.UUID]) -> None:
-    """Seed shipping rate matrix: 3 carriers x 3 regions x 3 regions."""
+    """生成三家承运商、三个起点和三个终点的运费矩阵。"""
     regions = ["east", "central", "west"]
-    # (standard_days, express_days, overnight_days) base — add distance modifier
+    # 标准、加急、隔夜配送的基础天数，再叠加距离修正。
     count = 0
     for ci, carrier_id in enumerate(carrier_ids):
         for rf in regions:
             for rt in regions:
                 distance = 0 if rf == rt else (1 if abs(regions.index(rf) - regions.index(rt)) == 1 else 2)
-                if ci == 0:  # standard
+                if ci == 0:  # 标准配送。
                     days_min, days_max = 5 + distance, 7 + distance
                     price = Decimal("5.99") + Decimal(str(distance * 2))
-                elif ci == 1:  # express
+                elif ci == 1:  # 加急配送。
                     days_min, days_max = 2 + distance, 3 + distance
                     price = Decimal("14.99") + Decimal(str(distance * 3))
-                else:  # overnight
+                else:  # 隔夜配送。
                     days_min, days_max = 1, 1 + distance
                     price = Decimal("29.99") + Decimal(str(distance * 5))
 
@@ -429,11 +414,11 @@ async def seed_shipping_rates(conn: asyncpg.Connection, carrier_ids: list[uuid.U
                     carrier_id, rf, rt, price, days_min, days_max,
                 )
                 count += 1
-    logger.info("Seeded %d shipping rates", count)
+    logger.info("已初始化 %d 条运费", count)
 
 
 async def seed_coupons(conn: asyncpg.Connection) -> None:
-    """Seed coupons."""
+    """初始化优惠券。"""
     now = datetime.now(timezone.utc)
     for code, desc, dtype, value, min_spend, max_disc, limit, valid_until, cats, user_email in COUPONS:
         until = datetime.fromisoformat(valid_until).replace(tzinfo=timezone.utc) if valid_until else now + timedelta(days=365)
@@ -445,11 +430,11 @@ async def seed_coupons(conn: asyncpg.Connection) -> None:
             Decimal(str(max_disc)) if max_disc else None,
             limit, now - timedelta(days=30), until, cats, user_email,
         )
-    logger.info("Seeded %d coupons", len(COUPONS))
+    logger.info("已初始化 %d 张优惠券", len(COUPONS))
 
 
 async def seed_promotions(conn: asyncpg.Connection) -> None:
-    """Seed promotions."""
+    """初始化促销。"""
     now = datetime.now(timezone.utc)
     for promo in PROMOTIONS:
         await conn.execute(
@@ -458,11 +443,11 @@ async def seed_promotions(conn: asyncpg.Connection) -> None:
             promo["name"], promo["type"], json.dumps(promo["rules"]),
             now - timedelta(days=5), now + timedelta(days=promo["days_active"]),
         )
-    logger.info("Seeded %d promotions", len(PROMOTIONS))
+    logger.info("已初始化 %d 项促销", len(PROMOTIONS))
 
 
 async def seed_loyalty_tiers(conn: asyncpg.Connection) -> None:
-    """Seed loyalty tiers."""
+    """初始化会员等级。"""
     for name, min_spend, discount, free_ship, priority in LOYALTY_TIERS:
         await conn.execute(
             """INSERT INTO loyalty_tiers (name, min_spend, discount_pct, free_shipping_threshold, priority_support)
@@ -470,11 +455,11 @@ async def seed_loyalty_tiers(conn: asyncpg.Connection) -> None:
             name, Decimal(str(min_spend)), Decimal(str(discount)),
             Decimal(str(free_ship)) if free_ship else None, priority,
         )
-    logger.info("Seeded %d loyalty tiers", len(LOYALTY_TIERS))
+    logger.info("已初始化 %d 个会员等级", len(LOYALTY_TIERS))
 
 
 async def seed_orders(conn: asyncpg.Connection, user_ids: dict[str, uuid.UUID], products: list[dict]) -> list[uuid.UUID]:
-    """Seed 200 orders with realistic distribution."""
+    """按预设状态分布生成 200 笔合成订单。"""
     customer_emails = [e for e, _, _, r, _, _ in USERS if r == "customer"]
     statuses = []
     for status, weight in ORDER_STATUSES_WEIGHTED:
@@ -490,7 +475,7 @@ async def seed_orders(conn: asyncpg.Connection, user_ids: dict[str, uuid.UUID], 
         address = random.choice(ADDRESSES)
         created = now - timedelta(days=random.randint(1, 90), hours=random.randint(0, 23))
 
-        # 1-4 items per order
+        # 每单 1–4 件商品。
         num_items = random.randint(1, 4)
         order_products = random.sample(products, min(num_items, len(products)))
         total = Decimal("0")
@@ -513,14 +498,14 @@ async def seed_orders(conn: asyncpg.Connection, user_ids: dict[str, uuid.UUID], 
         order_id = row["id"]
         order_ids.append(order_id)
 
-        # Insert order items
+        # 插入订单明细。
         for product_id, qty, price, subtotal in items:
             await conn.execute(
                 "INSERT INTO order_items (order_id, product_id, quantity, unit_price, subtotal) VALUES ($1, $2, $3, $4, $5)",
                 order_id, product_id, qty, price, subtotal,
             )
 
-        # Insert status history
+        # 插入状态历史。
         status_flow = _get_status_flow(status)
         for si, s in enumerate(status_flow):
             ts = created + timedelta(hours=si * random.randint(6, 48))
@@ -530,12 +515,12 @@ async def seed_orders(conn: asyncpg.Connection, user_ids: dict[str, uuid.UUID], 
                 order_id, s, f"Order {s}", location, ts,
             )
 
-    logger.info("Seeded %d orders", len(order_ids))
+    logger.info("已初始化 %d 笔订单", len(order_ids))
     return order_ids
 
 
 def _get_status_flow(final_status: str) -> list[str]:
-    """Return the status history leading to the final status."""
+    """返回通往最终状态的历史序列。"""
     full_flow = ["placed", "confirmed", "shipped", "out_for_delivery", "delivered"]
     if final_status == "cancelled":
         cut = random.randint(1, 2)
@@ -550,7 +535,7 @@ def _get_status_flow(final_status: str) -> list[str]:
 
 
 async def seed_reviews(conn: asyncpg.Connection, user_ids: dict[str, uuid.UUID], products: list[dict]) -> None:
-    """Seed 500 reviews with 5% fake patterns."""
+    """生成 500 条合成评论，其中 5% 含虚假评论模式。"""
     customer_emails = [e for e, _, _, r, _, _ in USERS if r == "customer"]
     reasons = ["great battery life", "excellent sound quality", "comfortable fit", "fast performance",
                "durable build", "easy setup", "good value", "beautiful design", "lightweight",
@@ -567,7 +552,7 @@ async def seed_reviews(conn: asyncpg.Connection, user_ids: dict[str, uuid.UUID],
         product = random.choice(products)
         email = random.choice(customer_emails)
         user_id = user_ids[email]
-        is_fake = random.random() < 0.05  # 5% fake
+        is_fake = random.random() < 0.05  # 5% 为模拟虚假评论。
         pt = product_types.get(product["category"], "product")
 
         if is_fake:
@@ -598,24 +583,24 @@ async def seed_reviews(conn: asyncpg.Connection, user_ids: dict[str, uuid.UUID],
         )
         count += 1
 
-    # Update review counts on products
+    # 更新商品评论计数。
     await conn.execute(
         """UPDATE products SET review_count = sub.cnt
            FROM (SELECT product_id, COUNT(*) as cnt FROM reviews GROUP BY product_id) sub
            WHERE products.id = sub.product_id"""
     )
-    logger.info("Seeded %d reviews", count)
+    logger.info("已初始化 %d 条评论", count)
 
 
 async def seed_price_history(conn: asyncpg.Connection, products: list[dict]) -> None:
-    """Seed 90 days of price history for all products."""
+    """为所有商品生成 90 天价格历史。"""
     now = datetime.now(timezone.utc)
     count = 0
     for product in products:
         base_price = float(product["price"])
         for day in range(90):
             recorded = now - timedelta(days=90 - day)
-            # Occasionally have a sale (10% chance)
+            # 以 10% 概率插入促销价格。
             if random.random() < 0.10:
                 price = base_price * random.uniform(0.80, 0.95)
             else:
@@ -626,17 +611,17 @@ async def seed_price_history(conn: asyncpg.Connection, products: list[dict]) -> 
                 product["id"], Decimal(str(price)), recorded,
             )
             count += 1
-    logger.info("Seeded %d price history records", count)
+    logger.info("已初始化 %d 条价格历史", count)
 
 
 async def seed_restock_schedule(conn: asyncpg.Connection, warehouse_ids: list[uuid.UUID], products: list[dict]) -> None:
-    """Seed restock schedules for low-stock items."""
+    """为低库存商品生成补货计划。"""
     now = datetime.now(timezone.utc)
     restocks = [
-        ("Dyson V15 Detect", 0, 50, 15),    # Out of stock → restock in 15 days
+        ("Dyson V15 Detect", 0, 50, 15),    # 缺货商品安排 15 天后补货。
         ("Dyson V15 Detect", 1, 30, 15),
         ("Dyson V15 Detect", 2, 40, 15),
-        ("Sony WH-1000XM5", 2, 100, 7),     # Low stock at West → restock in 7 days
+        ("Sony WH-1000XM5", 2, 100, 7),     # 西部仓低库存商品安排 7 天后补货。
         ("Casper Original Mattress Queen", 0, 10, 20),
         ("Sony Alpha a6700", 1, 15, 10),
         ("iRobot Roomba j9+", 2, 25, 12),
@@ -653,11 +638,11 @@ async def seed_restock_schedule(conn: asyncpg.Connection, warehouse_ids: list[uu
                 product_map[pname], warehouse_ids[wh_idx], qty, (now + timedelta(days=days_out)).date(),
             )
             count += 1
-    logger.info("Seeded %d restock schedules", count)
+    logger.info("已初始化 %d 条补货计划", count)
 
 
 async def seed_agent_catalog(conn: asyncpg.Connection) -> None:
-    """Seed agent catalog entries."""
+    """初始化智能体目录。"""
     for name, display, desc, category, icon, caps, requires_approval in AGENT_CATALOG:
         await conn.execute(
             """INSERT INTO agent_catalog (name, display_name, description, category, icon, capabilities, requires_approval)
@@ -665,11 +650,11 @@ async def seed_agent_catalog(conn: asyncpg.Connection) -> None:
                ON CONFLICT (name) DO UPDATE SET display_name = EXCLUDED.display_name""",
             name, display, desc, category, icon, caps, requires_approval,
         )
-    logger.info("Seeded %d agent catalog entries", len(AGENT_CATALOG))
+    logger.info("已初始化 %d 个智能体目录项", len(AGENT_CATALOG))
 
 
 async def seed_oauth_clients(conn: asyncpg.Connection) -> None:
-    """Seed the fixed OAuth2 client registry (AUTH_MODE=oauth)."""
+    """初始化 oauth 模式的固定客户端注册表。"""
     for client_id, grant_types, scopes, audiences in OAUTH_CLIENTS:
         secret = derive_client_secret(OAUTH_SEED_KEY, client_id)
         secret_hash = hash_pw(secret)
@@ -685,15 +670,15 @@ async def seed_oauth_clients(conn: asyncpg.Connection) -> None:
                    allowed_audiences = EXCLUDED.allowed_audiences""",
             client_id, secret_hash, client_id, grant_types, scopes, audiences,
         )
-    logger.info("Seeded %d OAuth clients", len(OAUTH_CLIENTS))
+    logger.info("已初始化 %d 个 OAuth 客户端", len(OAUTH_CLIENTS))
 
 
 async def seed_agent_permissions(conn: asyncpg.Connection, user_ids: dict[str, uuid.UUID]) -> None:
-    """Grant agent permissions to admin and power users."""
+    """向管理员与高级用户授予智能体权限。"""
     admin_id = user_ids["admin.demo@gmail.com"]
     agents = [a[0] for a in AGENT_CATALOG]
 
-    # Admin gets access to all agents
+    # 管理员可访问所有智能体。
     for agent_name in agents:
         await conn.execute(
             """INSERT INTO agent_permissions (user_id, agent_name, role, granted_by)
@@ -701,7 +686,7 @@ async def seed_agent_permissions(conn: asyncpg.Connection, user_ids: dict[str, u
             admin_id, agent_name,
         )
 
-    # Power users get access to all agents
+    # 高级用户可访问所有智能体。
     for pu_email in ["power.demo@gmail.com", "power2.demo@gmail.com"]:
         pu_id = user_ids[pu_email]
         for agent_name in agents:
@@ -711,7 +696,7 @@ async def seed_agent_permissions(conn: asyncpg.Connection, user_ids: dict[str, u
                 pu_id, agent_name, admin_id,
             )
 
-    # Regular customers get access to non-approval-required agents
+    # 普通客户可访问无需审批的智能体。
     free_agents = [a[0] for a in AGENT_CATALOG if not a[6]]
     customer_emails = [e for e, _, _, r, _, _ in USERS if r == "customer"]
     for email in customer_emails:
@@ -723,17 +708,17 @@ async def seed_agent_permissions(conn: asyncpg.Connection, user_ids: dict[str, u
                 uid, agent_name, admin_id,
             )
 
-    logger.info("Seeded agent permissions for admin, power users, and customers")
+    logger.info("已初始化管理员、高级用户与客户的智能体权限")
 
 
 # ============================================================
-# MAIN
+# 主入口
 # ============================================================
 
 async def connect_with_retry(
     dsn: str, *, max_retries: int = 15, delay: float = 2.0
 ) -> asyncpg.Connection:
-    """Connect to PostgreSQL with retries for first-run init race conditions."""
+    """带重试连接 PostgreSQL，兼容首次启动初始化竞态。"""
     for attempt in range(1, max_retries + 1):
         try:
             return await asyncpg.connect(dsn)
@@ -749,8 +734,8 @@ async def connect_with_retry(
 
 
 async def seed_carts(conn: asyncpg.Connection, user_ids: dict[str, uuid.UUID], products: list[dict]) -> None:
-    """Seed demo carts for test users so the cart page isn't empty."""
-    # Alice gets 3 items + a shipping address
+    """生成演示购物车，避免用户首次进入时页面为空。"""
+    # 示例客户购物车包含三个商品及配送地址。
     alice_id = user_ids["alice.johnson@gmail.com"]
     alice_cart = await conn.fetchrow(
         """INSERT INTO carts (user_id, shipping_address, billing_address, billing_same_as_shipping)
@@ -759,38 +744,34 @@ async def seed_carts(conn: asyncpg.Connection, user_ids: dict[str, uuid.UUID], p
         json.dumps({"name": "Alice Johnson", "street": "123 Oak Street", "city": "Portland", "state": "OR", "zip": "97201", "country": "US", "phone": "503-555-0101"}),
         json.dumps({"name": "Alice Johnson", "street": "123 Oak Street", "city": "Portland", "state": "OR", "zip": "97201", "country": "US", "phone": "503-555-0101"}),
     )
-    alice_products = random.sample(products[:10], 3)  # 3 electronics
+    alice_products = random.sample(products[:10], 3)  # 三个电子商品。
     for p in alice_products:
         await conn.execute(
             "INSERT INTO cart_items (cart_id, product_id, quantity) VALUES ($1, $2, $3)",
             alice_cart["id"], p["id"], random.randint(1, 2),
         )
 
-    # Power user gets a cart with coupon applied
+    # 高级用户购物车应用优惠券。
     power_id = user_ids["power.demo@gmail.com"]
     power_cart = await conn.fetchrow(
         "INSERT INTO carts (user_id, coupon_code, discount_amount) VALUES ($1, $2, $3) RETURNING id",
         power_id, "WELCOME10", Decimal("15.00"),
     )
-    power_products = random.sample(products[10:20], 2)  # 2 clothing items
+    power_products = random.sample(products[10:20], 2)  # 两件服饰。
     for p in power_products:
         await conn.execute(
             "INSERT INTO cart_items (cart_id, product_id, quantity) VALUES ($1, $2, $3)",
             power_cart["id"], p["id"], 1,
         )
 
-    logger.info("Seeded 2 demo carts")
+    logger.info("已初始化 2 个演示购物车")
 
 
 async def seed_workflow_checkpoints(conn: asyncpg.Connection) -> None:
-    """Drop a handful of resumable-workflow checkpoints into the table.
+    """写入少量演示检查点。
 
-    Mirrors the shape that ``shared/checkpoint_storage.PostgresCheckpointStorage``
-    writes: ``checkpoint_id`` UUID, ``workflow_name`` string, ``payload``
-    JSONB containing the encoded ``WorkflowCheckpoint`` dict. The values
-    here aren't load-bearing — they're just enough for the admin UI and
-    the eval harness to render rows without a runtime first having to
-    execute a workflow.
+    字段形态与实际检查点存储一致，仅供管理界面和评测展示；
+    不能把合成行等同于真实运行已验证可恢复的证据。
     """
     samples = [
         (
@@ -836,21 +817,19 @@ async def seed_workflow_checkpoints(conn: asyncpg.Connection) -> None:
             workflow_name,
             json.dumps(payload),
         )
-    logger.info("Seeded %d workflow checkpoints", len(samples))
+    logger.info("已初始化 %d 个演示检查点", len(samples))
 
 
 async def seed_hitl_requests(conn: asyncpg.Connection, user_ids: dict[str, uuid.UUID]) -> None:
-    """Create one of each HITL state so the admin pending-approvals UI
-    has something to show on first login.
+    """生成不同审批状态，供管理员首次登录展示。
 
-    Pending: still waiting for a reviewer.
-    Approved: reviewer said yes — workflow resumed.
-    Rejected: reviewer said no — workflow ended with an error.
+    待处理表示等待审核，批准表示许可决定，拒绝表示不允许执行；
+    合成记录本身不证明实际业务操作已经执行。
     """
     if not user_ids:
         return
 
-    # First three users get one HITL row apiece in different states.
+    # 为前三个用户分别创建不同状态的审批记录。
     emails = list(user_ids.keys())[:3]
     states = [
         (
@@ -886,14 +865,14 @@ async def seed_hitl_requests(conn: asyncpg.Connection, user_ids: dict[str, uuid.
     ]
 
     for email, (status, payload, response) in zip(emails, states):
-        # hitl_requests.workflow_run_id is a real FK to usage_logs (Phase
-        # 1.5) — needs a row to point at, not a bare random UUID. These
-        # demo rows never carry request_id/checkpoint_id (NULL, same as
-        # any pre-checkpoint-era request): they're for the admin
-        # pending-approvals UI to have something to show, not meant to be
-        # actually resumable via POST /api/orchestration/{run_id}/resume
-        # (which correctly 409s on a request with no checkpoint to resume
-        # from).
+        # workflow_run_id 是指向 usage_logs 的真实外键，
+        # 必须引用已有记录，而不是任意随机 UUID。
+        # 这些演示记录的 request_id 和 checkpoint_id 为 NULL，
+        # 只用于管理员审批列表展示，
+        # 不能当作真实可恢复工作流，
+        # 调用恢复端点时，
+        # 没有检查点的请求应返回 409，
+        # 而不是假装恢复成功。
         usage_log_id = await conn.fetchval(
             """INSERT INTO usage_logs (user_id, agent_name, input_summary, status)
                VALUES ($1, 'orchestrator', $2, 'success')
@@ -914,27 +893,27 @@ async def seed_hitl_requests(conn: asyncpg.Connection, user_ids: dict[str, uuid.
             status,
             json.dumps(response) if response else None,
         )
-    logger.info("Seeded %d HITL requests (pending + approved + rejected)", len(states))
+    logger.info("已初始化 %d 条审批请求（待处理、已批准及已拒绝）", len(states))
 
 
 async def main() -> None:
-    logger.info("Connecting to database: %s", DATABASE_URL.split("@")[-1])
+    logger.info("正在连接数据库：%s", DATABASE_URL.split("@")[-1])
     conn = await connect_with_retry(DATABASE_URL)
 
     try:
-        # Check if already seeded
+        # 检查是否已经初始化。
         count = await conn.fetchval("SELECT COUNT(*) FROM users")
         if count > 0:
-            logger.info("Database already has %d users — clearing and re-seeding", count)
-            # Truncate all tables in dependency order. Phase-7 tables
-            # (workflow_checkpoints, hitl_requests) sit at the leaves so
-            # CASCADE handles them, but we list them explicitly so a
-            # future schema change doesn't silently leave demo rows.
-            # oauth_clients is included (its seed data is refreshed here);
-            # oauth_signing_keys and oauth_tokens are AS-managed runtime
-            # state, not seed data, and are deliberately left alone — a
-            # full `dev.sh --clean` volume wipe is the only thing that
-            # resets those (see docs/security-guide.md).
+            logger.info("数据库已有 %d 个用户，将按脚本流程清理并重新初始化", count)
+            # 按依赖顺序清空待重建的数据表。
+            # 检查点和审批处于依赖末端，
+            # 虽然 CASCADE 可处理，仍显式列出，
+            # 避免未来结构变化后残留演示记录。
+            # oauth_clients 属于本脚本维护的种子数据；
+            # 签名密钥和令牌则是授权服务器管理的运行状态，
+            # 这里有意保留。
+            # 清空整个开发卷会同时删除它们，
+            # 应按安全指南明确区分影响范围。
             await conn.execute("""
                 TRUNCATE workflow_checkpoints, hitl_requests,
                          agent_execution_steps, usage_logs, messages, conversations,
@@ -969,23 +948,23 @@ async def main() -> None:
         await seed_workflow_checkpoints(conn)
         await seed_hitl_requests(conn, user_ids)
 
-        # Collect planner statistics before anyone queries this data.
+        # 查询之前先收集优化器统计。
         #
-        # Without it the planner runs blind on freshly-loaded tables, and it
-        # picks different plans than it will once autovacuum catches up —
-        # which reorders rows that tie on the ORDER BY column, since SQL
-        # leaves the order of tied rows undefined. Nothing is *wrong* either
-        # way, but eval replay fixtures key on the exact tool payload, so a
-        # reordered tie means a fixture miss on a database that was seeded
-        # seconds ago and never analyzed. That is exactly the shape CI runs
-        # in, and it is why the product-discovery smoke suite was failing.
+        # 刚批量导入的表若无统计信息，
+        # 查询计划可能与自动分析后不同，
+        # 进而改变排序字段相同记录的顺序。
+        # SQL 未规定并列记录顺序，
+        # 但回放键依赖精确工具载荷，
+        # 并列顺序变化会导致夹具未命中。
+        # CI 总从刚初始化的数据开始，
+        # 因此更容易暴露这类问题。
         #
-        # Analyzing after a bulk load is standard practice regardless; this
-        # just makes it explicit instead of waiting on autovacuum.
-        logger.info("Analyzing tables to collect planner statistics...")
+        # 批量加载后显式执行 ANALYZE，
+        # 无需等待自动分析。
+        logger.info("正在分析数据表，收集查询规划统计……")
         await conn.execute("ANALYZE")
 
-        logger.info("Seeding complete!")
+        logger.info("合成数据初始化完成。")
 
     finally:
         await conn.close()

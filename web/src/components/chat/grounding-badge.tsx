@@ -6,10 +6,10 @@ import type { GroundingClaim, GroundingReport } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const STATUS_LABEL: Record<GroundingClaim["status"], string> = {
-  verified: "verified",
-  price_mismatch: "price corrected",
-  not_found: "not found — stripped",
-  unverifiable: "unverifiable",
+  verified: "已核验",
+  price_mismatch: "价格已修正",
+  not_found: "未找到 — 已移除",
+  unverifiable: "无法核验",
 };
 
 const STATUS_CLASS: Record<GroundingClaim["status"], string> = {
@@ -20,10 +20,10 @@ const STATUS_CLASS: Record<GroundingClaim["status"], string> = {
 };
 
 /**
- * "N facts verified against the database" badge — the per-message readout of
- * GroundingVerificationMiddleware's report (shared/grounding/middleware.py).
- * Collapsed summary always shown when there's at least one claim; expand to
- * see exactly which id/price/tracking claim was checked and against what.
+ * 「已对照数据库核验 N 条事实」徽章——这是 GroundingVerificationMiddleware
+ * 报告（shared/grounding/middleware.py）在每条消息上的读数。
+ * 只要存在至少一条待核验声明就始终展示折叠摘要；展开后可看到具体是哪条
+ * id/价格/物流声明被核验、以及对照的是什么。
  */
 export function GroundingBadge({ report }: { report: GroundingReport | undefined | null }) {
   const [open, setOpen] = useState(false);
@@ -47,8 +47,8 @@ export function GroundingBadge({ report }: { report: GroundingReport | undefined
           <ShieldAlert className="size-3.5 text-amber-500" />
         )}
         <span>
-          {report.verified} fact{report.verified === 1 ? "" : "s"} verified against the database
-          {report.unverified > 0 && `, ${report.unverified} unverified`}
+          已对照数据库核验 {report.verified} 条事实
+          {report.unverified > 0 && `，${report.unverified} 条无法核验`}
         </span>
       </button>
 

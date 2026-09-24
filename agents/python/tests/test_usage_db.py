@@ -1,9 +1,7 @@
-"""Tests for shared.usage_db (Track D2-rest).
+"""用量记录测试。
 
-Two sections:
-- Pure-helper tests (no DB): JSON coercion, UsageTimer.
-- DB-backed integration tests: log_agent_usage + log_execution_step
-  via the clean_db testcontainer fixture.
+纯逻辑覆盖 JSON 序列化和计时；真实 PostgreSQL 覆盖运行用量及
+执行步骤写入。
 """
 
 from __future__ import annotations
@@ -33,12 +31,12 @@ def test_safe_json_coerces_unknown_objects() -> None:
         def __str__(self) -> str:
             return "thing-repr"
 
-    # default=str makes arbitrary values serializable rather than raising.
+    # default=str 让其他值也可序列化。
     assert "thing-repr" in _safe_json({"obj": Thing()})
 
 
 def test_safe_json_unserializable_returns_error_marker() -> None:
-    # A non-string dict key cannot be JSON-encoded -> the except branch fires.
+    # 不支持的字典键触发 JSON 编码异常分支。
     assert json.loads(_safe_json({(1, 2): "tuple-key"})) == {"error": "unserializable"}
 
 
@@ -59,7 +57,7 @@ def test_usage_timer_zero_before_exit() -> None:
 
 @pytest_asyncio.fixture
 async def db_pool(clean_db: asyncpg.Pool, monkeypatch: pytest.MonkeyPatch) -> asyncpg.Pool:
-    """Inject the test pool into shared.db so log_* functions use it."""
+    """注入测试连接池，供日志写入函数使用。"""
     monkeypatch.setattr(shared_db, "_pool", clean_db)
     return clean_db
 

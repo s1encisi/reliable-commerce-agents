@@ -1,23 +1,25 @@
-# Chapter 05 — Context Providers
+# 第 05 章 · 上下文提供器
 
-## Why this chapter
+[项目首页](../../README.md) · [教程总览](../README.md) · [术语表](../_shared/jargon-glossary.md)
 
-You want your agent to know *who* it's talking to without hard-coding "the user is Alice" into the system prompt. That doesn't scale past a demo — the moment you have more than one user, string-formatting a prompt per request turns into ad-hoc glue code scattered across every agent. A `ContextProvider` gives you a clean hook instead: run some code before every LLM call, add instructions (or messages, or tools) to the context, and let the framework wire it in. One provider per concern, composed in a list, reused across every agent that needs it.
+在每次 LLM 调用之前运行你自己的代码，把「当前用户是谁」这类上下文注入进去 —— 而不是把用户信息硬编码进系统提示词。
 
-This is exactly the primitive the capstone's specialist agents run on. Every one of the six agents (product discovery, orders, pricing, reviews, inventory, support) is built with a `context_providers=[...]` argument that injects the logged-in user's profile, recent orders, and long-term memories before the LLM ever sees the request — see `agents/python/shared/context_providers.py` for the real implementation.
+## 本章动机
 
-## Prerequisites
+你希望智能体知道自己在**跟谁**说话，而不必把「用户是 Alice」硬编码进系统提示词。这撑不过一个演示：一旦用户多于一个，为每个请求拼装提示词就会变成散落在各个智能体里的临时胶水代码。`ContextProvider` 给你一个干净的钩子：在每次 LLM 调用之前跑一段代码，把指令（或消息、或工具）加进上下文，剩下交给框架接线。**一个关注点一个提供器**，用列表组合起来，所有需要它的智能体共用。
 
-- Completed [Chapter 04 — Sessions](../04-sessions/)
-- Repo-root `.env` with working LLM credentials (`OPENAI_API_KEY`, or the `AZURE_OPENAI_*` set)
+这正是完整项目的专家智能体所依赖的原语。六个智能体（商品发现、订单、定价、评价、库存、客服）每一个都用 `context_providers=[...]` 参数构造，在 LLM 看到请求之前注入登录用户的画像、近期订单与长期记忆 —— 真实实现见 `agents/python/shared/context_providers.py`。
 
-## The concept
+## 前置条件
 
-**Python**: subclass `agent_framework.ContextProvider` and override `before_run(*, agent, session, context, state)`. Call `context.extend_instructions("source-id", "...")` to append to the system prompt for that run only, and optionally stash structured data in the `state` dict so your tools (Chapter 02's pattern) can read it too. Register the provider via `Agent(..., context_providers=[...])`.
+- 已完成 [第 04 章 · 会话持久化](../04-sessions/)
+- 仓库根目录的 `.env` 中有可用的 LLM 凭据（`OPENAI_API_KEY`，或 `AZURE_OPENAI_*` 那一组）
 
-**.NET**: subclass `Microsoft.Agents.AI.AIContextProvider` and override the protected `ProvideAIContextAsync(InvokingContext, CancellationToken)`. Return an `AIContext { Instructions = "..." }`. Register via `ChatClientAgentOptions.AIContextProviders`.
+## 核心概念
 
-Both fire on every `agent.run(...)` / `agent.RunAsync(...)` — before the request reaches the LLM. The provider is free to read from a database, call an API, check a feature flag, whatever the current request needs. It's the same shape as ASP.NET middleware or an Express interceptor, just scoped to "the next LLM call" instead of "the next HTTP request."
+子类化 `agent_framework.ContextProvider`，覆写 `before_run(*, agent, session, context, state)`。调用 `context.extend_instructions("source-id", "...")` 来追加**仅对本次运行生效**的系统提示词内容，并可选择把结构化数据塞进 `state` 字典，好让你的工具（第 02 章的模式）也能读到它。通过 `Agent(..., context_providers=[...])` 注册该提供器。
+
+提供器在每次 `agent.run(...)` 时触发 —— 在请求抵达 LLM **之前**。它可以自由地查数据库、调 API、检查功能开关，一切取决于当前请求需要什么。形态类似 HTTP 中间件或 Express 拦截器，只是作用域从「下一个 HTTP 请求」变成了「下一次 LLM 调用」。
 
 ```mermaid
 %%{init: {'theme':'base', 'themeVariables': {
@@ -30,18 +32,18 @@ flowchart LR
   classDef infra    fill:#64748b,stroke:#334155,color:#ffffff
   classDef success  fill:#10b981,stroke:#047857,color:#ffffff
 
-  request([Agent.run request])
+  request([Agent.run 请求])
   provider[[ContextProvider.before_run]]
-  db[(User profile / orders / memories)]
-  agent[Agent]
+  db[(用户画像 / 订单 / 记忆)]
+  agent[智能体]
   llm[(LLM)]
-  answer([Personalized answer])
+  answer([个性化回答])
 
   request --> provider
-  provider -- "reads current user" --> db
+  provider -- "读取当前用户" --> db
   provider -- "extend_instructions(...)" --> agent
-  agent -- "prompt + injected context" --> llm
-  llm -- "final text" --> agent
+  agent -- "提示词 + 注入的上下文" --> llm
+  llm -- "最终文本" --> agent
   agent --> answer
 
   class provider core
@@ -51,11 +53,11 @@ flowchart LR
   class answer success
 ```
 
-The provider never talks to the LLM directly — it only shapes what the agent sends on the *next* call. The LLM sees a single, already-composed system prompt; it has no idea a provider ran.
+提供器从不直接与 LLM 对话 —— 它只塑造智能体在**下一次**调用中发送的内容。LLM 看到的是一份已经组装好的系统提示词，它完全不知道有提供器运行过。
 
 ## Python
 
-Run from the repo root using the shared `tutorials/` uv project (one `uv sync` covers every chapter):
+在仓库根目录运行，共用 `tutorials/` 这一个 uv 项目（一次 `uv sync` 覆盖全部章节）：
 
 ```bash
 uv sync --project tutorials
@@ -64,7 +66,7 @@ uv run --project tutorials python tutorials/05-context-providers/python/main.py
 uv run --project tutorials python tutorials/05-context-providers/python/main.py bob@example.com Bob gold
 ```
 
-The chapter's `UserProfileProvider` in [`python/main.py`](./python/main.py):
+本章 [`python/main.py`](./python/main.py) 中的 `UserProfileProvider`：
 
 ```python
 class UserProfileProvider(ContextProvider):
@@ -91,84 +93,32 @@ class UserProfileProvider(ContextProvider):
         state["user"] = {"email": self.email, "name": self.name, "loyalty_tier": self.loyalty_tier}
 ```
 
-`build_agent()` wires it in with `context_providers=[provider]`, and `main()` reads email/name/tier from `sys.argv` so you can run the same script for different users without touching code. `main.py` also supports `LLM_PROVIDER=replay` (a canned, no-network chat client the tests use for CI) alongside `openai` and `azure` — see `_default_client()` for the full provider switch.
+`build_agent()` 用 `context_providers=[provider]` 把它接进去，`main()` 则从 `sys.argv` 读取邮箱 / 姓名 / 等级，于是同一个脚本不必改代码就能跑不同用户。`main.py` 同样支持 `LLM_PROVIDER=replay`（一个预设的、无需网络的 chat client，测试在 CI 中使用它）。
 
-The `source_id` argument to both `super().__init__(...)` and `extend_instructions(...)` lets MAF dedupe and debug which provider injected what when several are chained together (as the capstone does — see below).
+`super().__init__(...)` 与 `extend_instructions(...)` 都带 `source_id` 参数，这让 MAF 在多个提供器串联（完整项目就是如此 —— 见下文）时能去重，并在调试时分辨出「是谁注入了什么」。
 
-## .NET
+## 常见坑
 
-```bash
-cd tutorials/05-context-providers/dotnet
-dotnet run
-```
+- **Python 要求 `source_id`。** 既要在 `__init__` 里通过 `super().__init__(source_id=...)` 提供，也要在 `extend_instructions(source_id, text)` 里提供。漏掉任何一处都会在实例化 / 调用时抛错，不会静默通过。
+- **提供器状态是「每个提供器」的，不是全局的。** `before_run` 收到的 `state` 字典作用域限于智能体构造时所用的那条提供器链。当你串联多个提供器（`ECommerceContextProvider` 就是这么做的 —— 见下文）时，靠后的提供器能读到靠前提供器写入的字段，但仅限同一次运行的 `state` 字典之内。
+- **`agents/python/patch_maf.py` 那个 MAF 打包补丁属于历史遗留。** 它修补的是 `agent-framework-core==1.0.0` 附带的一个空 `__init__.py`；仓库现已锁定在上游已修复的版本，因此它只是一个防御性的空操作。教程代码完全不使用它 —— `tutorials/_shared/maf_bootstrap.py` 才是教程应当调用的受认可引导入口，也是 `python/main.py` 在导入 `agent_framework` 之前所调用的东西。
 
-The equivalent provider in [`dotnet/Program.cs`](./dotnet/Program.cs):
-
-```csharp
-public sealed class UserProfileProvider : AIContextProvider
-{
-    public string Email { get; }
-    public string Name { get; }
-    public string LoyaltyTier { get; }
-
-    public UserProfileProvider(string email, string name, string loyaltyTier = "silver")
-    {
-        Email = email;
-        Name = name;
-        LoyaltyTier = loyaltyTier;
-    }
-
-    protected override ValueTask<AIContext> ProvideAIContextAsync(
-        InvokingContext context,
-        CancellationToken cancellationToken = default)
-    {
-        return ValueTask.FromResult(new AIContext
-        {
-            Instructions = $"Current user: {Name} ({Email}). Loyalty tier: {LoyaltyTier}.",
-        });
-    }
-}
-```
-
-`BuildAgent()` registers it via `ChatClientAgentOptions.AIContextProviders = new[] { provider }`, and `Program.Main` reads the same email/name/tier positional args from the command line as the Python version, so both sides of the chapter are runnable the same way.
-
-## Side-by-side differences
-
-| Aspect | Python | .NET |
-|--------|--------|------|
-| Base class | `ContextProvider` | `AIContextProvider` |
-| Override point | `before_run(...)` (public) | `ProvideAIContextAsync(...)` (protected) |
-| Injecting instructions | `context.extend_instructions(source_id, text)` | `return new AIContext { Instructions = "..." }` |
-| Shared state | `state["..."]` dict passed into `before_run` | No equivalent — use DI / a custom service |
-| Registration | `Agent(..., context_providers=[...])` | `ChatClientAgentOptions.AIContextProviders = [...]` |
-| Also can add | messages, tools, middleware | messages, tools |
-
-## Gotchas
-
-- **Python requires `source_id`** on both `__init__` (via `super().__init__(source_id=...)`) and `extend_instructions(source_id, text)`. Forgetting either raises at instantiation / call time, not silently.
-- **.NET's override point is `ProvideAIContextAsync`, not `InvokingAsync`.** `InvokingAsync` is the base class's own pipeline method that calls into your override internally — trying to override it directly is the wrong extension point; use the protected `ProvideAIContextAsync` shown above.
-- **Provider state is per-*provider*, not global.** In Python, the `state` dict passed to `before_run` is scoped to whichever provider chain the agent was built with. When you chain multiple providers (as `ECommerceContextProvider` does — see below), later providers can read fields earlier ones set, but only within that same run's `state` dict.
-- **The `agents/python/patch_maf.py` MAF packaging workaround is legacy.** It patched an empty `__init__.py` shipped by `agent-framework-core==1.0.0`; the repo now pins a version where that's fixed upstream, so it's a defensive no-op. Tutorial code doesn't use it at all — `tutorials/_shared/maf_bootstrap.py` is the sanctioned bootstrap that tutorials call instead, and it's what `python/main.py` calls before importing `agent_framework`.
-
-## Tests
+## 测试
 
 ```bash
 uv run --project tutorials pytest tutorials/05-context-providers/python/tests -v
-cd tutorials/05-context-providers/dotnet && dotnet test tests/ContextProviders.Tests.csproj
 ```
 
-`tutorials/05-context-providers/python/tests/test_context_provider.py` covers: a unit test asserting the injected instructions reach a fake `CannedChatClient` (name, tier, email all present), a unit test asserting `before_run` populates `state["user"]` for downstream tools, a unit test proving two independently-built agents never leak each other's user context, a replay-based test that plays back a recorded fixture (no network or credentials needed, safe for CI), and an integration test gated on real LLM credentials being present in `.env`.
+`python/tests/test_context_provider.py` 覆盖：一个断言注入的指令抵达伪 `CannedChatClient` 的单元测试（姓名、等级、邮箱都在）、一个断言 `before_run` 为下游工具填充了 `state["user"]` 的单元测试、一个证明两个独立构造的智能体绝不会互相泄漏用户上下文的单元测试、一个回放已录制 fixture 的测试（无需网络与凭据，可安全用于 CI），以及一个以真实 LLM 凭据为前提的集成测试。
 
-`tutorials/05-context-providers/dotnet/tests/ContextProvidersTests.cs` mirrors that shape: three fast unit facts against the provider and `BuildAgent()`, plus two `[Trait("Category", "Integration")]` tests that hit a real LLM and are skipped (not failed) when no credentials are configured.
+## 在完整项目中的落点
 
-## How this shows up in the capstone
+- `agents/python/shared/context_providers.py:25` —— `UserProfileProvider`，本章示例的生产版本：它按当前请求的邮箱（`shared.context.current_user_email`）查询 `users` 表，并以姓名、角色、会员等级与累计消费调用 `context.extend_instructions("user-profile", ...)`。
+- 同一文件还定义了 `RecentOrdersProvider` 与 `AgentMemoriesProvider`（可用同样方式组合），以及 `ECommerceContextProvider` —— 一个向后兼容的复合提供器，把三者串起来，并把它们的输出重新拼装成单个 `state["user_context"]` 字符串，供旧的工具循环使用。
+- `agents/python/product_discovery/agent.py:92` —— `context_providers=[ECommerceContextProvider()]` 就是传进每个专家智能体 `Agent(...)` 构造器的那个参数。六个专家智能体全都以本章 `build_agent()` 的方式接入上下文提供器。
 
-- `agents/python/shared/context_providers.py:35` — `UserProfileProvider`, the production equivalent of this chapter's example: it queries `users` by the current request's email (`shared.context.current_user_email`) and calls `context.extend_instructions("user-profile", ...)` with name, role, loyalty tier, and total spend.
-- The same file also defines `RecentOrdersProvider` and `AgentMemoriesProvider` (composable in the same way), and `ECommerceContextProvider` — a back-compat composite that chains all three and reassembles their output into a single `state["user_context"]` string for the legacy tool loop.
-- `agents/python/product_discovery/agent.py:92` — `context_providers=[ECommerceContextProvider()]` is the argument passed into every specialist agent's `Agent(...)` constructor. Every one of the six specialist agents wires context providers the same way this chapter's `build_agent()` does.
+## 下一步
 
-## What's next
-
-- Next chapter: [Chapter 06 — Middleware](../06-middleware/) — intercepting the agent run, tool calls, and LLM calls themselves.
-- Full source: [`python/`](./python/) · [`dotnet/`](./dotnet/)
-- Shared: [Mermaid style guide](../_shared/mermaid-style-guide.md)
+- 下一章：[第 06 章 · 中间件](../06-middleware/) —— 拦截智能体运行、工具调用乃至 LLM 调用本身。
+- 完整源码：[`python/`](./python/)
+- 共享材料：[Mermaid 风格指南](../_shared/mermaid-style-guide.md) · [术语表](../_shared/jargon-glossary.md)

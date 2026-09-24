@@ -1,40 +1,35 @@
 """
-MAF v1 — Chapter 32: Cost Control and Budgets (Python)
+MAF v1 — 第 32 章：成本控制与预算（Python）
 
-A single `ChatMiddleware` that tracks the cumulative estimated USD cost of
-every LLM turn in a run and, once a configured ceiling is crossed, refuses
-to start the *next* turn — a toy stand-in for
-`agents/python/shared/guardrails/cost_budget_middleware.py`'s
-`CostBudgetMiddleware`. Same two-tier posture (`observe` never blocks,
-`enforce` does), same short-circuit mechanic (set `context.result` to a
-refusal and skip `call_next()`), simplified to a plain instance attribute
-instead of a `ContextVar` — this script's turns run sequentially in one
-process, not across concurrent asyncio tasks that each need an isolated
-running total.
+一个 `ChatMiddleware`，累计追踪一次运行中每一轮 LLM 调用的预估美元成本，
+一旦越过配置的上限，就拒绝开始*下一轮* —— 这是
+`agents/python/shared/guardrails/cost_budget_middleware.py` 里
+`CostBudgetMiddleware` 的玩具级替身。同样是两档姿态（`observe` 从不拦截，
+`enforce` 会拦截），同样的短路机制（把 `context.result` 设为一条拒绝响应并
+跳过 `call_next()`），只是简化为普通实例属性而非 `ContextVar` —— 本脚本的
+各轮是在单个进程里顺序执行的，而不是并发的 asyncio 任务、各自需要一份隔离
+的运行总计。
 
-`get_product_price` is a canned-data tool (no real catalog lookup). Each
-question triggers a two-turn tool-calling loop (one turn where the model
-calls the tool, one where it reads the result and answers) — accumulating
-cost turn by turn is the whole point, so a single-turn demo wouldn't show
-anything interesting. `DEMO_BUDGET_USD_PER_RUN` is deliberately tiny
-(a fraction of a cent) purely so the ceiling trips within two or three
-short demo questions instead of requiring a very long, expensive run —
-production ceilings (`COST_BUDGET_USD_PER_RUN`) are set per real workload,
-not to this toy's scale.
+`get_product_price` 是一个预置数据的工具（不做真实目录查询）。每个问题都会
+触发一个两轮的工具调用循环（一轮模型调用工具，一轮它读取结果并作答）——
+逐轮累计成本正是全部要点，所以单轮演示看不出任何有意思的东西。
+`DEMO_BUDGET_USD_PER_RUN` 刻意设得极小（不到一美分），纯粹是为了让上限在
+两三个简短的演示问题内就被触发，而不必跑一次很长、很贵的运行 —— 生产环境的
+上限（`COST_BUDGET_USD_PER_RUN`）是按真实负载设定的，而不是按这个玩具的
+量级。
 
-Note on replay mode: `tutorials/_shared/replay_client.py`'s `ReplayChatClient`
-deliberately composes `FunctionInvocationLayer` directly with
-`BaseChatClient`, skipping `ChatMiddlewareLayer` (see that module's own
-docstring) — a replay client doesn't need it just to play back a
-tool-calling fixture correctly. That means `CostBudgetChatMiddleware.process()`
-never runs under `LLM_PROVIDER=replay`: the replay test below only proves
-the tool-calling round trip replays correctly, not that the budget
-middleware fired. The `[budget]` prints and the refusal only show up
-against a live LLM (`LLM_PROVIDER=azure` or `openai`) — same limitation
-Chapter 06's PII-redaction `ChatMiddleware` has, which is why that
-chapter's chat-middleware assertion is a live-LLM-only test too.
+关于回放模式的说明：`tutorials/_shared/replay_client.py` 里的
+`ReplayChatClient` 刻意把 `FunctionInvocationLayer` 直接与 `BaseChatClient`
+组合，跳过了 `ChatMiddlewareLayer`（见该模块自己的文档字符串）—— 回放客户端
+只是为了正确回放一个工具调用夹具，并不需要它。这意味着在
+`LLM_PROVIDER=replay` 下 `CostBudgetChatMiddleware.process()` 永远不会执行：
+下方的回放测试只能证明工具调用往返被正确回放，而不能证明预算中间件真的触发
+了。`[budget]` 打印与那条拒绝响应只有在面对真实 LLM
+（`LLM_PROVIDER=azure` 或 `openai`）时才会出现 —— 第 06 章的 PII 脱敏
+`ChatMiddleware` 有同样的局限，这也是为什么那一章的 chat-middleware 断言
+同样是一个只在真实 LLM 下运行的测试。
 
-Run:
+运行：
     python tutorials/32-cost-control-and-budgets/python/main.py
     python tutorials/32-cost-control-and-budgets/python/main.py "What's the price of product P-100?"
 """
@@ -77,10 +72,10 @@ DEFAULT_QUESTIONS = [
 
 FIXTURES_DIR = pathlib.Path(__file__).resolve().parent / "tests" / "fixtures" / "replay"
 
-# Deliberately tiny — a fraction of a cent. Real production ceilings
-# (COST_BUDGET_USD_PER_RUN) are set for real workloads (dollars, not cents);
-# this number exists only to trip within two or three short demo questions
-# rather than requiring hundreds of paid turns to demonstrate the mechanic.
+# 刻意设得极小 —— 不到一美分。真实的生产上限
+# （COST_BUDGET_USD_PER_RUN）是按真实负载设定的（以美元计，而非美分）；
+# 这个数字的存在只是为了在两三个简短的演示问题内就被触发，而不必花上
+# 几百轮付费调用才能演示这个机制。
 DEMO_BUDGET_USD_PER_RUN = 0.0015
 
 BUDGET_REFUSAL_MESSAGE = (
@@ -88,21 +83,20 @@ BUDGET_REFUSAL_MESSAGE = (
     "Start a new request, or raise the budget if this ceiling is too low."
 )
 
-# Simplified single-model pricing — USD per 1K tokens. Same numbers as
-# production's shared/cost.py::_PRICING["gpt-4.1"], so the dollar amounts
-# this demo prints are realistic, not made up. Production's table covers
-# several models and falls back gracefully for an unrecognized one; this
-# toy only needs the one model the tutorials' `.env` is configured for.
+# 简化的单模型定价 —— 每 1K token 的美元价。与生产环境
+# shared/cost.py::_PRICING["gpt-4.1"] 的数字一致，因此本演示打印出的
+# 金额是贴近现实的，而非编造。生产的定价表覆盖多个模型，并对无法识别的
+# 模型优雅降级；这个玩具只需要教程 `.env` 所配置的那一个模型。
 GPT_4_1_INPUT_PER_1K = 0.002
 GPT_4_1_OUTPUT_PER_1K = 0.008
 
 
 def estimate_cost_usd(tokens_in: int, tokens_out: int) -> float:
-    """Estimate USD cost for one turn from its token counts. Simplified from shared/cost.py."""
+    """根据 token 数估算一轮调用的美元成本。简化自 shared/cost.py。"""
     return (tokens_in / 1000) * GPT_4_1_INPUT_PER_1K + (tokens_out / 1000) * GPT_4_1_OUTPUT_PER_1K
 
 
-# ─────────────────── Tool ───────────────────
+# ─────────────────── 工具 ───────────────────
 
 
 @tool(name="get_product_price", description="Look up the current price for a product by ID.")
@@ -117,24 +111,22 @@ def get_product_price(
     return canned.get(product_id.lower(), f"No price found for product {product_id}.")
 
 
-# ─────────────────── Cost budget middleware ───────────────────
+# ─────────────────── 成本预算中间件 ───────────────────
 
 
 class CostBudgetChatMiddleware(ChatMiddleware):
-    """Tracks cumulative per-run cost and, in `enforce` mode, caps it.
+    """累计追踪每次运行的逐轮成本，并在 `enforce` 模式下给它封顶。
 
-    Toy stand-in for `CostBudgetMiddleware`
-    (`agents/python/shared/guardrails/cost_budget_middleware.py`). Two
-    modes, mirroring `settings.COST_BUDGET_MODE`:
+    `CostBudgetMiddleware` 的玩具级替身
+    （`agents/python/shared/guardrails/cost_budget_middleware.py`）。两种
+    模式，对应 `settings.COST_BUDGET_MODE`：
 
-    - `observe` — accumulate and print the running cost; never blocks, even
-      past `budget_usd`. This is production's default.
-    - `enforce` — same accumulation, plus refuses the *next* turn once the
-      running total exceeds `budget_usd`. A turn already in flight when the
-      ceiling is crossed is never aborted mid-call — cost is only knowable
-      after a turn completes (from its `usage_details`), so enforcement is
-      necessarily one turn behind the actual overage. Same trade-off the
-      real middleware documents.
+    - `observe` —— 累计并打印运行成本；从不拦截，即使已越过 `budget_usd`。
+      这是生产环境的默认值。
+    - `enforce` —— 同样累计，并在运行总计超过 `budget_usd` 后拒绝*下一轮*。
+      在越过上限时已经在途的一轮绝不会被中途打断 —— 成本只有在某一轮
+      完成之后（从其 `usage_details`）才可知，所以强制拦截必然滞后于实际
+      超支一轮。这与真实中间件所记录的权衡完全一致。
     """
 
     def __init__(self, *, budget_usd: float, mode: str = "enforce") -> None:
@@ -152,11 +144,11 @@ class CostBudgetChatMiddleware(ChatMiddleware):
         if self.mode == "enforce" and self.total_cost_usd > self.budget_usd:
             self.blocked += 1
             print(
-                f"  [budget] refused turn {self.turns_recorded + self.blocked} — "
-                f"running total ${self.total_cost_usd:.4f} already exceeds ${self.budget_usd:.4f}"
+                f"  [budget] 已拒绝第 {self.turns_recorded + self.blocked} 轮 —— "
+                f"运行总计 ${self.total_cost_usd:.4f} 已超过 ${self.budget_usd:.4f}"
             )
-            # Short-circuit: do NOT call call_next() — no further LLM turn is
-            # made once the run is already over budget.
+            # 短路：不调用 call_next() —— 一旦本次运行已超预算，
+            # 就不再发起任何后续 LLM 调用。
             context.result = ChatResponse(
                 messages=[Message(role="assistant", contents=[BUDGET_REFUSAL_MESSAGE])],
                 finish_reason="length",
@@ -172,19 +164,19 @@ class CostBudgetChatMiddleware(ChatMiddleware):
     def _record(self, response: object) -> None:
         usage = getattr(response, "usage_details", None)
         if not usage:
-            return  # no usage data (e.g. a fixture recorded without it) — nothing to price
+            return  # 没有用量数据（例如夹具录制时未包含）—— 无从计价
         tokens_in = usage.get("input_token_count") or 0
         tokens_out = usage.get("output_token_count") or 0
         cost = estimate_cost_usd(tokens_in, tokens_out)
         self.total_cost_usd += cost
         self.turns_recorded += 1
         print(
-            f"  [budget] turn {self.turns_recorded}: +${cost:.4f} "
-            f"(in={tokens_in} out={tokens_out}) -> running total ${self.total_cost_usd:.4f}"
+            f"  [budget] 第 {self.turns_recorded} 轮：+${cost:.4f} "
+            f"(in={tokens_in} out={tokens_out}) -> 运行总计 ${self.total_cost_usd:.4f}"
         )
 
 
-# ─────────────────── Client + agent factories ───────────────────
+# ─────────────────── 客户端与智能体工厂 ───────────────────
 
 
 def _default_client() -> OpenAIChatClient | OpenAIChatCompletionClient | ReplayChatClient:
@@ -205,9 +197,9 @@ def _default_client() -> OpenAIChatClient | OpenAIChatCompletionClient | ReplayC
     return OpenAIChatClient(
         model=os.environ.get("LLM_MODEL", "gpt-4.1"),
         api_key=os.environ["OPENAI_API_KEY"],
-        # Phase 9: any OpenAI-compatible endpoint (GitHub Models, OpenRouter,
-        # vLLM, LM Studio, Ollama) instead of api.openai.com — see
-        # tutorials/00-setup/README.md's "Don't have a paid API key?" section.
+        # Phase 9：可指向任何兼容 OpenAI 的端点（GitHub Models、OpenRouter、
+        # vLLM、LM Studio、Ollama），而不必是 api.openai.com —— 见
+        # tutorials/00-setup/README.md 的「没有付费 API key？」一节。
         base_url=os.environ.get("LLM_BASE_URL") or None,
     )
 
@@ -233,16 +225,16 @@ async def main() -> None:
     budget_mw = CostBudgetChatMiddleware(budget_usd=DEMO_BUDGET_USD_PER_RUN, mode="enforce")
     agent = build_agent(budget_mw)
 
-    print(f"budget: ${budget_mw.budget_usd:.4f} per run (mode={budget_mw.mode})\n")
+    print(f"预算：每次运行 ${budget_mw.budget_usd:.4f}（模式={budget_mw.mode}）\n")
     for question in questions:
         answer = await ask(agent, question)
-        print(f"Q: {question}")
-        print(f"A: {answer}")
+        print(f"问：{question}")
+        print(f"答：{answer}")
         print()
 
-    print(f"turns recorded: {budget_mw.turns_recorded}")
-    print(f"turns blocked:  {budget_mw.blocked}")
-    print(f"running total:  ${budget_mw.total_cost_usd:.4f} (budget ${budget_mw.budget_usd:.4f})")
+    print(f"已记录轮数：{budget_mw.turns_recorded}")
+    print(f"已拦截轮数：{budget_mw.blocked}")
+    print(f"运行总计：  ${budget_mw.total_cost_usd:.4f}（预算 ${budget_mw.budget_usd:.4f}）")
 
 
 if __name__ == "__main__":

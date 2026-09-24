@@ -1,125 +1,127 @@
-# MCP Integration
+# MCP 集成
 
-E-Commerce Agents ships two standalone MCP servers as independently publishable Python packages.
-They expose product and inventory data over the [Model Context Protocol](https://modelcontextprotocol.io)
-streamable HTTP transport so any MCP-compatible client can consume them without knowing anything
-about this codebase.
+可靠电商多智能体平台以可独立发布的 Python 包形式提供两个独立的 MCP 服务器。
+它们通过 [Model Context Protocol](https://modelcontextprotocol.io)（MCP，模型上下文协议）的
+streamable HTTP 传输暴露商品与库存数据，因此任何兼容 MCP 的客户端都能消费它们，
+而无需了解本代码库的任何细节。
 
-## What this demonstrates
+## 这展示了什么
 
-The default architecture has specialist agents calling PostgreSQL directly via `asyncpg`:
+默认架构下，专业智能体通过 `asyncpg` 直接访问 PostgreSQL：
 
 ```
-Specialist Agent (MAF)
-  → @tool function
+专业智能体（MAF）
+  → @tool 函数
   → asyncpg
   → PostgreSQL
 ```
 
-With MCP enabled, the same agents call a running MCP server instead:
+启用 MCP 后，同一批智能体改为调用运行中的 MCP 服务器：
 
 ```
-Specialist Agent (MAF)
-  → MCPStreamableHTTPTool (MAF's built-in MCP client)
-  → Streamable HTTP (MCP protocol)
-  → MCP Server (FastMCP + asyncpg)
+专业智能体（MAF）
+  → MCPStreamableHTTPTool（MAF 内置的 MCP 客户端）
+  → Streamable HTTP（MCP 协议）
+  → MCP 服务器（FastMCP + asyncpg）
   → PostgreSQL
 ```
 
-The agent's behavior — prompts, routing, middleware, guardrails — is identical in both modes.
-Only the data access layer changes.
+两种模式下智能体的行为 —— 提示词、路由、中间件、护栏 —— 完全一致。
+只有数据访问层发生变化。
 
-## MCP Servers
+## MCP 服务器
 
-| Server | Port | Domain | Package |
+| 服务器 | 端口 | 业务域 | 包 |
 |--------|------|--------|---------|
-| `mcp-product` | 9000 | Product search, details, comparison, trending, price history | `packages/mcp-product` |
-| `mcp-inventory` | 9001 | Stock levels, warehouses, shipping, carriers | `packages/mcp-inventory` |
+| `mcp-product` | 9000 | 商品检索、详情、对比、热门、价格历史 | `packages/mcp-product` |
+| `mcp-inventory` | 9001 | 库存量、仓库、运费、承运商 | `packages/mcp-inventory` |
 
-Both use [FastMCP](https://github.com/modelcontextprotocol/python-sdk) and expose the MCP streamable
-HTTP transport at `/mcp`. MAF's `MCPStreamableHTTPTool` connects to that endpoint.
+两者都使用 [FastMCP](https://github.com/modelcontextprotocol/python-sdk)，并在 `/mcp` 暴露
+MCP streamable HTTP 传输。MAF 的 `MCPStreamableHTTPTool` 连接到该端点。
 
-## Enabling MCP mode
+## 启用 MCP 模式
 
-### 1. Start the MCP servers
+### 1. 启动 MCP 服务器
 
 ```bash
-# Start MCP servers alongside infrastructure
+# 与基础设施一起启动 MCP 服务器
 docker compose --profile mcp --profile agents up
 ```
 
-Or locally for development:
+或在本地开发时直接运行：
 
 ```bash
 cd agents/python
 
-# Product MCP server on :9000
+# 商品 MCP 服务器，监听 :9000
 uv run uvicorn ecommerce_mcp_product.server:app --port 9000 --reload &
 
-# Inventory MCP server on :9001
+# 库存 MCP 服务器，监听 :9001
 uv run uvicorn ecommerce_mcp_inventory.server:app --port 9001 --reload &
 ```
 
-### 2. Set environment variables
+### 2. 设置环境变量
 
 ```bash
 MCP_ENABLED=true
-MCP_PRODUCT_SERVER_URL=http://localhost:9000/mcp    # or http://mcp-product:9000/mcp in Docker
-MCP_INVENTORY_SERVER_URL=http://localhost:9001/mcp  # or http://mcp-inventory:9001/mcp in Docker
+MCP_PRODUCT_SERVER_URL=http://localhost:9000/mcp    # Docker 内为 http://mcp-product:9000/mcp
+MCP_INVENTORY_SERVER_URL=http://localhost:9001/mcp  # Docker 内为 http://mcp-inventory:9001/mcp
 ```
 
-### 3. Restart the specialist agents
+### 3. 重启专业智能体
 
-The `product-discovery` and `inventory-fulfillment` agents read `MCP_ENABLED` at startup and
-select the appropriate tool set. No code changes are needed.
+`product-discovery` 与 `inventory-fulfillment` 在启动时读取 `MCP_ENABLED`，并据此选择对应的工具集。
+无需改动代码。
 
-## OAuth 2.1 resource-server mode (optional)
+## OAuth 2.1 资源服务器模式（可选）
 
-By default the MCP servers are unauthenticated — anyone who can reach `:9000`/`:9001` can call
-tools. Setting `MCP_AUTH_ENABLED=true` (requires `AUTH_MODE=oauth` and `MCP_ENABLED=true`) turns
-each server into an OAuth 2.1 resource server per [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728),
-validated against the same self-hosted Authorization Server (AS) used for user login and
-inter-agent calls — no external identity provider.
+默认情况下 MCP 服务器不做鉴权 —— 任何能访问 `:9000`/`:9001` 的人都可以调用工具。
+设置 `MCP_AUTH_ENABLED=true`（需同时满足 `AUTH_MODE=oauth` 与 `MCP_ENABLED=true`）后，
+每个服务器会按 [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) 变成 OAuth 2.1 资源服务器，
+并针对同一个自托管授权服务器（Authorization Server，AS）做校验 —— 该 AS 也用于用户登录与
+智能体间调用，无需外部身份提供方。
 
-### Running it locally
+### 本地运行
 
 ```bash
-# Full stack, oauth mode, MCP enabled + protected
+# 完整服务栈，oauth 模式，MCP 已启用且受保护
 AUTH_MODE=oauth MCP_ENABLED=true MCP_AUTH_ENABLED=true \
   docker compose --profile agents --profile mcp up --build
 
-# Seed the database, then restart auth-server so its in-memory client
-# registry picks up the seeded oauth_clients rows (it loads once at startup)
+# 灌入种子数据，然后重启 auth-server，使其内存中的客户端注册表
+# 能加载到种子写入的 oauth_clients 行（它只在启动时加载一次）
 docker compose --profile seed run --rm seeder
 docker compose restart auth-server
 ```
 
-### What each server does differently
+### 各服务器的差异
 
-- A vendored `JwksTokenVerifier` (`packages/mcp-product/src/ecommerce_mcp_product/auth.py`,
-  `packages/mcp-inventory/.../auth.py` — deliberately **not** shared between the two packages or
-  with the main app's `shared/oauth/verifier.py`, since these are independently publishable uv
-  workspace members) validates the bearer JWT via `PyJWKClient` against `AUTH_SERVER_JWKS_URL`:
-  signature, issuer (`AUTH_SERVER_ISSUER`), audience (`mcp-product` / `mcp-inventory`), and required
-  scope (`mcp:product` / `mcp:inventory`).
+- 一份内置的 `JwksTokenVerifier`
+  （`packages/mcp-product/src/ecommerce_mcp_product/auth.py`、
+  `packages/mcp-inventory/.../auth.py` —— 刻意**不**在两个包之间共享，也不与主应用的
+  `shared/oauth/verifier.py` 共享，因为它们是可独立发布的 uv workspace 成员）
+  通过 `PyJWKClient` 对 `AUTH_SERVER_JWKS_URL` 校验 bearer JWT：
+  签名、签发方（`AUTH_SERVER_ISSUER`）、受众（`mcp-product` / `mcp-inventory`），
+  以及必需 scope（`mcp:product` / `mcp:inventory`）。
 - `FastMCP(token_verifier=..., auth=AuthSettings(issuer_url=..., resource_server_url=..., required_scopes=[...]))`
-  — the MCP Python SDK auto-mounts `GET /.well-known/oauth-protected-resource/mcp` and wraps
-  `POST /mcp` in `RequireAuthMiddleware`. An unauthenticated or wrong-scope call gets `401` plus a
-  spec-shaped header: `WWW-Authenticate: Bearer error="invalid_token", error_description="...", resource_metadata="http://.../.well-known/oauth-protected-resource/mcp"`.
-- Each server is served with `host="0.0.0.0"` explicitly. **Gotcha**: FastMCP auto-enables
-  DNS-rebinding Host-header protection whenever `host` is left at its default `"127.0.0.1"`,
-  allowlisting only `localhost`/`127.0.0.1`/`::1` — which would silently `421` every real call over
-  the Docker network (e.g. `http://mcp-product:9000/mcp`), auth or no auth. This is fixed in both
-  `server.py` files; don't remove the explicit `host` argument.
-- The Dockerfile/compose healthchecks curl `/mcp` when `MCP_AUTH_ENABLED=false`, but the
-  auto-mounted, unauthenticated `/.well-known/oauth-protected-resource/mcp` when it's `true` — `/mcp`
-  always `401`s once auth is on, so the healthcheck target has to switch too.
+  —— MCP Python SDK 会自动挂载 `GET /.well-known/oauth-protected-resource/mcp`，
+  并把 `POST /mcp` 包进 `RequireAuthMiddleware`。未鉴权或 scope 不正确的调用会得到 `401`，
+  并附带符合规范形状的请求头：
+  `WWW-Authenticate: Bearer error="invalid_token", error_description="...", resource_metadata="http://.../.well-known/oauth-protected-resource/mcp"`。
+- 每个服务器都显式以 `host="0.0.0.0"` 提供服务。**易踩的坑**：只要 `host` 保持默认的
+  `"127.0.0.1"`，FastMCP 就会自动启用 DNS 重绑定 Host 头保护，只把
+  `localhost`/`127.0.0.1`/`::1` 加入白名单 —— 这会静默地让 Docker 网络上的每一次真实调用
+  （例如 `http://mcp-product:9000/mcp`）返回 `421`，无论是否开启鉴权。两个 `server.py`
+  都已修复该问题；不要移除显式的 `host` 参数。
+- 当 `MCP_AUTH_ENABLED=false` 时，Dockerfile/compose 的健康检查请求 `/mcp`；
+  当它为 `true` 时，改为请求自动挂载且无需鉴权的
+  `/.well-known/oauth-protected-resource/mcp` —— 一旦开启鉴权，`/mcp` 总是返回 `401`，
+  因此健康检查的目标也必须随之切换。
 
-### How a specialist agent acquires its resource token
+### 专业智能体如何获取它的资源令牌
 
-`product_discovery/agent.py` / `inventory_fulfillment/agent.py` pass a `header_provider` to
-`MCPStreamableHTTPTool` (MAF's own documented mechanism for attaching per-request headers) when
-`MCP_AUTH_ENABLED=true`:
+当 `MCP_AUTH_ENABLED=true` 时，`product_discovery/agent.py` / `inventory_fulfillment/agent.py`
+会向 `MCPStreamableHTTPTool` 传入一个 `header_provider`（MAF 官方文档中用于附加按请求请求头的机制）：
 
 ```python
 mcp_product = MCPStreamableHTTPTool(
@@ -129,74 +131,68 @@ mcp_product = MCPStreamableHTTPTool(
 )
 ```
 
-`header_provider` is invoked **synchronously**, from inside an already-running event loop — it
-cannot itself perform the `client_credentials` grant. Each specialist's async startup hook
-pre-warms the token cache once (`await acquire_service_token(scope, audience)`); the header
-provider then does a synchronous, cache-only read (`get_cached_service_token`) and attaches
-`Authorization: Bearer <token>`. A token scoped for `mcp:product` cannot authenticate to
-`mcp-inventory`, or vice versa — each server validates its own audience independently.
+`header_provider` 是**同步**调用的，且调用发生在已经运行的事件循环内部 —— 它自身无法执行
+`client_credentials` 授权。每个专业智能体的异步启动钩子会先预热一次令牌缓存
+（`await acquire_service_token(scope, audience)`）；随后 header provider 只做一次同步的、
+仅读缓存的操作（`get_cached_service_token`），并附加 `Authorization: Bearer <token>`。
+面向 `mcp:product` 的令牌无法通过 `mcp-inventory` 的鉴权，反之亦然 ——
+每个服务器独立校验自己的受众。
 
-### Connecting an external MCP client (e.g. MCP Inspector) in oauth mode
+### 在 oauth 模式下接入外部 MCP 客户端（例如 MCP Inspector）
 
-A generic OAuth 2.1 client completes the standard protected-resource discovery flow:
+通用 OAuth 2.1 客户端会走标准的受保护资源发现流程：
 
 1. `GET http://localhost:9000/.well-known/oauth-protected-resource/mcp` → `{"resource": "...", "authorization_servers": ["http://localhost:8090/"], "scopes_supported": ["mcp:product"], ...}`
-2. Discover the AS's own metadata: `GET http://localhost:8090/.well-known/oauth-authorization-server`
-3. Obtain a token from `token_endpoint` (`client_credentials` grant, scope `mcp:product`) using a
-   seeded client's credentials (`scripts/seed.py::OAUTH_CLIENTS` — e.g. `product-discovery`; derive
-   the dev secret with `derive_client_secret(OAUTH_SEED_KEY, client_id)`, or set an explicit
-   `OAUTH_CLIENT_SECRET` in production)
-4. Call `POST /mcp` with `Authorization: Bearer <token>`
+2. 发现授权服务器自身的元数据：`GET http://localhost:8090/.well-known/oauth-authorization-server`
+3. 用种子客户端凭据（`scripts/seed.py::OAUTH_CLIENTS` —— 例如 `product-discovery`；
+   开发密钥可用 `derive_client_secret(OAUTH_SEED_KEY, client_id)` 推导，
+   生产环境则设置显式的 `OAUTH_CLIENT_SECRET`）从 `token_endpoint` 获取令牌
+   （`client_credentials` 授权，scope 为 `mcp:product`）
+4. 带上 `Authorization: Bearer <token>` 调用 `POST /mcp`
 
-The .NET MCP host (`ECommerceAgents.Mcp`) uses the official `ModelContextProtocol.AspNetCore` SDK
-(real JSON-RPC over streamable HTTP at `POST /mcp`, same transport shape as the Python FastMCP
-servers) with its own bearer-token gate (`GET /.well-known/oauth-protected-resource`, the same
-`WWW-Authenticate` shape on 401) implemented as ASP.NET Core middleware ahead of the SDK's own
-routing, reusing the same `JwtTokenService`/`JwksKeyProvider` the Phase B/C auth paths use.
+### 作为第三方 MCP 客户端获取凭据（动态注册）
 
-### Getting credentials as a third-party MCP client (dynamic registration)
+上面的第 3 步假设你是一方预置客户端。当授权服务器运营方选择开启时，
+真正的外部 MCP 客户端也可以自行注册（RFC 7591）：
 
-Step 3 above assumes a first-party, pre-seeded client. A genuinely external MCP client can instead
-self-register (RFC 7591) when the AS operator has opted in:
+1. 运营方在 auth-server 上设置 `AUTH_ALLOW_DYNAMIC_REGISTRATION=true`（默认关闭）。
+2. 运营方用种子写入的 `auth-admin` 客户端，通过 `client_credentials` 获取一个带
+   `client:register` scope 的令牌，并把得到的**注册令牌**通过带外方式交给第三方
+   （这不是客户端自己能发现的东西）。
+3. 客户端带上该 bearer 令牌和形如 `{"client_name": "...", "scope": "mcp:product"}` 的请求体
+   调用 `POST /oauth/register`，拿回一对 `client_id`/`client_secret`（仅展示一次）——
+   可立即用于上面的第 3 步。
 
-1. Operator sets `AUTH_ALLOW_DYNAMIC_REGISTRATION=true` on the auth-server (off by default).
-2. Operator obtains a `client:register`-scoped token via `client_credentials` using the seeded
-   `auth-admin` client, and hands the resulting **registration token** to the third party
-   out-of-band (it is not something a client discovers on its own).
-3. The client calls `POST /oauth/register` with that bearer token and a body like
-   `{"client_name": "...", "scope": "mcp:product"}`, and gets back a `client_id`/`client_secret`
-   pair (shown once) — usable immediately with step 3 above.
+注册被刻意收窄：只允许 `client_credentials` 授权，且只能申请两个 MCP 读取 scope
+（`mcp:product`、`mcp:inventory`）—— 永远不能申请 `agent:invoke`、`api:chat`
+或 `client:register` 本身。关于那个不太直观的实现细节（注册端点在进程内完成 bearer 令牌校验，
+而不走其他资源服务器使用的 JWKS-over-HTTP 路径 —— 因为单 worker 服务器在自己的请求处理器里
+去拉取自己的 JWKS 会发生死锁），见 `docs/security-guide.md` 的「已知问题」一节。
 
-Registration is deliberately narrow: only `client_credentials` grant, and only the two MCP read
-scopes (`mcp:product`, `mcp:inventory`) can be requested — never `agent:invoke`, `api:chat`, or
-`client:register` itself. See `docs/security-guide.md`'s Known Issues for the one non-obvious
-implementation detail (the registration endpoint verifies its bearer token entirely in-process,
-not via the JWKS-over-HTTP path every other resource server uses — that path deadlocks when a
-single-worker server tries to fetch its own JWKS from within its own request handler).
+### 开关关闭时（`MCP_AUTH_ENABLED=false`，默认值）
 
-### Flag off (`MCP_AUTH_ENABLED=false`, the default)
+两个 MCP 服务器的行为与该功能引入之前完全一致 —— 没有任何鉴权面，
+并由 `tests/test_mcp_oauth_integration.py::test_mcp_auth_disabled_is_unchanged_regression_guard`
+做逐字节的回归保护。
 
-Both MCP servers behave exactly as before this feature — no auth surface at all, byte-for-byte
-regression-guarded by `tests/test_mcp_oauth_integration.py::test_mcp_auth_disabled_is_unchanged_regression_guard`.
+## 用 MCP Inspector 检视
 
-## Inspect with MCP Inspector
-
-The [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector) is an interactive tool
-for testing MCP servers. With the servers running:
+[MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector) 是用于测试 MCP 服务器的
+交互式工具。在服务器运行状态下：
 
 ```bash
-# Inspect the product server
+# 检视商品服务器
 npx @modelcontextprotocol/inspector http://localhost:9000/mcp
 
-# Inspect the inventory server
+# 检视库存服务器
 npx @modelcontextprotocol/inspector http://localhost:9001/mcp
 ```
 
-This lets you browse tool schemas, call individual tools, and see raw MCP protocol messages.
+你可以借此浏览工具模式（schema）、调用单个工具，并查看原始的 MCP 协议消息。
 
-## How the agent selection works
+## 智能体的工具选择逻辑
 
-In `product_discovery/agent.py` and `inventory_fulfillment/agent.py`:
+在 `product_discovery/agent.py` 与 `inventory_fulfillment/agent.py` 中：
 
 ```python
 from agent_framework._mcp import MCPStreamableHTTPTool
@@ -209,53 +205,52 @@ def create_product_discovery_agent() -> Agent:
             url=settings.MCP_PRODUCT_SERVER_URL,
             description="Product catalog data via MCP",
         )
-        # User-context tools (semantic search, price history) stay local —
-        # they depend on pgvector / ContextVars not propagated to the MCP server.
+        # 依赖用户上下文的工具（语义检索、价格历史）保持本地 ——
+        # 它们依赖 pgvector / 不会传递到 MCP 服务器的 ContextVars。
         tools = [mcp_product, semantic_search, find_similar_products, ...]
     else:
-        tools = AGENT_TOOLS  # direct asyncpg @tool functions
+        tools = AGENT_TOOLS  # 直连 asyncpg 的 @tool 函数
 
     return Agent(client=..., tools=tools, ...)
 ```
 
-`MCPStreamableHTTPTool` is MAF's built-in MCP client. When the agent initialises, it calls the
-MCP server's tool listing endpoint, discovers the available tools, and exposes them to the LLM
-exactly like native `@tool` functions. The LLM cannot tell the difference.
+`MCPStreamableHTTPTool` 是 MAF 内置的 MCP 客户端。智能体初始化时，它会调用 MCP 服务器的
+工具列表端点、发现可用工具，并把它们像原生 `@tool` 函数一样暴露给 LLM。
+LLM 分辨不出二者的差别。
 
-## Tool coverage
+## 工具覆盖范围
 
-Not all tools are migrated to MCP. Tools that require user identity context (ContextVars set by
-the auth middleware) or are unique to this platform (semantic vector search, `place_backorder`)
-remain as direct `@tool` functions even in MCP mode. The MCP servers cover pure data-access tools
-that are genuinely portable.
+并非所有工具都迁移到了 MCP。需要用户身份上下文（由认证中间件设置的 ContextVars）的工具，
+或本平台特有的工具（语义向量检索、`place_backorder`），即使在 MCP 模式下也仍保持为直连的
+`@tool` 函数。MCP 服务器覆盖的是真正可移植的纯数据访问工具。
 
-| Tool | MCP mode | Direct mode |
+| 工具 | MCP 模式 | 直连模式 |
 |------|----------|-------------|
-| `search_products` | product-mcp server | asyncpg `@tool` |
-| `get_product_details` | product-mcp server | asyncpg `@tool` |
-| `compare_products` | product-mcp server | asyncpg `@tool` |
-| `get_trending_products` | product-mcp server | asyncpg `@tool` |
-| `get_price_history` | product-mcp server | asyncpg `@tool` |
-| `semantic_search` | direct `@tool` (pgvector) | asyncpg `@tool` |
-| `find_similar_products` | direct `@tool` (pgvector) | asyncpg `@tool` |
-| `check_stock` | inventory-mcp server | asyncpg `@tool` |
-| `get_warehouse_availability` | inventory-mcp server | asyncpg `@tool` |
-| `estimate_shipping` | inventory-mcp server | asyncpg `@tool` |
-| `compare_carriers` | inventory-mcp server | asyncpg `@tool` |
-| `get_restock_schedule` | inventory-mcp server | asyncpg `@tool` |
-| `get_tracking_status` | direct `@tool` | asyncpg `@tool` |
-| `place_backorder` | direct `@tool` | asyncpg `@tool` |
+| `search_products` | product-mcp 服务器 | asyncpg `@tool` |
+| `get_product_details` | product-mcp 服务器 | asyncpg `@tool` |
+| `compare_products` | product-mcp 服务器 | asyncpg `@tool` |
+| `get_trending_products` | product-mcp 服务器 | asyncpg `@tool` |
+| `get_price_history` | product-mcp 服务器 | asyncpg `@tool` |
+| `semantic_search` | 直连 `@tool`（pgvector） | asyncpg `@tool` |
+| `find_similar_products` | 直连 `@tool`（pgvector） | asyncpg `@tool` |
+| `check_stock` | inventory-mcp 服务器 | asyncpg `@tool` |
+| `get_warehouse_availability` | inventory-mcp 服务器 | asyncpg `@tool` |
+| `estimate_shipping` | inventory-mcp 服务器 | asyncpg `@tool` |
+| `compare_carriers` | inventory-mcp 服务器 | asyncpg `@tool` |
+| `get_restock_schedule` | inventory-mcp 服务器 | asyncpg `@tool` |
+| `get_tracking_status` | 直连 `@tool` | asyncpg `@tool` |
+| `place_backorder` | 直连 `@tool` | asyncpg `@tool` |
 
-## Package structure
+## 包结构
 
-Each MCP server is a standalone Python package under `agents/python/packages/`:
+每个 MCP 服务器都是 `agents/python/packages/` 下独立的 Python 包：
 
 ```
 agents/python/packages/
   mcp-product/
     pyproject.toml          # name = "ecommerce-mcp-product"
     src/ecommerce_mcp_product/
-      server.py             # FastMCP server + ASGI app
+      server.py             # FastMCP 服务器 + ASGI 应用
     tests/
   mcp-inventory/
     pyproject.toml          # name = "ecommerce-mcp-inventory"
@@ -264,42 +259,42 @@ agents/python/packages/
     tests/
 ```
 
-Both are members of the `agents/python` uv workspace. A single `uv.lock` covers the whole
-workspace; the MCP packages share resolved deps without re-pinning.
+两者都是 `agents/python` uv workspace 的成员。一份 `uv.lock` 覆盖整个 workspace；
+MCP 包共享已解析的依赖，无需重复锁定。
 
-## Publishing a server independently
+## 独立发布某个服务器
 
 ```bash
 cd agents/python
 
-# Build wheel + sdist
+# 构建 wheel + sdist
 uv build --package ecommerce-mcp-product
 uv build --package ecommerce-mcp-inventory
 
-# Publish to PyPI (or a private registry)
+# 发布到 PyPI（或私有仓库）
 uv publish dist/ecommerce_mcp_product-*.whl
 uv publish dist/ecommerce_mcp_inventory-*.whl
 ```
 
-Once published, any MCP client can install and run the server without the rest of this repo:
+发布之后，任何 MCP 客户端都可以安装并运行该服务器，而无需本仓库的其余部分：
 
 ```bash
 pip install ecommerce-mcp-product
-DATABASE_URL=postgresql://... ecommerce-mcp-product   # starts on :9000
+DATABASE_URL=postgresql://... ecommerce-mcp-product   # 在 :9000 上启动
 ```
 
-## Adding a new MCP server
+## 新增一个 MCP 服务器
 
-1. Create a new workspace package:
+1. 创建一个新的 workspace 包：
 
 ```bash
 mkdir -p agents/python/packages/mcp-<domain>/src/ecommerce_mcp_<domain>
 ```
 
-2. Add `pyproject.toml` mirroring the existing packages (name `ecommerce-mcp-<domain>`,
-   deps `mcp[cli]`, `asyncpg`, `uvicorn`, console script entry-point).
+2. 参照现有包编写 `pyproject.toml`（名称为 `ecommerce-mcp-<domain>`，
+   依赖为 `mcp[cli]`、`asyncpg`、`uvicorn`，并配置控制台脚本入口点）。
 
-3. Write `server.py` using FastMCP:
+3. 用 FastMCP 编写 `server.py`：
 
 ```python
 from mcp.server.fastmcp import FastMCP
@@ -311,30 +306,30 @@ mcp = FastMCP("my-domain-mcp", lifespan=_lifespan)
 async def my_tool(param: Annotated[str, "Description"]) -> dict:
     ...
 
-app = mcp.streamable_http_app()  # ASGI entry-point for uvicorn
+app = mcp.streamable_http_app()  # 供 uvicorn 使用的 ASGI 入口点
 ```
 
-4. Register the package in the workspace root `pyproject.toml`:
+4. 在 workspace 根 `pyproject.toml` 中注册该包：
 
 ```toml
 [tool.uv.workspace]
 members = ["packages/mcp-product", "packages/mcp-inventory", "packages/mcp-<domain>"]
 ```
 
-5. Run `uv lock` to update the shared lockfile.
+5. 运行 `uv lock` 更新共享的 lock 文件。
 
-6. Add a service to `docker-compose.yml` under the `mcp` profile using `Dockerfile.mcp`.
+6. 在 `docker-compose.yml` 的 `mcp` 档位下，用 `Dockerfile.mcp` 添加一个服务。
 
-7. Add config vars to `shared/config.py` and `.env.example`.
+7. 把配置变量加入 `shared/config.py` 与 `.env.example`。
 
-8. Wire `MCPStreamableHTTPTool` into the relevant agent factory.
+8. 把 `MCPStreamableHTTPTool` 接入相关的智能体工厂。
 
-## Using from external MCP clients
+## 从外部 MCP 客户端使用
 
-Because these are standard MCP servers, any MCP-compatible client can connect:
+由于这些是标准 MCP 服务器，任何兼容 MCP 的客户端都能连接：
 
 ```json
-// Claude Desktop — claude_desktop_config.json
+// Claude Desktop —— claude_desktop_config.json
 {
   "mcpServers": {
     "ecommerce-product": {
@@ -359,8 +354,8 @@ client = MultiServerMCPClient({
 })
 ```
 
-## Related
+## 相关内容
 
-- [`docs/architecture.md`](architecture.md) — full system architecture
-- [`docs/telemetry.md`](telemetry.md) — OTel + Langfuse observability
-- [`docs/maf-best-practices.md`](maf-best-practices.md) — MAF patterns used across all agents
+- [`docs/architecture.md`](architecture.md) —— 完整系统架构
+- [`docs/telemetry.md`](telemetry.md) —— OpenTelemetry + Langfuse 可观测性
+- [`docs/maf-best-practices.md`](maf-best-practices.md) —— 所有智能体共用的 MAF 模式

@@ -1,22 +1,11 @@
-"""Tool-level role authorization (Track A — guardrails).
+"""工具级角色授权。
 
-Adds the missing *authorization* layer: today destructive tools have an
-``approval_mode="always_require"`` human-approval gate and data-layer ownership
-filters (``WHERE u.email = $2``), but nothing checks the caller's *role* before
-the tool runs. ``requires_role`` closes that gap — it runs first (authorize),
-then MAF's approval gate runs (confirm).
+先通过 requires_role 检查角色，再进入 MAF 人工审批；订单归属过滤
+不能替代角色授权。身份从 current_user_role 读取，不由工具参数传入。
+admin 始终允许；GUARDRAILS_ENABLED 控制启用。
 
-Identity is read from the ``current_user_role`` ContextVar (set by the auth
-middleware / route deps) — never passed as a function argument, per repo
-convention. ``admin`` is always allowed (superuser). Gated by
-``GUARDRAILS_ENABLED`` so it can be disabled without a redeploy.
-
-Two forms are provided:
-
-- :func:`requires_role` — decorator for new tools (placed *under* ``@tool`` so
-  MAF still introspects the original signature via ``functools.wraps``).
-- :func:`ensure_role` — guard-clause helper returning a denial payload (or
-  ``None``) for retrofitting existing tool bodies without re-ordering decorators.
+requires_role 置于 @tool 下方，通过 wraps 保留签名；ensure_role 可在
+既有工具函数开头作为守卫，拒绝时返回结构化结果，否则返回 None。
 """
 
 from __future__ import annotations
@@ -54,10 +43,9 @@ def _denial(allowed: set[str], tool: str, role: str) -> dict[str, Any]:
 
 
 def ensure_role(*roles: str, tool: str = "tool") -> dict[str, Any] | None:
-    """Return a denial payload if the current role is not authorized, else None.
+    """当前角色未获授权时返回拒绝对象，否则返回 None。
 
-    Use as a guard clause at the top of a tool body::
-
+    工具函数开头可使用：
         denied = ensure_role("seller", "admin", tool="get_my_products")
         if denied:
             return denied
@@ -72,12 +60,9 @@ def ensure_role(*roles: str, tool: str = "tool") -> dict[str, Any] | None:
 
 
 def requires_role(*roles: str) -> Callable[[F], F]:
-    """Decorator: deny the call (structured payload) unless the role is allowed.
+    """角色未获授权时返回结构化拒绝对象的装饰器。
 
-    Place directly under ``@tool`` so MAF introspects the wrapped function's
-    real signature (``functools.wraps`` exposes ``__wrapped__`` /
-    ``__annotations__``)::
-
+    放在 @tool 下方，functools.wraps 保留原始签名和注解：
         @tool(name="get_my_products", description="...")
         @requires_role("seller", "admin")
         async def get_my_products(...): ...

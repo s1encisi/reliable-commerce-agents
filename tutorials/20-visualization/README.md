@@ -1,25 +1,27 @@
-# Chapter 20 — Workflow Visualization
+# 第 20 章 · 工作流可视化
 
-## Why this chapter
+[项目首页](../../README.md) · [教程总览](../README.md) · [术语表](../_shared/jargon-glossary.md)
 
-A workflow you can't see is hard to review and impossible to reason about on-call at 3 AM. MAF ships visualization helpers that turn any `Workflow` object into Mermaid (renders inline in GitHub markdown, issues, and PRs) or Graphviz DOT (for architecture diagrams, wikis, runbooks). Both are deterministic — the same graph always produces the same bytes — so you can commit the output and diff real changes in a PR instead of eyeballing a screenshot.
+## 本章动机
 
-This isn't just a tutorial exercise: the same pattern regenerates the diagrams for every production workflow spec in this repo (see [How this shows up in the capstone](#how-this-shows-up-in-the-capstone)), and a live variant of it drives the orchestration graph you see in the web UI while a run is in progress.
+看不见的工作流难以评审，也无法在凌晨三点的值班场景中推理。MAF 提供可视化辅助工具，可把任意 `Workflow` 对象转成 Mermaid（在 GitHub 的 markdown、issue 与 PR 中内联渲染）或 Graphviz DOT（用于架构图、wiki、运行手册）。两者都是确定性的——同一张图总是产出相同的字节——因此你可以把输出提交进仓库，在 PR 里对真实变化做 diff，而不是靠肉眼比对截图。
 
-## Prerequisites
+这并不只是教程练习：同一模式为本项目每一条生产工作流规格重新生成图（见下文「在完整项目中的落点」），而它的一个实时变体驱动着 Web 界面中运行期间可见的编排图。
 
-- Completed [Chapter 19 — Declarative Workflows](../19-declarative-workflows/)
-- No LLM calls in this chapter — no API key required, it's pure graph rendering
-- Optional: `graphviz` installed locally if you want to rasterize the `.dot` output to PNG/SVG via the `dot` CLI
+## 前置条件
 
-## The concept
+- 已完成[第 19 章 · 声明式工作流](../19-declarative-workflows/)
+- 本章不调用 LLM——无需 API 密钥，纯粹是图渲染
+- 可选：本地安装 `graphviz`，如果你想通过 `dot` 命令把 `.dot` 输出栅格化为 PNG/SVG
 
-`WorkflowViz` (Python) and the `Workflow` extension methods (.NET) walk the executor graph you built with `WorkflowBuilder`/`WorkflowBuilder<T>` and serialize it to two formats:
+## 核心概念
 
-- **Mermaid** — a `flowchart` block that GitHub renders inline, no extra tooling needed.
-- **Graphviz DOT** — a `digraph` you pipe through the `dot` CLI to get PNG/SVG for docs or wikis.
+`WorkflowViz`（Python）会遍历你用 `WorkflowBuilder` 构建的执行器图，并把它序列化为两种格式：
 
-Both are derived purely from the graph's structure (executor ids and edges), not from any specific run — so the diagram represents every possible path through the workflow, not just the one a particular input happened to take.
+- **Mermaid**——一个 `flowchart` 块，GitHub 可直接内联渲染，无需额外工具。
+- **Graphviz DOT**——一个 `digraph`，你可以通过 `dot` 命令管道处理，得到用于文档或 wiki 的 PNG/SVG。
+
+两者都纯粹从图的结构（执行器 id 与边）派生，而不来自某一次具体运行——因此这张图代表的是工作流的**所有**可能路径，而不只是某个输入恰好走过的那条。
 
 ```mermaid
 %%{init: {'theme':'base', 'themeVariables': {
@@ -47,19 +49,19 @@ flowchart LR
   class log success
 ```
 
-This is the actual `demo-pipeline` workflow rendered by this chapter's `main.py` — three executors, two edges, one deterministic diagram.
+这就是本章 `main.py` 实际渲染出的 `demo-pipeline` 工作流——三个执行器、两条边、一张确定性图。
 
 ## Python
 
-Run from the repo root using the shared `tutorials/` uv project (one `uv sync` covers every chapter):
+在仓库根目录运行，使用共享的 `tutorials/` uv 项目（一次 `uv sync` 覆盖全部章节）：
 
 ```bash
 uv sync --project tutorials
 uv run --project tutorials python tutorials/20-visualization/python/main.py
-# writes workflow.mmd + workflow.dot into tutorials/20-visualization/python/
+# 会把 workflow.mmd + workflow.dot 写入 tutorials/20-visualization/python/
 ```
 
-Source: [`python/main.py`](./python/main.py). The workflow is the same three-executor pipeline used throughout the earlier workflow chapters — uppercase, then a non-empty gate, then a logger — built with the normal `WorkflowBuilder`:
+源码：[`python/main.py`](./python/main.py)。该工作流就是前面各工作流章节一直使用的三执行器流水线——先大写，再一道非空闸门，最后记录器——用常规的 `WorkflowBuilder` 构建：
 
 ```python
 from agent_framework._workflows._viz import WorkflowViz
@@ -83,9 +85,9 @@ def render_dot() -> str:
     return WorkflowViz(build_workflow()).to_digraph()
 ```
 
-`main.py` writes both outputs to disk next to itself. The imports come from `agent_framework._workflows._viz` and `._workflow_builder` — underscore-prefixed internal modules, not the public top-level package; that's the real import path this MAF version exposes for visualization today.
+`main.py` 会把两份输出写到与自身同级的磁盘上。导入来自 `agent_framework._workflows._viz` 与 `._workflow_builder`——带下划线前缀的内部模块，而非公开的顶层包；这就是当前这个 MAF 版本为可视化暴露的真实导入路径。
 
-Rendered Mermaid (this is `workflow.mmd`, byte-for-byte):
+渲染出的 Mermaid（即 `workflow.mmd`，逐字节一致）：
 
 ```
 flowchart TD
@@ -96,7 +98,7 @@ flowchart TD
   validate --> log;
 ```
 
-Rendered DOT (this is `workflow.dot`, byte-for-byte):
+渲染出的 DOT（即 `workflow.dot`，逐字节一致）：
 
 ```dot
 digraph Workflow {
@@ -112,78 +114,37 @@ digraph Workflow {
 }
 ```
 
-## .NET
+## 常见坑
 
-```bash
-cd tutorials/20-visualization/dotnet
-dotnet run
-```
+- **节点 id 必须唯一。** 两个执行器共用同一个 `id` 会在 `WorkflowBuilder.build()` 时失败（例如两个 `ValidateExecutor()` 实例都默认 `id="validate"`），而不是在可视化阶段失败——图只有在构建成功之后才会被渲染，因此可视化问题很少真的是可视化问题。
+- **Mermaid 是 GitHub 原生支持的，DOT 需要 Graphviz。** 提交 `.mmd` 文件后，GitHub 会在 issue、PR 与 wiki 中内联渲染，无需任何额外工具。`.dot` 文本是可移植的，但要把它变成 PNG/SVG，需要本地或 CI 安装 `graphviz`。
+- **确定性取决于你的构建器，而不只是渲染器。** `WorkflowViz` 渲染图交给它的任何边顺序。如果你自己的代码通过遍历 `set` 或 `dict`（没有稳定顺序）来添加边，那么即使**逻辑**图没有变化，渲染输出也可能在多次运行之间发生抖动——构建图时请遍历有序集合（列表、元组）。
+- **MAF v1.0 的空 `__init__.py` 打包缺陷已在上游修复，但本章仍做防御性修补。** `tutorials/_shared/maf_bootstrap.py::bootstrap()` 会在任何教程导入该包之前，把公开 API 重新导出进 `agent_framework/__init__.py`（如果它为空或带有更早的引导补丁标记）——每一章的 `main.py` 与测试都会先调用它。这与 `agents/python/patch_maf.py` 不同，后者是生产应用对同一防御性修复的副本；面对已固定的 1.14.0 wheel（随附真实 `__init__.py`），两者实际上都是空操作，但都被保留而非移除。不存在 `shared/maf.py`。
 
-[`dotnet/Program.cs`](./dotnet/Program.cs) builds the same three-executor pipeline as the Python side and renders it both ways:
+## 测试
 
-```csharp
-using Microsoft.Agents.AI.Workflows;
+[`python/tests/test_visualization.py`](./python/tests/test_visualization.py) 在完全不调用 LLM 的情况下覆盖：
 
-string mermaid = WorkflowVisualizer.ToMermaidString(workflow);
-string dot     = WorkflowVisualizer.ToDotString(workflow);
-
-File.WriteAllText("workflow.mmd", mermaid);
-File.WriteAllText("workflow.dot", dot);
-```
-
-Note the shape: these are **static methods on `WorkflowVisualizer`**, not extension methods on `Workflow`. `workflow.ToMermaidString()` does not compile, which matters because it is what most people try first — Python wraps the workflow in a `WorkflowViz` object, and the .NET name reads like an extension.
-
-This chapter previously shipped a .NET *stub* that printed API usage instead of running any, and the usage it printed was the extension-method form that does not compile. Printed sample code is never compiled, so nothing caught it. Unlike Chapter 16, there was no SDK gap to be blocked on: `WorkflowVisualizer` has been in `Microsoft.Agents.AI.Workflows` since 1.1.0.
-
-## Side-by-side differences
-
-| Aspect | Python | .NET |
-|--------|--------|------|
-| Mermaid | `WorkflowViz(workflow).to_mermaid()` | `workflow.ToMermaidString()` |
-| DOT | `WorkflowViz(workflow).to_digraph()` | `workflow.ToDotString()` |
-| Import surface | Internal module (`agent_framework._workflows._viz`) | Public extension methods on `Workflow` |
-| Bitmap export | Pipe `.dot` text through the `dot` CLI | Pipe `.dot` text through the `dot` CLI (same approach both languages) |
-
-## Gotchas
-
-- **Node IDs must be unique.** Two executors sharing an `id` fail at `WorkflowBuilder.build()` time (e.g., two `ValidateExecutor()` instances both defaulting to `id="validate"`), not at visualization time — the diagram only renders once the build already succeeded, so a visualization bug is rarely actually a visualization bug.
-- **Mermaid is GitHub-native, DOT needs Graphviz.** Commit `.mmd` files and GitHub renders them inline in issues, PRs, and wikis with zero extra tooling. The `.dot` text is portable, but turning it into PNG/SVG requires a local or CI install of `graphviz`.
-- **Determinism depends on your builder, not just the renderer.** `WorkflowViz` renders whatever edge order the graph gives it. If your own code adds edges by iterating a `set` or `dict` without a stable order, the rendered output can shuffle between runs even though the *logical* graph didn't change — iterate over ordered collections (lists, tuples) when building the graph.
-- **The MAF v1.0 empty-`__init__.py` packaging bug is fixed upstream, but this chapter still patches defensively.** `tutorials/_shared/maf_bootstrap.py::bootstrap()` re-exports the public API into `agent_framework/__init__.py` if it's empty (or carries an older bootstrap patch marker) before any tutorial imports the package — every chapter's `main.py` and tests call it first. This is distinct from `agents/python/patch_maf.py`, which is the production app's copy of the same defensive fix; both are effectively no-ops against the pinned 1.14.0 wheel (which ships a real `__init__.py`), but are left in place rather than removed. There is no `shared/maf.py`.
-
-## Tests
-
-
-[`python/tests/test_visualization.py`](./python/tests/test_visualization.py) covers, without any LLM call:
-
-- Mermaid output is non-empty and starts with the `flowchart` directive
-- All three executor ids and both edges appear in the Mermaid output
-- Mermaid rendering is deterministic (`render_mermaid() == render_mermaid()`)
-- DOT output starts with `digraph` and references every node
-- DOT rendering is deterministic
-- `build_workflow()` succeeds
+- Mermaid 输出非空，且以 `flowchart` 指令开头
+- 三个执行器 id 与两条边都出现在 Mermaid 输出中
+- Mermaid 渲染是确定性的（`render_mermaid() == render_mermaid()`）
+- DOT 输出以 `digraph` 开头，并引用每一个节点
+- DOT 渲染是确定性的
+- `build_workflow()` 构建成功
 
 ```bash
 uv run --project tutorials pytest tutorials/20-visualization/python/tests -v
 ```
 
-The .NET side ships [`dotnet/tests/VisualizationTests.cs`](./dotnet/tests/VisualizationTests.cs) — eleven tests, no LLM:
+## 在完整项目中的落点
 
-```bash
-cd tutorials/20-visualization/dotnet && dotnet test tests/Visualization.Tests.csproj
-```
+两套互补机制，一套静态、一套实时：
 
-They compare rendered output against the actual graph topology rather than checking a non-empty string came back: a diagram listing the right nodes and the wrong arrows is worse than no diagram, because it is confidently wrong. `Rendering_Is_Deterministic` guards the stated use case — committing diagrams and diffing them in PRs only works if identical graphs render byte-identically.
+- **静态、构建期。** [`scripts/visualize_workflows.py`](../../scripts/visualize_workflows.py) 遍历 `agents/python/config/workflows/*.yaml` 下的每一份工作流规格，通过 `shared.workflow_loader.load_workflows_directory` 加载，并用本章讲授的同一个 `WorkflowViz` API 渲染（`scripts/visualize_workflows.py:34`）。它写出 `docs/workflows/{name}.mmd` 与 `{name}.dot`，其 `--check` 标志会在内容漂移时让 CI 失败——缺失文件、内容与规格不再匹配、或存在没有对应规格的孤立输出——相关逻辑见 `scripts/visualize_workflows.py:52`。目前它只渲染一条工作流 `text-pipeline`（`docs/workflows/text-pipeline.mmd`），生产工作流（`return-replace`、`pre-purchase`）被记为后续落地。
+- **实时、运行期。** `web/src/components/chat/orchestration-graph.tsx` 从 `GET /api/orchestration/modes/{name}/graph`（`agents/python/orchestrator/routes/orchestration.py:52`）获取某个模式的静态 `graph_mermaid()` 输出，在客户端用项目统一的 Mermaid 配色重新渲染，随后在运行期间随 SSE `node` 事件到达叠加实时状态——活跃、完成、出错三类执行器获得不同的节点样式（`web/src/components/chat/orchestration-graph.tsx:20`）。把实时 `node_id` 对应到图上的节点，依赖一条刻意的后端约定：每个模式的 `graph_mermaid()` 都用真实执行器 id（把短横线换成下划线）作为 Mermaid 节点 id，该约定记录在 `agents/python/orchestrator/modes/workflow_mode.py:166` 的 `PrePurchaseMode.graph_mermaid()` 上。这与 `visualize_workflows.py` 是两条不同的代码路径——一条在构建期渲染固定规格并在 CI 中做 diff，另一条在请求期渲染某个模式的固定拓扑并让它随实时运行产生动画。
 
-## How this shows up in the capstone
+## 下一步
 
-Two complementary mechanisms, one static and one live:
-
-- **Static, build-time.** [`scripts/visualize_workflows.py`](../../scripts/visualize_workflows.py) walks every workflow spec under `agents/python/config/workflows/*.yaml`, loads each via `shared.workflow_loader.load_workflows_directory`, and renders it with the exact same `WorkflowViz` API this chapter teaches (`scripts/visualize_workflows.py:36`). It writes `docs/workflows/{name}.mmd` and `{name}.dot`, and its `--check` flag fails CI on drift — missing files, content that no longer matches the spec, or orphaned output with no matching spec — when `WORKFLOW_VISUALIZATION_ON_BUILD=true` (`scripts/visualize_workflows.py:71`). Today it renders one workflow, `text-pipeline` (`docs/workflows/text-pipeline.mmd`), with production workflows (`return-replace`, `pre-purchase`) documented as landing later.
-- **Live, runtime.** `web/src/components/chat/orchestration-graph.tsx` fetches a mode's static `graph_mermaid()` output from `GET /api/orchestration/modes/{name}/graph` (`agents/python/orchestrator/routes/orchestration.py:63`) and re-renders it client-side with the house Mermaid palette, then overlays live state as SSE `node` events arrive during a run — active, done, and errored executors get different node classes (`web/src/components/chat/orchestration-graph.tsx:20`). Correlating a live `node_id` to a diagram node relies on a deliberate backend convention: every mode's `graph_mermaid()` uses the real executor id with dashes swapped for underscores as the Mermaid node id, documented on `PrePurchaseMode.graph_mermaid()` in `agents/python/orchestrator/modes/workflow_mode.py:164`. This is a different code path from `visualize_workflows.py` — one renders a fixed spec at build time and diffs it in CI, the other renders a mode's fixed topology at request time and animates it against a live run.
-
-## What's next
-
-- Next chapter: [Chapter 20b — DevUI](../20b-devui/)
-- Full source: [`python/`](./python/) · [`dotnet/`](./dotnet/)
-- Shared: [Mermaid style guide](../_shared/mermaid-style-guide.md)
+- 下一章：[第 20b 章 · DevUI](../20b-devui/)
+- 完整源码：[`python/`](./python/)
+- 共享资料：[Mermaid 风格指南](../_shared/mermaid-style-guide.md)

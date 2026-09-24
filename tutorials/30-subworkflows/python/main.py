@@ -1,17 +1,15 @@
 """
-MAF v1 — Chapter 30: Subworkflows (Python)
+MAF v1 — 第 30 章：子工作流（Python）
 
-Two small workflows. The inner one, "find replacement", validates a
-proposed replacement product against a toy catalog, checks a toy stock
-count, and approves or rejects it. The outer one, "process return", uses
-the inner workflow as a single step of its own graph via MAF's built-in
-``WorkflowExecutor`` — a Workflow wrapped so it behaves as an Executor.
+两个小工作流。内层那个叫「find replacement」，它拿待替换商品去玩具级
+目录里校验、查玩具级库存数，然后通过或拒绝。外层那个叫「process return」，
+借助 MAF 内置的 ``WorkflowExecutor``（把 Workflow 包成 Executor）把内层
+工作流当作自己图里的一个步骤来用。
 
-No LLM — both workflows are pure, deterministic graph logic (same
-LLM-free precedent as Chapter 09), so the mechanics of nesting stay front
-and center.
+不涉及 LLM —— 两个工作流都是纯粹的确定性图逻辑（与第 09 章同样以无 LLM
+为先例），这样嵌套本身的机制才能成为焦点。
 
-Run:
+运行：
     python tutorials/30-subworkflows/python/main.py
 """
 
@@ -36,7 +34,7 @@ from agent_framework import (  # noqa: E402
     handler,
 )
 
-# ─────────────── Toy catalog data ───────────────
+# ─────────────── 玩具级目录数据 ───────────────
 
 CATALOG: dict[str, str] = {
     "sku-mug-red": "Ceramic Mug — Red",
@@ -46,17 +44,17 @@ CATALOG: dict[str, str] = {
 
 STOCK: dict[str, int] = {
     "sku-mug-red": 12,
-    "sku-mug-blue": 0,  # in the catalog, but out of stock
+    "sku-mug-blue": 0,  # 在目录里，但没有库存
     "sku-plate-green": 5,
 }
 
 
-# ─────────────── Messages ───────────────
+# ─────────────── 消息类型 ───────────────
 
 
 @dataclass
 class ReplacementRequest:
-    """Input to the inner 'find replacement' workflow."""
+    """内层「find replacement」工作流的输入。"""
 
     order_id: str
     requested_product_id: str
@@ -64,7 +62,7 @@ class ReplacementRequest:
 
 @dataclass
 class ReplacementResult:
-    """Output of the inner 'find replacement' workflow."""
+    """内层「find replacement」工作流的输出。"""
 
     order_id: str
     product_id: str
@@ -74,21 +72,21 @@ class ReplacementResult:
 
 @dataclass
 class ReturnRequest:
-    """Input to the outer 'process return' workflow."""
+    """外层「process return」工作流的输入。"""
 
     order_id: str
     requested_product_id: str
 
 
-# ─────────────── Inner workflow: find replacement ───────────────
+# ─────────────── 内层工作流：查找替代品 ───────────────
 #
-# validate_catalog -> check_stock -> approve, with two short-circuit exits
-# (not in catalog / out of stock) that both yield_output a rejected
-# ReplacementResult directly, mirroring Ch09's ValidateExecutor pattern.
+# validate_catalog -> check_stock -> approve，带两条短路出口
+# （目录中不存在 / 无库存），两者都直接 yield_output 一个被拒绝的
+# ReplacementResult，与第 09 章的 ValidateExecutor 模式一致。
 
 
 class _ValidateCatalogExecutor(Executor):
-    """Step 1: does the requested product exist in the catalog at all?"""
+    """第 1 步：请求的商品在目录里到底存不存在？"""
 
     def __init__(self) -> None:
         super().__init__(id="validate_catalog")
@@ -113,7 +111,7 @@ class _ValidateCatalogExecutor(Executor):
 
 
 class _CheckStockExecutor(Executor):
-    """Step 2: is there any stock left for the (now known-to-exist) product?"""
+    """第 2 步：（现已确认存在的）商品还有库存吗？"""
 
     def __init__(self) -> None:
         super().__init__(id="check_stock")
@@ -138,7 +136,7 @@ class _CheckStockExecutor(Executor):
 
 
 class _ApproveExecutor(Executor):
-    """Step 3: both checks passed — approve the replacement."""
+    """第 3 步：两项检查都通过 —— 批准这次替换。"""
 
     def __init__(self) -> None:
         super().__init__(id="approve")
@@ -161,11 +159,11 @@ class _ApproveExecutor(Executor):
 
 
 def build_find_replacement_workflow() -> Workflow:
-    """Build a fresh instance of the inner 'find replacement' workflow.
+    """构建一个全新的内层「find replacement」工作流实例。
 
-    A fresh instance matters: ``WorkflowExecutor`` docs warn against sharing
-    the same ``Workflow`` (and its executor instances) across more than one
-    wrapper, so this is a factory, not a module-level singleton.
+    全新实例很重要：``WorkflowExecutor`` 的文档警告不要把一个
+    ``Workflow``（及其执行器实例）共享给多个包装器，所以这里是工厂
+    函数，而不是模块级单例。
     """
     validate = _ValidateCatalogExecutor()
     stock = _CheckStockExecutor()
@@ -178,14 +176,14 @@ def build_find_replacement_workflow() -> Workflow:
     )
 
 
-# ─────────────── Outer workflow: process return ───────────────
+# ─────────────── 外层工作流：处理退货 ───────────────
 #
-# receive_return -> find_replacement (the inner workflow, wrapped as a
-# single Executor node via WorkflowExecutor) -> finalize_return.
+# receive_return -> find_replacement（内层工作流，经 WorkflowExecutor
+# 包装成单个 Executor 节点）-> finalize_return。
 
 
 class _ReceiveReturnExecutor(Executor):
-    """Translates the outer request into the inner workflow's input type."""
+    """把外层请求转换成内层工作流的输入类型。"""
 
     def __init__(self) -> None:
         super().__init__(id="receive_return")
@@ -198,7 +196,7 @@ class _ReceiveReturnExecutor(Executor):
 
 
 class _FinalizeReturnExecutor(Executor):
-    """Turns the sub-workflow's ReplacementResult into the outer workflow's final text output."""
+    """把子工作流的 ReplacementResult 转成外层工作流的最终文本输出。"""
 
     def __init__(self) -> None:
         super().__init__(id="finalize_return")
@@ -217,16 +215,15 @@ class _FinalizeReturnExecutor(Executor):
 
 
 def build_process_return_workflow() -> Workflow:
-    """Build the outer 'process return' workflow, nesting a fresh inner workflow inside it."""
+    """构建外层「process return」工作流，并在其中嵌套一个全新的内层工作流。"""
     receive = _ReceiveReturnExecutor()
     find_replacement = WorkflowExecutor(
         build_find_replacement_workflow(),
         id="find_replacement",
-        # Default (False): the sub-workflow's yield_output(ReplacementResult)
-        # is forwarded as a regular send_message() to whatever this node's
-        # outbound edge points at — here, finalize_return. Setting this True
-        # would instead make the sub-workflow's output the outer workflow's
-        # own terminal output, skipping finalize_return entirely.
+        # 默认值（False）：子工作流 yield_output(ReplacementResult) 的结果
+        # 会作为一次普通的 send_message() 转发给本节点出边所指向的目标 ——
+        # 这里是 finalize_return。若置为 True，则子工作流的输出会直接成为
+        # 外层工作流自己的终止输出，从而完全跳过 finalize_return。
         allow_direct_output=False,
     )
     finalize = _FinalizeReturnExecutor()
@@ -238,11 +235,11 @@ def build_process_return_workflow() -> Workflow:
     )
 
 
-# ─────────────── Run helpers ───────────────
+# ─────────────── 运行辅助函数 ───────────────
 
 
 async def run_find_replacement(order_id: str, requested_product_id: str) -> ReplacementResult | None:
-    """Run the inner workflow standalone and return its single ReplacementResult output."""
+    """单独运行内层工作流，返回它那唯一一条 ReplacementResult 输出。"""
     workflow = build_find_replacement_workflow()
     request = ReplacementRequest(order_id=order_id, requested_product_id=requested_product_id)
     async for event in workflow.run(request, stream=True):
@@ -252,7 +249,7 @@ async def run_find_replacement(order_id: str, requested_product_id: str) -> Repl
 
 
 async def run_process_return(order_id: str, requested_product_id: str) -> list[str]:
-    """Run the outer workflow (which nests the inner one) and return every yielded output."""
+    """运行外层工作流（其中嵌套了内层工作流），返回所有被 yield 的输出。"""
     workflow = build_process_return_workflow()
     request = ReturnRequest(order_id=order_id, requested_product_id=requested_product_id)
     outputs: list[str] = []
@@ -264,9 +261,9 @@ async def run_process_return(order_id: str, requested_product_id: str) -> list[s
 
 async def main() -> None:
     scenarios = [
-        ("R-1001", "sku-mug-red"),  # in catalog, in stock -> approved
-        ("R-1002", "sku-mug-blue"),  # in catalog, no stock -> rejected
-        ("R-1003", "sku-unknown"),  # not in catalog at all -> rejected
+        ("R-1001", "sku-mug-red"),  # 在目录中且有库存 -> 批准
+        ("R-1002", "sku-mug-blue"),  # 在目录中但无库存 -> 拒绝
+        ("R-1003", "sku-unknown"),  # 根本不在目录中 -> 拒绝
     ]
     for order_id, product_id in scenarios:
         print(f"--- Return {order_id}: requested replacement {product_id!r} ---")

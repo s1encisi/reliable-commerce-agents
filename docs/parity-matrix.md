@@ -1,88 +1,65 @@
-# Python vs .NET Feature Parity Matrix
+# 能力矩阵
 
-This repo ships two complete backends over the same domain: `agents/python/` (Microsoft
-Agent Framework's Python SDK) and `agents/dotnet/` (the .NET/C# SDK). Development here is
-**Python-first** — new capabilities land in Python first, and the .NET backend follows on a
-prioritized backlog rather than in lockstep. This matrix replaces an earlier, less accurate
-"feature-parity" claim in the root `README.md` with an honest, per-concept breakdown of what's
-actually implemented on each side today, verified directly against the code (not carried
-forward from an older description).
+本文件按能力逐项说明可靠电商多智能体平台当前的实现覆盖情况。矩阵中的每一行都直接对照代码核实过，而不是沿用更早的描述。
 
-See also [`docs/agent-audit-matrix.md`](agent-audit-matrix.md) for the security-specific
-breakdown (injection defense, role enforcement, eval/red-team coverage) — this document covers
-the wider feature surface; the two overlap on guardrails and cross-link rather than duplicate.
+各智能体安全维度的专门拆解（注入防御、角色强制、评测/红队覆盖）见 [`docs/agent-audit-matrix.md`](agent-audit-matrix.md) —— 本文件覆盖更广的功能面，两者在护栏部分有重叠，互相交叉引用而不重复描述。
 
-**Status legend**
+**状态图例**
 
-| Status | Meaning |
+| 状态 | 含义 |
 |--------|---------|
-| Full | Implemented and wired into the live request path on both sides |
-| Partial | Present but incomplete, or present in one form and not the equivalent form (noted inline) |
-| Python-first — planned | Python has it; .NET doesn't yet, and it's on the backlog below |
-| Not supported by MAF .NET | Blocked on the underlying .NET SDK, not a gap this repo can close alone |
-
-**Priority** reflects the backlog order in [issue #11](https://github.com/nitin27may/e-commerce-agents/issues/11)'s
-linked gaps — P1 first.
+| 已实现 | 已落地并接入线上请求路径 |
+| 部分实现 | 已具备但不完整（行内已注明） |
+| 计划中 | 尚未实现，已列入后续规划 |
+| 设计如此 | 有意不实现，并已在行内说明理由 |
 
 ---
 
-## Matrix
+## 矩阵
 
-| # | Concept | Python | .NET | Status | Priority | Issue |
-|---|---------|--------|------|--------|----------|-------|
-| 1 | Middleware / context-provider pipeline attached to agents | `shared/middleware.py`'s `build_specialist_middleware()` wired into every specialist's `Agent(...)` construction | `Shared/Agents/SpecialistPipeline.cs` composes `AgentRunLogger`, `ToolAuditMiddleware`, and `PiiRedactor` via `AIAgentBuilder`'s `.Use(...)` pipeline (agent-run + function-invocation seams, MAF .NET 1.18+); `ContextEnricher` is attached via a new `EcommerceContextProvider : AIContextProvider` on `ChatClientAgentOptions.AIContextProviders`. `SpecialistAgentFactory.Create()` applies both whenever a caller passes its `IServiceProvider`, which all 6 agent-construction call sites (5 specialists + orchestrator) now do | Full | — | [#12](https://github.com/nitin27may/e-commerce-agents/issues/12) (closed) |
-| 2 | MCP server protocol | Two real FastMCP servers (`packages/mcp-product`, `packages/mcp-inventory`) — streamable-HTTP transport, real JSON-RPC | `ECommerceAgents.Mcp` now uses the official `ModelContextProtocol.AspNetCore` SDK — real JSON-RPC over streamable HTTP (`MapMcp("/mcp")`), `[McpServerToolType]`/`[McpServerTool]` tools, verified live (`initialize` + `tools/list` + `tools/call` over the wire) and via an end-to-end `McpClient` test | Full | — | [#13](https://github.com/nitin27may/e-commerce-agents/issues/13) (closed) |
-| 3 | Streaming chat to specialists (`/message:stream`) | `shared/agent_host.py` exposes both `/message:send` and `/message:stream` (SSE) on every specialist; `orchestrator/agent.py`'s `call_specialist_agent` consumes the specialist's stream and forwards live `event: delta` frames while the tool call is in flight | `AgentHost.cs` now maps `POST /message:stream` on every specialist (`RunAgentWithHistoryStreamingAsync`); `A2AClient.StreamAsync` consumes it; `OrchestratorTools.CallSpecialistAgent` forwards each delta into a request-scoped `Channel<string>` (`RequestContext.StreamScope`, the .NET analog of Python's `current_stream_queue`) that `ChatRoutes.StreamAsync` drains concurrently into `event: delta` frames on the outer SSE response — same live-preview behavior as Python's `tool` mode. Scoped to the `tool` orchestration mode only; .NET has no other orchestration modes to extend this to (see rows 11-13) | Full | — | [#14](https://github.com/nitin27may/e-commerce-agents/issues/14) (closed) |
-| 4 | Inbound prompt-injection detection | `shared/guardrails/injection_middleware.py`, attached via the shared middleware pipeline | `Shared/Guardrails/Sanitize.cs` (patterns ported verbatim) + `SpecialistPipeline`'s combined guardrail gate, built on the `AIAgentBuilder.Use(runFunc, streamingFunc)` seam so it can fully short-circuit before the chat client. Observe-only by default (flags via `RequestContext.CurrentGuardrailFlags`); `GUARDRAILS_BLOCK_ON_INJECTION` escalates to a hard refusal, same as Python | Full | — | [#15](https://github.com/nitin27may/e-commerce-agents/issues/15) (closed) |
-| 5 | Stored-content sanitization (tool results re-entering the model) | `shared/guardrails/output_middleware.py` | `Shared/Guardrails/OutputSanitizer.cs` — reflection-based recursive walk of a tool's returned `record` (the .NET twin of Python's dict-key-based `neutralize_value`, since .NET tools return strongly-typed records, not dicts), gated by a new `SanitizeToolsConfig.SanitizeTools` allowlist (tool name → property names) covering the same three specialists Python's table does, wired into the function-invocation seam alongside `ToolAuditMiddleware` | Full | — | [#15](https://github.com/nitin27may/e-commerce-agents/issues/15) (closed) |
-| 6 | Output moderation (self-harm / hate / violence phrase screening) | `shared/guardrails/moderation.py` + `moderation_middleware.py` | `Shared/Guardrails/Moderation.cs` (patterns ported verbatim), checked on the final response text by the same combined guardrail gate as row 4. `OUTPUT_MODERATION_MODE=enforce` replaces a non-streaming response; a streamed response can only be flagged post-hoc (chunks already on the wire) — same documented trade-off as Python | Full | — | [#15](https://github.com/nitin27may/e-commerce-agents/issues/15) (closed) |
-| 7 | Step recorder → live agentic timeline | `shared/agent_observability.py`'s `StepRecorderMiddleware`, attached to every agent, drained per-request into SSE `event: step` frames and the `/runs` UI | `SpecialistPipeline`'s `RecordSteps` stage (function-invocation seam, unconditional like Python's) appends one `ExecutionStep` per tool call to a new `RequestContext.CurrentSteps`. A specialist returns its own steps over A2A (`AgentResponse.Steps` on `/message:send`; an `event: steps` bulk SSE frame on `/message:stream`); `A2AClient` merges them into the orchestrator's own timeline, tagged with the specialist's name. `ChatRoutes` now calls the previously-unused `UsageRecorder.LogExecutionStepAsync()` per step after persisting the turn, and `StreamAsync` emits one `event: step` SSE frame per step (same wire shape `web/src/lib/api.ts`'s `AgentStep` parser already expects) — so `/runs` and the live timeline now populate for the .NET backend too | Full | — | [#16](https://github.com/nitin27may/e-commerce-agents/issues/16) (closed) |
-| 8 | Fan-out/fan-in + sequential HITL-gated workflow construction | `workflows/pre_purchase.py` and `workflows/return_replace.py` both use MAF's `WorkflowBuilder` — real executor graphs; `return_replace.py`'s HITL gate uses `ctx.request_info` to pause | Both `PrePurchaseWorkflow.cs` and `ReturnAndReplaceWorkflow.cs` now build real `WorkflowBuilder` graphs (`Microsoft.Agents.AI.Workflows` 1.18.0), executor ids matching Python's 1:1. `PrePurchaseWorkflow`'s fan-in barrier collects the three upstream messages one at a time (MAF delivers them separately, not batched) via a `MergeStates` merge, since .NET executors can't share one mutable state object across parallel branches the way the old `Task.WhenAll` version did. `ReturnAndReplaceWorkflow`'s HITL gate uses a `RequestPort` (MAF .NET has no `ctx.request_info`-equivalent ad-hoc pause from inside an arbitrary executor — pausing requires a dedicated port node), with a `GateDecisionExecutor` routing to the port or straight past it by explicit `targetId` depending on order value. Python's two-call `execute()`/resume-via-`responses={...}` contract maps to one long-lived `StreamingRun` cached across the pause (verified empirically before implementing: break out of the event stream on `RequestInfoEvent` without disposing the run, later call `SendResponseAsync` and open a fresh `WatchStreamAsync()` on the same run — resumes correctly), keyed by order id so one workflow instance can have multiple orders paused concurrently. One deliberate improvement over Python: the resumed state keeps the full original `WorkflowState` object rather than Python's narrower `ReturnApprovalRequest`-only rehydration, so `return_id`/`replacement_products`/`user_email` survive the pause where Python's don't. Both stacks now wire these to live routes: Python registers them in `orchestrator/modes/`, .NET in `ModeRegistry` (`PrePurchaseMode`, `ReturnReplaceMode`). .NET additionally checkpoints through MAF's own `ICheckpointStore` and can resume a paused run **from storage** rather than from a live in-process object, so a pending approval survives an orchestrator restart | Full | — | [#17](https://github.com/nitin27may/e-commerce-agents/issues/17) (closed) |
-| 9 | Human-in-the-loop as middleware | `shared/hitl.py` intercepts five destructive tools at the middleware layer, independent of each tool's own body | `HitlGate` is now a real interception layer, wired into `SpecialistPipeline`'s function-invocation pipeline (the same seam `ToolAuditMiddleware`/`OutputSanitizer` use) — `CancelOrder`/`ModifyOrder`/`PlaceBackorder` no longer know or need to know they're gated; a gated call is short-circuited before the tool method ever runs, matching Python's "don't call `call_next()`" exactly, with the same generic `{status, message, request_id}` result shape Python returns (rather than trying to preserve each tool's typed result for the pending case). Also fixes a real bug found during the port: the old call-site wrapper failed *open* on a DB error — contradicting Python's own fail-closed behavior — now fails closed | Full | — | [#17](https://github.com/nitin27may/e-commerce-agents/issues/17) (closed) |
-| 10 | Shared tool library | `shared/tools/` — 8 modules, 1,473 lines, imported by whichever specialists need them (`cart_tools.py`, `return_tools.py`, `seller_tools.py`, `loyalty_tools.py`, `inventory_tools.py`, `user_tools.py`, `memory_tools.py`, `pricing_tools.py`) | `Shared/Tools/` now holds the cross-cutting modules — `ProductLookupTools`, `UserProfileTools`, `StockLookupTools`, `PriceHistoryTools`, `LoyaltyTools`, `ReturnTools` — registered by whichever specialists need them, the same shape as Python's `shared/tools/`. Domain-specific logic stays in each specialist's own `Tools/` folder on both sides | Full | — | [#18](https://github.com/nitin27may/e-commerce-agents/issues/18) |
-| 11 | Handoff orchestration | `orchestrator/handoff.py`'s `HandoffBuilder` mesh over `RemoteSpecialistChatClient` | `Modes/HandoffMode.cs` — a real `AgentWorkflowBuilder.CreateHandoffBuilderWith` mesh. It was previously a hand-rolled router over the A2A client, because MAF's handoff orchestration takes `AIAgent` participants and a specialist lives behind an HTTP hop; `RemoteSpecialistChatClient` is the adapter that closes that gap — an `IChatClient` whose "model" is the far side of an A2A call, and the direct twin of Python's `shared/remote_agent.py`. Both stacks now start from a **tool-free triage agent**: seeding the mesh with the tool-calling orchestrator meant it routed *and* answered instead of handing off (23,637 characters from `orchestrator` with no specialist speaking at all) | Full | — | [#19](https://github.com/nitin27may/e-commerce-agents/issues/19) |
-| 12 | Group chat orchestration | `workflows/group_chat.py` — two agent panelists + a moderator | `Modes/GroupChatMode.cs` — same two panelists and moderator, same prompts, same sequential-transcript shape | Full | — | [#19](https://github.com/nitin27may/e-commerce-agents/issues/19) |
-| 13 | Magentic orchestration | **Not present.** `orchestrator/modes/` holds `base`, `tool_router`, `handoff_mode`, `workflow_mode` and `group_chat_mode` — there is no `magentic_mode.py`; an earlier version of this row cited one | Not present. MAF .NET ships `MagenticWorkflowBuilder`, so this is unbuilt rather than unavailable | Neither stack — not a parity gap | — | [#19](https://github.com/nitin27may/e-commerce-agents/issues/19) |
-| 14 | Eval harness | `evals/harness.py`'s `ProductionRunner`, real scorers, committed baselines, CI-gated smoke suite | Not present | Python-first — planned | P3 | [#19](https://github.com/nitin27may/e-commerce-agents/issues/19) |
-| 15 | Long-term memory — write path | `shared/tools/memory_tools.py` — agent-callable save/update tools | `Shared/Tools/MemoryTools.cs` — `StoreMemory` and `RecallMemories`, registered on `product-discovery` and `review-sentiment` exactly as Python registers them, alongside the existing read paths (`ContextEnricher`, `ProfileRoutes`). Identity comes from `RequestContext`, so the model cannot write onto another user's profile | Partial | P3 | [#19](https://github.com/nitin27may/e-commerce-agents/issues/19) |
-| 16 | Tutorial chapter test coverage (`tutorials/*/dotnet/`) | 32 chapters ship code, all with tests (non-integration suite green in CI) | 31 chapters ship code, all with tests. Not ported: ch20b — `Microsoft.Agents.AI.DevUI` is prerelease-only and this repo pins 1.1.0 stable. Ch16's .NET is a documented status stub (Magentic is Python-only in MAF v1) whose tests are a tripwire over the shipped assembly. Ch21 is planned on both sides. | Parity | — | [#20](https://github.com/nitin27may/e-commerce-agents/issues/20) |
-| 17 | Server-side grounding | `shared/grounding/{ledger,extractor,verifier,middleware}.py` — three tiers (per-request tool-result ledger, batched DB lookup, consistency check), `GROUNDING_MODE` `off`/`observe`/`annotate`/`enforce` | `Shared/Grounding/{ClaimExtractor,GroundingVerifier}.cs` with the DB and consistency tiers and the same `off`/`observe`/`annotate` modes. **No ledger tier**: Python records facts from tool results inside the *specialist* processes, so an orchestrator-side port needs them carried back over A2A. Prose figures are instead checked against the DB rows the answer's own cards cite. Python's `enforce` is **refused at startup** rather than silently behaving like `annotate` | Partial | P2 | [#33](https://github.com/nitin27may/e-commerce-agents/issues/33) |
-| 18 | Idempotency on money paths | `shared/idempotency.py` + `idempotency_keys`, applied to `initiate_return`, `process_refund`, `execute_approved_action` and checkout | `Shared/Idempotency/IdempotencyGuard.cs` over the same table, applied at the same four sites. Reserve via `ON CONFLICT DO NOTHING`, replay a completed reservation, refuse a live duplicate, reclaim one older than 60s, release on failure | Full | — | — |
-| 19 | Rate limiting | `shared/rate_limit.py` — Redis sliding window on both chat routes, keyed by user and by IP for anonymous traffic | `Shared/RateLimiting/SlidingWindowRateLimiter.cs` — the same Lua script, applied to both chat routes via an endpoint filter. Fails open | Full | — | — |
-| 20 | Cost estimation and budget ceiling | `shared/cost.py` + `cost_budget_middleware.py`, `COST_BUDGET_MODE` default `observe` | `Shared/Cost/CostEstimator.cs` plus a ceiling in `SpecialistPipeline`, same default | Full | — | — |
-| 21 | Telemetry depth | `shared/telemetry.py` — traces, metrics and logs to Aspire; auto-instrumentation for httpx, asyncpg and OpenAI; `invoke_agent` GenAI span convention; `trace_id` correlated into `usage_logs`. Emits one custom instrument this repo owns — `ecommerce.llm.cost.usd`, plus tokens split by direction, from the same per-turn estimate the budget ceiling already computes. Everything else is auto-instrumentation | `Shared/Telemetry/TelemetrySetup.cs` — traces, metrics and logs to Aspire; auto-instrumentation for ASP.NET Core, `HttpClient` and Npgsql; same `invoke_agent` convention and session/conversation enrichment; the same `ecommerce.llm.cost.usd` and `ecommerce.llm.tokens` instruments under the same meter name, so one dashboard covers both stacks | Full, except the optional Langfuse sink | P3 | [#19](https://github.com/nitin27may/e-commerce-agents/issues/19) |
-| 22 | Orchestration modes registered | Five: `tool`, `handoff`, `workflow:pre-purchase`, `workflow:return-replace`, `group-chat` | The same five. Verified live against a running stack: one question answered in three modes gives the orchestrator's own composition, the specialist's unedited answer, and a panel transcript respectively | Full | — | — |
-| 23 | `/api/orchestration/*` routes | `modes`, `modes/{name}/graph`, `compare`, `{run_id}/resume` | All four. `resume` restores the paused workflow from its checkpoint and **claims the pending row before executing** — Python updates it afterwards, which leaves a window where two clicks both release a refund | Full | — | — |
-| 24 | MCP consumption (client side) | `product-discovery` and `inventory-fulfillment` can swap their direct-asyncpg tools for `MCPStreamableHTTPTool` against the two FastMCP servers, gated by `MCP_ENABLED` | .NET ships an MCP **server** (`ECommerceAgents.Mcp`, real JSON-RPC) but no specialist wires an MCP **client**, so there is no equivalent swap | Partial | P3 | [#19](https://github.com/nitin27may/e-commerce-agents/issues/19) |
-| 25 | Session + checkpoint backends actually used | `MAF_SESSION_BACKEND` and `MAF_CHECKPOINT_BACKEND` drive real providers | Both registered in `Program.cs`, and checkpointing is now genuinely exercised: workflows write through MAF's `CheckpointManager` during a run, which is what makes `GET /api/runs/{id}/checkpoints` return anything. Registration alone was not enough — the DI entry existed for a while with no consumer | Full | — | — |
-| 26 | Seeder and auth-server | `scripts/seed.py` (deterministic, `random.seed(42)`) and the Python `auth_server` image | **The same two Python images**, by design. `docker-compose.dotnet.yml` builds both from `./agents/python`. The seeder is the single source of demo data — a second implementation would have to produce byte-identical rows or the two stacks diverge in catalogue content, and the dual-backend Playwright suite asserts against seeded data, so divergence there destroys the parity gate that having two backends exists to provide. OAuth2 is protocol-standard: both stacks validate against a JWKS endpoint and the issuer's language is invisible to the consumer. Neither service is an agent, so neither demonstrates anything about Microsoft Agent Framework. Cost, stated honestly: the .NET stack cannot start unless the Python image builds | By design | — | plan 16 F5 |
-| 27 | Anonymous multi-turn memory | Not persisted — anonymous storefront conversations have no context at any tier | Same | By design | — | plan 20 |
-| 28 | Langfuse sink | Optional additive exporter alongside OTel | **Deliberately not ported.** OTel is the primary sink on both stacks and already carries GenAI spans to Aspire; a second exporter would be additive-only and duplicate what is already exported | By design | — | plan 20 |
+| # | 能力 | 实现位置 | 状态 | 说明 |
+|---|---------|--------|--------|-------|
+| 1 | 挂载到智能体上的中间件 / 上下文提供器流水线 | `shared/middleware.py` 的 `build_specialist_middleware()`，接入每个专业智能体的 `Agent(...)` 构造过程 | 已实现 | 中间件按固定顺序组合，涵盖日志、审计、护栏与步骤记录 |
+| 2 | MCP 服务端协议 | `packages/mcp-product`、`packages/mcp-inventory` —— 两个真实的 FastMCP 服务，streamable HTTP 传输，真实 JSON-RPC | 已实现 | 可独立发布、独立部署 |
+| 3 | 面向专业智能体的流式对话（`/message:stream`） | `shared/agent_host.py` 在每个专业智能体上同时暴露 `/message:send` 与 `/message:stream`（SSE）；`orchestrator/agent.py` 的 `call_specialist_agent` 消费专业智能体的流，并在工具调用进行中实时转发 `event: delta` 帧 | 已实现 | 与 `tool` 编排模式配合，实现实时预览 |
+| 4 | 入口侧提示词注入检测 | `shared/guardrails/injection_middleware.py`，通过共享中间件流水线挂载 | 已实现 | 默认仅观测（`GUARDRAILS_BLOCK_ON_INJECTION` 可升级为硬拒绝） |
+| 5 | 存储内容净化（工具结果重新进入模型时） | `shared/guardrails/output_middleware.py` | 已实现 | 按工具白名单逐字段中和用户生成的自由文本 |
+| 6 | 输出内容审核（自伤 / 仇恨 / 暴力措辞筛查） | `shared/guardrails/moderation.py` + `moderation_middleware.py` | 已实现 | `OUTPUT_MODERATION_MODE=enforce` 可替换非流式回复；流式回复只能在事后标记（分片已发出）—— 这一取舍已在文档中说明 |
+| 7 | 步骤记录器 → 实时智能体时间线 | `shared/agent_observability.py` 的 `StepRecorderMiddleware`，挂载到每个智能体，按请求导出为 SSE 的 `event: step` 帧与 `/runs` 界面 | 已实现 | 时间线在前端逐条实时呈现 |
+| 8 | 扇出/扇入 + 顺序的 HITL 门控工作流 | `workflows/pre_purchase.py` 与 `workflows/return_replace.py` 均使用 MAF 的 `WorkflowBuilder`，是真实的执行器图；`return_replace.py` 的 HITL 门控通过 `ctx.request_info` 暂停 | 已实现 | 两个工作流都注册到了实时路由（`orchestrator/modes/`） |
+| 9 | 以中间件形式实现人工参与（HITL） | `shared/hitl.py` 在中间件层拦截五个破坏性工具，独立于每个工具自身的实现 | 已实现 | 被门控的调用在工具方法执行前即被短路，并返回统一的 `{status, message, request_id}` 结构 |
+| 10 | 共享工具库 | `shared/tools/` —— 8 个模块，由需要的专业智能体导入（`cart_tools.py`、`return_tools.py`、`seller_tools.py`、`loyalty_tools.py`、`inventory_tools.py`、`user_tools.py`、`memory_tools.py`、`pricing_tools.py`） | 已实现 | 领域专属逻辑仍保留在各专业智能体自己的 `tools/` 目录中 |
+| 11 | 处理权交接编排 | `orchestrator/handoff.py` 的 `HandoffBuilder` 网格，构建在 `RemoteSpecialistChatClient` 之上 | 已实现 | 网格从一个**不带工具的分诊智能体**启动：若用会调用工具的编排器作为起点，它会既路由又作答，而不是交接 |
+| 12 | 群聊编排 | `workflows/group_chat.py` —— 两个智能体参与者 + 一个主持人 | 已实现 | 顺序化会议记录形式 |
+| 13 | Magentic 动态编排 | **未实现。** `orchestrator/modes/` 中只有 `base`、`tool_router`、`handoff_mode`、`workflow_mode` 与 `group_chat_mode`，没有 `magentic_mode.py` | 计划中 | 属于尚未构建的能力，而非不可用 |
+| 14 | 评测运行框架 | `evals/harness.py` 的 `ProductionRunner`，真实评分器、已提交的基线、纳入 CI 的冒烟套件 | 已实现 | 评测跑的是生产路径而非其副本 |
+| 15 | 长期记忆 —— 写入路径 | `shared/tools/memory_tools.py` —— 智能体可调用的保存/更新工具 | 部分实现 | 身份来自 `RequestContext`，因此模型无法写到其他用户的档案上 |
+| 16 | 教程章节测试覆盖 | 32 章均提供代码，且全部带测试（非集成套件在 CI 中为绿） | 已实现 | 第 21 章尚在规划中 |
+| 17 | 服务端事实核验（grounding） | `shared/grounding/{ledger,extractor,verifier,middleware}.py` —— 三层机制（按请求的工具结果台账、批量数据库查询、一致性检查），`GROUNDING_MODE` 支持 `off`/`observe`/`annotate`/`enforce` | 已实现 | `enforce` 模式会校验答案中的结论与数据库记录是否一致 |
+| 18 | 资金路径的幂等性 | `shared/idempotency.py` + `idempotency_keys` 表，应用于 `initiate_return`、`process_refund`、`execute_approved_action` 与结算 | 已实现 | 通过 `ON CONFLICT DO NOTHING` 预留，重放已完成的预留，拒绝进行中的重复请求，回收超过 60 秒的旧预留，失败时释放 |
+| 19 | 限流 | `shared/rate_limit.py` —— 两条对话路由上的 Redis 滑动窗口，按用户计，匿名流量按 IP 计 | 已实现 | 失败时放行 |
+| 20 | 成本估算与预算上限 | `shared/cost.py` + `cost_budget_middleware.py`，`COST_BUDGET_MODE` 默认 `observe` | 已实现 | 按轮次估算 token 与成本 |
+| 21 | 遥测深度 | `shared/telemetry.py` —— 追踪发往 Jaeger；指标与日志导出需要兼容的独立接收端；对 httpx、asyncpg 与 OpenAI 自动埋点；采用 `invoke_agent` 这一 GenAI 跨度约定；`trace_id` 关联写入 `usage_logs`。本项目自有的自定义指标只有 `ecommerce.llm.cost.usd`，以及按方向拆分的 token 计数，二者复用预算上限已经算出的按轮次估算。其余全部来自自动埋点 | 已实现（可选的 Langfuse 导出器除外） | 同一套指标命名可覆盖全部服务 |
+| 22 | 已注册的编排模式 | 五种：`tool`、`handoff`、`workflow:pre-purchase`、`workflow:return-replace`、`group-chat` | 已实现 | 已在运行中的服务栈上实测：同一个问题用三种模式作答，分别得到编排器自身的综合结果、专业智能体未经改写的回答，以及一份圆桌记录 |
+| 23 | `/api/orchestration/*` 路由 | `modes`、`modes/{name}/graph`、`compare`、`{run_id}/resume` | 已实现 | `resume` 从检查点恢复暂停的工作流，并在执行前**先认领待处理行**，避免两次点击同时释放一笔退款 |
+| 24 | MCP 消费（客户端侧） | `product-discovery` 与 `inventory-fulfillment` 可以把直连 asyncpg 的工具替换为针对两个 FastMCP 服务的 `MCPStreamableHTTPTool`，由 `MCP_ENABLED` 控制 | 已实现 | 默认关闭；开启后走 MCP 数据层 |
+| 25 | 实际使用的会话与检查点后端 | `MAF_SESSION_BACKEND` 与 `MAF_CHECKPOINT_BACKEND` 驱动真实的后端实现 | 已实现 | 工作流在运行期间通过 MAF 的 `CheckpointManager` 写入检查点，这正是 `GET /api/runs/{id}/checkpoints` 能返回内容的原因 —— 仅有依赖注入注册是不够的 |
+| 26 | 种子数据与认证服务 | `scripts/seed.py`（确定性，`random.seed(42)`）与 `auth_server` 镜像 | 已实现 | 种子脚本是演示数据的唯一来源，确定性保证重复运行产出同样的数据行 |
+| 27 | 匿名多轮记忆 | 不持久化 —— 匿名店铺会话在任何层级都没有上下文 | 设计如此 | 匿名访问不落库，避免产生无主数据 |
+| 28 | Langfuse 导出器 | 与 OTel 并行的可选附加导出器 | 设计如此 | OTel 是主通道，已把 GenAI 跨度送到 Jaeger；再加一个导出器只会重复已有内容 |
 
 ---
 
-## What's not on this list
+## 不在本表范围内的部分
 
-Both backends implement the domain fully — an orchestrator plus five specialist agents, A2A
-routing, the tool-router mode, Postgres-backed checkpointing, OAuth2/JWT auth, guardrails,
-idempotency on the money paths, rate limiting, and the Aspire-based telemetry pipeline. This
-matrix tracks the *gaps*; the shared foundation isn't repeated here row by row.
+平台已完整实现该业务域 —— 一个编排器加五个专业智能体、A2A 路由、工具路由模式、基于 Postgres 的检查点、OAuth2/JWT 认证、护栏、资金路径的幂等性、限流，以及基于 OpenTelemetry 的遥测流水线。本矩阵只跟踪**缺口**，共同的基础能力不在这里逐行重复。
 
-Two claims this document used to make and no longer does, because both were false when checked
-against the code: that neither stack wired its workflows to a live route (both do), and that
-Python has a `magentic_mode.py` (neither stack has one).
+## 关于本文档的历史说明
 
-## Out of scope for now
+本文档此前曾作出两项与代码不符的断言，现已更正：一是工作流未接入实时路由（实际已接入），二是存在 `magentic_mode.py`（实际并不存在）。
 
-.NET readers should treat the P3 rows as capabilities this backend doesn't have yet rather than
-capabilities arriving soon: the evals harness, long-term-memory writes, MCP client consumption, and
-the optional Langfuse sink. Handoff and group-chat are **no longer on that list** — both are
-registered, live and built on MAF's own orchestration. **Magentic is not on it either** — it exists
-in neither stack, so it is not a parity gap at all.
+## 相关文档
 
-The P2 row is grounding's missing ledger tier, which is bounded by a real constraint rather than
-effort: the facts it would check against are produced inside the specialist processes and would
-have to be carried back over A2A.
-
-Everything else above is Full on both sides. Where .NET is stricter than Python it is noted inline
-rather than smoothed over — the resume route's claim-before-execute is the current example.
+- [`docs/agent-audit-matrix.md`](agent-audit-matrix.md) —— 各智能体的安全审计矩阵
+- [`docs/agent-quality.md`](agent-quality.md) —— 评测方法论、数据集与 CI 门禁
+- [`docs/architecture.md`](architecture.md) —— 系统总览与请求链路

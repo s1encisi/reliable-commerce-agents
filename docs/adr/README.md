@@ -1,26 +1,24 @@
-# Architecture Decision Records
+# 架构决策记录
 
-Five decisions that shaped this repository, each one argued somewhere in the prose
-already — in `CLAUDE.md`, `docs/architecture.md`, `docs/roadmap.md`, or a module
-docstring — and none of them anywhere a reader would think to look.
+五个塑造了这个仓库的决策，每一个都已在某处的文字里论述过——在 `CLAUDE.md`、
+`docs/architecture.md`、`docs/roadmap.md`，或某个模块的文档字符串里——但没有一个在读者会想到
+去查的地方。
 
-That is the gap these records close. A decision recorded only as a passing sentence
-inside a 500-line document is indistinguishable from an accident, and the most common
-consequence is someone "fixing" it later at some cost.
+这正是这些记录要弥合的缺口。一个只作为 500 行文档里一句顺带提及而被记录下来的决策，与一次
+意外无法区分，而最常见的后果是日后有人花不小代价去「修」它。
 
-Each record states what was decided, what it rules out, and — most usefully — **what
-would make it wrong**. A decision with no stated reversal condition is dogma.
+每条记录都说明决定了什么、排除了什么，以及——最有用的一点——**什么情况下这个决定就是错的**。
+没有写明推翻条件的决策就是教条。
 
-| # | Decision | Status |
+| # | 决策 | 状态 |
 |---|---|---|
-| [0001](0001-a2a-over-direct-calls.md) | Specialists talk over A2A HTTP, not in-process calls | Accepted |
-| [0002](0002-no-text-to-sql.md) | No text-to-SQL; tools own their queries | Accepted |
-| [0003](0003-yaml-prompt-composition.md) | Prompts compose from YAML, never hardcoded strings | Accepted |
-| [0004](0004-maf-native-execution.md) | MAF runs the tool-calling loop, not this repo | Accepted |
-| [0005](0005-dual-stack-parity.md) | Two backends, one frontend, gated by a real test run | Accepted |
+| [0001](0001-a2a-over-direct-calls.md) | 专业智能体之间通过 A2A HTTP 通信，而非进程内调用 | 已接受 |
+| [0002](0002-no-text-to-sql.md) | 不做 text-to-SQL；查询由工具自己持有 | 已接受 |
+| [0003](0003-yaml-prompt-composition.md) | 提示词由 YAML 组合而成，绝不硬编码字符串 | 已接受 |
+| [0004](0004-maf-native-execution.md) | 工具调用循环由 MAF 运行，而非本仓库 | 已接受 |
+| [0005](0005-dual-stack-parity.md) | 只保留 Python 单栈，避免能力重复实现 | 已接受 |
 
-## Format
+## 格式
 
-Deliberately short. These are records, not designs — the design lives in
-`.claude/plans/`. Anything longer than a page here goes unread, which defeats the
-purpose.
+刻意简短。这些是记录，不是设计——设计在 `.claude/plans/`。这里任何超过一页的东西都不会被读，
+那就失去了意义。

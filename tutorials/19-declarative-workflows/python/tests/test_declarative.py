@@ -1,7 +1,7 @@
 """
-Chapter 19 — Declarative Workflows: tests.
+第 19 章 —— 声明式工作流：测试。
 
-No LLM — pure loader + executor logic.
+无 LLM——纯粹的加载器 + 执行器逻辑。
 """
 
 import pathlib
@@ -40,17 +40,17 @@ def test_op_non_empty_forwards_when_not_blank() -> None:
 
 def test_op_non_empty_terminates_when_blank() -> None:
     op = _build_op("non_empty", {})
-    assert op("") == (None, "[skipped: empty input]")
-    assert op("   ") == (None, "[skipped: empty input]")
+    assert op("") == (None, "[已跳过：输入为空]")
+    assert op("   ") == (None, "[已跳过：输入为空]")
 
 
 def test_op_prefix_wraps_message_as_terminal_output() -> None:
-    op = _build_op("prefix", {"prefix": "LOGGED: "})
-    assert op("X") == (None, "LOGGED: X")
+    op = _build_op("prefix", {"prefix": "已记录："})
+    assert op("X") == (None, "已记录：X")
 
 
 def test_unknown_op_raises_clean_error() -> None:
-    with pytest.raises(ValueError, match="unknown op"):
+    with pytest.raises(ValueError, match="未知算子"):
         _build_op("mystery", {})
 
 
@@ -64,10 +64,10 @@ def test_load_workflow_builds_from_yaml_spec() -> None:
 @pytest.mark.asyncio
 async def test_yaml_happy_path_matches_code_built_equivalent() -> None:
     outputs = await run("hello world")
-    assert outputs == ["LOGGED: HELLO WORLD"]
+    assert outputs == ["已记录：HELLO WORLD"]
 
 
 @pytest.mark.asyncio
 async def test_yaml_short_circuits_empty_input() -> None:
     outputs = await run("")
-    assert outputs == ["[skipped: empty input]"]
+    assert outputs == ["[已跳过：输入为空]"]

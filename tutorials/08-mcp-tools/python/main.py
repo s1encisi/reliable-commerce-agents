@@ -1,11 +1,11 @@
 """
-MAF v1 — Chapter 08: MCP Tools (Python)
+MAF v1 — 第 08 章：MCP 工具（Python）
 
-Connect an agent to a local MCP server over stdio. The server lives in
-`weather_mcp_server.py` and exposes a canned weather tool. MAF spawns it
-as a subprocess and discovers the tool automatically.
+通过 stdio 把一个智能体接到本地 MCP 服务器上。该服务器位于
+`weather_mcp_server.py`，对外暴露一个预置数据的天气工具。MAF 把它作为子进程
+拉起，并自动发现其中的工具。
 
-Run:
+运行：
     python tutorials/08-mcp-tools/python/main.py "What's the weather in Paris?"
 """
 
@@ -55,15 +55,15 @@ def _default_client() -> OpenAIChatClient | OpenAIChatCompletionClient | ReplayC
     return OpenAIChatClient(
         model=os.environ.get("LLM_MODEL", "gpt-4.1"),
         api_key=os.environ["OPENAI_API_KEY"],
-        # Phase 9: any OpenAI-compatible endpoint (GitHub Models, OpenRouter,
-        # vLLM, LM Studio, Ollama) instead of api.openai.com — see
-        # tutorials/00-setup/README.md's "Don't have a paid API key?" section.
+        # Phase 9：可指向任何兼容 OpenAI 的端点（GitHub Models、OpenRouter、
+        # vLLM、LM Studio、Ollama），而不必是 api.openai.com —— 见
+        # tutorials/00-setup/README.md 的「没有付费 API key？」一节。
         base_url=os.environ.get("LLM_BASE_URL") or None,
     )
 
 
 def build_mcp_tool() -> MCPStdioTool:
-    """Spawns the weather MCP server as a subprocess and exposes its tools to the agent."""
+    """把天气 MCP 服务器作为子进程拉起，并把它的工具暴露给智能体。"""
     return MCPStdioTool(
         name="weather-mcp",
         command=sys.executable,
@@ -86,8 +86,8 @@ async def run(question: str) -> str:
 async def main() -> None:
     question = sys.argv[1] if len(sys.argv) > 1 else "What's the weather in Paris?"
     answer = await run(question)
-    print(f"Q: {question}")
-    print(f"A: {answer}")
+    print(f"问：{question}")
+    print(f"答：{answer}")
 
 
 if __name__ == "__main__":

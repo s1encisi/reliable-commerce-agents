@@ -1,34 +1,36 @@
-# Chapter 31 — Retry and Compensation (Saga Pattern)
+# 第 31 章 · 重试与补偿（Saga 模式）
 
-A saga is what you build when a multi-step process has no single transaction to roll back. This chapter is standalone orchestration logic — no LLM, no agent reasoning — because the pattern itself doesn't need one: it's plain code that decides what to retry, what to undo, and in what order.
+[项目首页](../../README.md) · [教程总览](../README.md) · [术语表](../_shared/jargon-glossary.md)
 
-## Why this chapter
+当一个多步流程没有可供回滚的单一事务时，你要构建的就是 Saga。本章是独立的编排逻辑 —— 没有 LLM，没有智能体推理 —— 因为这个模式本身不需要它们：它就是决定重试什么、撤销什么、以什么顺序来做的普通代码。
 
-Placing an order in the capstone app touches at least three independent things: reserve inventory, charge a payment, create a shipment. In a single Postgres database, three `UPDATE`s inside one transaction either all commit or all roll back automatically — that's what `BEGIN`/`COMMIT`/`ROLLBACK` is for. But the moment those three steps are three separate API calls to three separate services (even if, in this repo, they're all backed by the same Postgres instance today, the point generalizes to the day one of them is a third-party payment gateway or shipping carrier), there is no shared transaction spanning them. If step three fails, steps one and two already committed for real. Nothing rolls them back for you.
+## 本章动机
 
-The **saga pattern** is the fix: give every step an explicit **compensating action** — the opposite operation that undoes it — and if a later step fails, walk backward through the steps that already succeeded, running their compensations in reverse order. `reserve_stock` pairs with `release_stock`. `charge_payment` pairs with `refund_payment`. `create_shipment` pairs with `cancel_shipment`. Nobody has to log into a database console and manually clean up an order that's half-placed.
+在完整项目里下一单至少触及三件相互独立的事情：预留库存、扣款、创建运单。在单个 PostgreSQL 数据库里，一个事务内的三条 `UPDATE` 要么全部提交、要么全部自动回滚 —— 这正是 `BEGIN`/`COMMIT`/`ROLLBACK` 的用途。但一旦这三步变成对三个独立服务的三次独立 API 调用（即便在本仓库中它们今天都落在同一个 PostgreSQL 实例上，这个论点在其中一个变成第三方支付网关或承运商的那天依然成立），就不存在横跨它们的共享事务了。如果第三步失败，第一步和第二步已经真实提交了。没有任何东西会替你回滚它们。
 
-**Retries are a related but separate idea, and conflating them is the most common mistake.** A **transient** failure — a network timeout talking to the inventory service, a connection reset — is worth retrying with backoff, because the same call will probably succeed a moment later. A **genuine** failure — a declined credit card, an item that's actually out of stock — will not succeed if you call it again with the same arguments. Retrying a declined payment doesn't turn it into an approved one; it just wastes time and, if the call isn't idempotent, risks a double charge. The rule this chapter's demo enforces: retry only on a transient-error type, and only for steps explicitly marked retryable; anything else compensates immediately.
+**Saga 模式**就是解药：给每一步配一个明确的**补偿动作** —— 即撤销它的相反操作 —— 如果后续某步失败，就沿已经成功的步骤倒着走，按相反顺序执行它们的补偿。`reserve_stock` 与 `release_stock` 配对。`charge_payment` 与 `refund_payment` 配对。`create_shipment` 与 `cancel_shipment` 配对。没有人需要登录数据库控制台去手工清理一张下了一半的订单。
 
-**When it matters:** any multi-step process spanning independent services or API calls, where a step failing partway through leaves the system in a state a human would otherwise have to clean up by hand. **When it's overkill:** a single-step operation (nothing to unwind), or a multi-step process where partial completion is genuinely harmless — e.g. logging an analytics event after an order already succeeded; losing that log entry needs no compensation, just a retry or a shrug.
+**重试是一个相关但不同的概念，把它们混为一谈是最常见的错误。** **瞬时性**失败 —— 与库存服务通信时的网络超时、连接被重置 —— 值得带退避地重试，因为同一个调用过一会儿多半会成功。**真实**失败 —— 信用卡被拒、商品确实没有库存 —— 用同样的参数再调一次也不会成功。重试一次被拒的支付不会把它变成被批准的；它只是浪费时间，而且如果该调用不是幂等的，还有重复扣款的风险。本章演示所执行的规则是：只对瞬时错误类型重试，且只对显式标记为可重试的步骤重试；其他任何情况立即补偿。
 
-## Prerequisites
+**什么时候它重要：**任何横跨独立服务或 API 调用的多步流程，其中某一步中途失败会把系统留在一个本来需要人工清理的状态。**什么时候它是杀鸡用牛刀：**单步操作（没有东西需要回退），或者部分完成确实无害的多步流程 —— 例如订单已经成功之后再记一条分析事件；丢掉那条日志不需要任何补偿，重试一下或者耸耸肩就过去了。
 
-- Completed [Chapter 30 — Subworkflows](../30-subworkflows/)
-- Python 3.12+ via `uv`
-- No environment variables needed and no LLM calls — this chapter's saga engine is deterministic orchestration logic
+## 前置条件
 
-## The concept
+- 已完成[第 30 章 · 子工作流](../30-subworkflows/)
+- 通过 `uv` 使用 Python 3.12+
+- 无需环境变量，也不调用 LLM —— 本章的 Saga 引擎是确定性的编排逻辑
 
-The demo models a toy "place an order" saga against in-memory dictionaries standing in for three independent services (no real DB or HTTP calls, so the example stays fast and dependency-free):
+## 核心概念
 
-| Step | Action | Compensation |
+演示用内存字典代替三个独立服务，建模了一个玩具级的「下单」Saga（没有真实数据库或 HTTP 调用，因此示例保持快速、无外部依赖）：
+
+| 步骤 | 动作 | 补偿 |
 |------|--------|--------------|
 | 1 | `reserve_stock(product_id, qty)` | `release_stock(product_id, qty)` |
 | 2 | `charge_payment(order_id, amount)` | `refund_payment(order_id)` |
 | 3 | `create_shipment(order_id)` | `cancel_shipment(order_id)` |
 
-A tiny saga engine (`run_saga`) runs the steps in order. Each step is a `SagaStep` — an action, its matching compensation, and whether it's `retryable`. If a step's action raises `TransientError` and it's marked retryable, the engine retries with exponential backoff up to a max attempt count. If a step raises anything else (a genuine failure like `PaymentDeclinedError`), the engine stops immediately and walks backward through every step that already completed, calling each one's compensation — printing exactly what happened at each stage so the unwind is visible in the demo's output.
+一个极小的 Saga 引擎（`run_saga`）按顺序运行各步骤。每一步是一个 `SagaStep` —— 一个动作、与之配对的补偿，以及它是否 `retryable`。如果某步的动作抛出 `TransientError` 且该步被标记为可重试，引擎就会以指数退避重试，直到达到最大尝试次数。如果某步抛出任何其他异常（例如 `PaymentDeclinedError` 这样的真实失败），引擎立即停止，并沿每一个已经完成的步骤倒着走，调用各自的补偿 —— 同时把每个阶段发生的事精确打印出来，好让回退过程在演示输出中可见。
 
 ```mermaid
 %%{init: {'theme':'base', 'themeVariables': {
@@ -45,18 +47,18 @@ flowchart LR
   reserve[reserve_stock]
   charge[charge_payment]
   ship[create_shipment]
-  ok([Order placed])
+  ok([下单成功])
   refund[[refund_payment]]
   release[[release_stock]]
-  failed([Order rolled back])
+  failed([订单已回退])
 
   start --> reserve
-  reserve -- "TransientError: retry w/ backoff" --> reserve
-  reserve -- ok --> charge
-  charge -- ok --> ship
-  ship -- ok --> ok
-  charge -- "declined: compensate" --> refund
-  ship -- "carrier error: compensate" --> refund
+  reserve -- "TransientError：带退避重试" --> reserve
+  reserve -- 成功 --> charge
+  charge -- 成功 --> ship
+  ship -- 成功 --> ok
+  charge -- "被拒：补偿" --> refund
+  ship -- "承运商错误：补偿" --> refund
   refund --> release
   release --> failed
 
@@ -70,18 +72,18 @@ flowchart LR
   class start infra
 ```
 
-Compensation always runs in the *reverse* of completion order: if `charge_payment` succeeded after `reserve_stock`, an unwind refunds the payment before it releases the stock — the same order you'd want a human doing manual cleanup to follow.
+补偿总是按完成顺序的*相反*顺序运行：如果 `charge_payment` 在 `reserve_stock` 之后成功，那么一次回退会先退款、再释放库存 —— 与你希望人工手动清理时所遵循的顺序相同。
 
 ## Python
 
-Run from the repo root using the shared `tutorials/` uv project (one `uv sync` covers every chapter):
+在仓库根目录运行，使用共享的 `tutorials/` uv 项目（一次 `uv sync` 覆盖全部章节）：
 
 ```bash
 uv sync --project tutorials
 uv run --project tutorials python tutorials/31-retry-and-compensation/python/main.py
 ```
 
-Source: [`python/main.py`](./python/main.py). The saga engine's core loop — retry transient failures, compensate on anything else:
+源码：[`python/main.py`](./python/main.py)。Saga 引擎的核心循环 —— 重试瞬时失败，其他一切情况都补偿：
 
 ```python
 def run_saga(order_id: str, steps: list[SagaStep], *, max_attempts: int = 3, base_delay: float = 0.0) -> SagaResult:
@@ -113,7 +115,7 @@ def run_saga(order_id: str, steps: list[SagaStep], *, max_attempts: int = 3, bas
     return SagaResult(order_id, True, [s.name for s in completed])
 ```
 
-`_compensate` is the unwind — it's the whole pattern in four lines:
+`_compensate` 就是那个回退过程 —— 四行代码写完了整个模式：
 
 ```python
 def _compensate(completed: list[SagaStep]) -> list[str]:
@@ -125,7 +127,7 @@ def _compensate(completed: list[SagaStep]) -> list[str]:
     return compensated
 ```
 
-Running `main.py` plays out three scenarios back to back:
+运行 `main.py` 会连着演三种场景：
 
 ```text
 === Scenario 1: happy path — all three steps succeed ===
@@ -148,79 +150,46 @@ Running `main.py` plays out three scenarios back to back:
   [compensate] undoing reserve_stock
 ```
 
-Scenario 2 shows a transient error retried into a success. Scenario 3 shows a genuine failure (`PaymentDeclinedError`) skip retries entirely and unwind the one step that had already completed.
+场景 2 展示了瞬时错误被重试成一次成功。场景 3 展示了真实失败（`PaymentDeclinedError`）完全跳过重试，并回退那唯一一个已经完成的步骤。
 
-## .NET
+## 本章与真实生产级 Saga 的差距
 
-Source: [`dotnet/Program.cs`](./dotnet/Program.cs).
+本演示简化了若干生产级 Saga 实现必须认真对待的事情：
 
-```bash
-cd tutorials/31-retry-and-compensation/dotnet
-dotnet run
-dotnet test tests/Saga.Tests.csproj
-```
-
-No LLM and no MAF packages — the saga pattern is plain orchestration logic. The transient/genuine split is expressed as an exception filter, which reads more directly than Python's nested `try`:
-
-```csharp
-catch (TransientException ex) when (step.Retryable && attempt < maxAttempts)
-{
-    // exponential backoff, then retry
-}
-catch (TransientException ex)  { return Unwind(...); }   // budget spent
-catch (Exception ex)           { return Unwind(...); }   // genuine failure
-```
-
-The `when` clause is load-bearing: a `TransientException` on a step that did not opt into retries, or after the budget is spent, falls through to compensation rather than looping.
-
-Being LLM-free makes this the one chapter whose tests can assert **the state of the world** after a failure rather than a return value:
-
-```csharp
-backends.Stock["widget"].Should().Be(before);
-backends.Reservations.GetValueOrDefault("widget").Should().Be(0);
-backends.Payments.Should().NotContainKey("order-3");
-```
-
-A result object reporting `compensated` while stock stays decremented is the exact bug the pattern exists to prevent, and it is invisible from the return value alone.
-
-Two edge cases get their own tests because they are the ones written wrong: failing at step one means the unwind loop runs zero times (an implementation assuming at least one completed step throws instead of returning cleanly), and an out-of-stock failure must not be retried — retrying will not conjure inventory, and getting it wrong turns an instant correct "no" into three round trips and the same "no".
-
-## This chapter vs a real production saga
-
-This demo simplifies several things a production saga implementation would need to take seriously:
-
-| Aspect | This chapter | Production concern |
+| 方面 | 本章 | 生产环境需要关注的问题 |
 |--------|--------------|---------------------|
-| State | In-memory `dict`s inside a `Backends` object, lost on process exit | Durable state — a saga log or outbox table surviving a crash mid-saga |
-| Idempotency | Not addressed — a retried `charge_payment` call is assumed side-effect-free to repeat | A retried "charge card" call against a real payment gateway needs an idempotency key, or a retry risks a double charge |
-| Compensation failure | Assumed to always succeed | A compensation call can itself fail (the refund API is down) — production needs its own retry/dead-letter path for compensations, not just the primary step |
-| Concurrency | One saga runs synchronously, start to finish, in one function call | Real sagas often coordinate across process restarts via a message queue or workflow engine (e.g. Temporal, MassTransit's saga state machine, or a durable MAF workflow with checkpoints — see [Chapter 18 — State and Checkpoints](../18-state-and-checkpoints/)) |
+| 状态 | `Backends` 对象里的内存 `dict`，进程退出即丢失 | 持久化状态 —— 一份在 Saga 中途崩溃后仍能存活的 Saga 日志或 outbox 表 |
+| 幂等性 | 未处理 —— 假定重试 `charge_payment` 是可安全重复的无副作用操作 | 对真实支付网关重试「扣款」调用需要幂等键，否则重试就有重复扣款风险 |
+| 补偿失败 | 假定总是成功 | 补偿调用本身也可能失败（退款 API 挂了）—— 生产环境需要为补偿准备自己的重试/死信路径，而不只是主步骤 |
+| 并发 | 一次 Saga 在一次函数调用中同步地从头跑到尾 | 真实 Saga 常常通过消息队列或工作流引擎跨进程重启协调（例如 Temporal、MassTransit 的 Saga 状态机，或带检查点的持久化 MAF 工作流 —— 参见[第 18 章 · 状态与检查点](../18-state-and-checkpoints/)） |
 
-## Gotchas
+## 常见坑
 
-- **Don't retry a genuine failure.** A declined payment or an out-of-stock item will not become a success on the next attempt with the same arguments. This demo's engine only retries steps raising `TransientError` *and* explicitly marked `retryable=True` — everything else compensates on the first failure. Retrying blindly (e.g. wrapping every step in a generic `except Exception: retry`) is the single most common mistake with this pattern.
-- **Compensation order is reverse of completion order, not reverse of declaration order.** If a saga has steps A, B, C and C fails after only A and B completed, the unwind runs B's compensation then A's — never a step that never ran.
-- **A compensating action must actually be the opposite of its step**, not just "something related." `refund_payment` needs to know the exact `order_id` (and in a real system, the exact charge id) it's undoing — a compensation that refunds "however much is in the account" instead of "exactly what this step charged" corrupts state instead of fixing it.
-- **This chapter's retry has no jitter.** `base_delay * 2 ** (attempt - 1)` is plain exponential backoff. Production retry logic typically adds random jitter to avoid a thundering herd when many callers back off in lockstep — out of scope here to keep the demo's output deterministic and testable.
-- **Real compensations aren't guaranteed to succeed either.** This demo assumes every compensating action succeeds. A production saga has to handle a compensation itself failing (e.g. the refund API is down) — usually with its own retry policy or a dead-letter queue for manual follow-up, which this toy example doesn't model.
+- **不要重试真实失败。** 被拒的支付或没有库存的商品，用同样的参数下一次尝试也不会变成成功。本演示的引擎只重试抛出 `TransientError` *且*显式标记 `retryable=True` 的步骤 —— 其他一切在第一次失败时就补偿。盲目重试（例如给每个步骤都包一层通用的 `except Exception: retry`）是这个模式最常见的单一错误。
+- **补偿顺序是完成顺序的相反，而不是声明顺序的相反。** 如果一个 Saga 有 A、B、C 三步，而 C 在只有 A、B 完成之后失败，那么回退先运行 B 的补偿、再运行 A 的 —— 永远不会去补偿一个从未运行过的步骤。
+- **补偿动作必须真的是其步骤的相反操作**，而不只是「与之相关的某事」。`refund_payment` 需要知道它正在撤销的确切 `order_id`（在真实系统中还有确切的扣款 id）—— 一个退款「账户里有多少就退多少」而不是「精确退这一步扣的金额」的补偿，是在破坏状态而不是修复状态。
+- **本章的重试没有抖动。** `base_delay * 2 ** (attempt - 1)` 是纯粹的指数退避。生产级重试逻辑通常会加入随机抖动，以避免大量调用方同步退避时引发的惊群 —— 这里不做，是为了让演示的输出保持确定、可测试。
+- **真实的补偿也不保证成功。** 本演示假定每个补偿动作都成功。生产级 Saga 必须处理补偿自身失败的情况（例如退款 API 挂了）—— 通常用自己的一套重试策略或死信队列来人工跟进，而本玩具示例没有建模这一点。
 
-## Tests
+## 测试
 
 ```bash
 uv run --project tutorials pytest tutorials/31-retry-and-compensation/python/tests -v
 ```
 
-`tutorials/31-retry-and-compensation/python/tests/test_retry_and_compensation.py` covers, structurally:
+`tutorials/31-retry-and-compensation/python/tests/test_retry_and_compensation.py` 从结构上覆盖：
 
-1. **Happy path** — all three steps complete, nothing is compensated, and every backend's state reflects the successful order.
-2. **Genuine failure compensates immediately** — a declined payment stops the saga and unwinds only the steps that already completed, in reverse order; a failing `create_shipment` unwinds both earlier steps (payment refunded before stock released).
-3. **Transient failure is retried** — a flaky `reserve_stock` that fails twice then succeeds completes the saga without compensation once retries exhaust the simulated flakiness; a `reserve_stock` that never stops failing exhausts `max_attempts` and then compensates (with nothing to compensate, since it was the first step).
-4. **Retryability is per-step, not global** — a `TransientError` raised by a step explicitly marked `retryable=False` is *not* retried; the saga compensates on the first failure.
-5. **The unwind is actually visible** — a `capsys`-based test asserts the printed `[compensate]` lines appear in the correct reverse order.
+1. **正常路径** —— 三步全部完成，没有任何补偿，且每个后端的最终状态都反映了这次成功的下单。
+2. **真实失败立即补偿** —— 被拒的支付让 Saga 停止，并按相反顺序只回退已经完成的步骤；`create_shipment` 失败会回退此前两个步骤（先退款，再释放库存）。
+3. **瞬时失败会被重试** —— 一个失败两次后成功的 `reserve_stock` 会在重试耗尽模拟的抖动之后完成整个 Saga 且不做补偿；一个永远失败的 `reserve_stock` 会耗尽 `max_attempts` 然后补偿（由于它是第一步，没有东西可补偿）。
+4. **可重试性是按步骤而非全局的** —— 一个显式标记 `retryable=False` 的步骤抛出的 `TransientError` *不会*被重试；Saga 在第一次失败时就补偿。
+5. **回退过程确实可见** —— 一个基于 `capsys` 的测试断言打印出的 `[compensate]` 行以正确的相反顺序出现。
 
-## How this shows up in the capstone
+因为不涉及 LLM，这是唯一一章其测试可以断言失败之后**世界的状态**、而不只是返回值的章节 —— 一个报告 `compensated` 而库存却仍被扣减的结果对象，正是这个模式存在所要防止的那种缺陷，而它仅从返回值是看不出来的。另有两个边界情况值得单独立测，因为它们最容易被写错：在第一步就失败意味着回退循环运行零次（一个假定至少有一个已完成步骤的实现会抛错而不是干净返回），以及库存不足的失败绝不能被重试 —— 重试不会凭空变出库存，写错就会把一个瞬间给出的正确「不」变成三次往返之后同样的「不」。
 
-There is no saga or compensation code in this repo today — verified with `grep -rniE "saga|compensat" agents/python --include="*.py"`, which returns nothing. The closest existing real code is `agents/python/orchestrator/agent.py:116`-`138`, the blocking-path `try`/`except` around the orchestrator's A2A call to a specialist agent:
+## 在完整项目中的落点
+
+本仓库今天没有任何 Saga 或补偿代码 —— 用 `grep -rniE "saga|compensat" agents/python --include="*.py"` 验证过，结果为空。现存最接近的真实代码是 `agents/python/orchestrator/agent.py:153-172`，即编排器向专业智能体发起 A2A 调用时阻塞路径上的 `try`/`except`：
 
 ```python
 try:
@@ -241,10 +210,10 @@ except Exception:
     return f"Failed to reach the {agent_name} agent. Please try again later."
 ```
 
-Be clear about what this is and isn't: it's plain error handling around a **single** HTTP call — catch the exception, log it, return a user-facing message. It does not retry, and it does not unwind any earlier completed step, because `call_specialist_agent` is not part of a multi-step transaction with anything to unwind — there's no saga here to compensate. This repo's future idempotency/production-hardening phase is the expected place real saga-style compensation would eventually land (e.g. if checkout ever grew into "reserve stock via specialist A, charge via specialist B, ship via specialist C" as three separate A2A calls), but as of this chapter, that code doesn't exist. This chapter is deliberately greenfield, standalone, tutorial-only content — teaching the pattern for the day it's needed.
+要说清楚这是什么、不是什么：它是对**单次** HTTP 调用的朴素错误处理 —— 捕获异常、记日志、返回一条面向用户的消息。它不重试，也不回退任何此前已完成的步骤，因为 `call_specialist_agent` 并不是某个有东西可回退的多步事务的一部分 —— 这里没有 Saga 可供补偿。本仓库后续的幂等性/生产加固阶段才是真实 Saga 式补偿最终该落地的地方（例如如果结算有一天演化成「经专业智能体 A 预留库存、经专业智能体 B 扣款、经专业智能体 C 发货」这三次独立 A2A 调用），但截至本章，那段代码并不存在。本章是刻意的全新、独立、纯教程内容 —— 为需要它的那一天先把模式讲清楚。
 
-## What's next
+## 下一步
 
-- Next chapter: Chapter 32 (landing alongside this one as part of the same batch — link will be wired up once its README merges)
-- Full source: [`python/`](./python/)
-- Shared: [Mermaid style guide](../_shared/mermaid-style-guide.md)
+- 下一章：[第 32 章 · 成本控制与预算](../32-cost-control-and-budgets/)
+- 完整源码：[`python/`](./python/)
+- 共享资料：[Mermaid 风格指南](../_shared/mermaid-style-guide.md)

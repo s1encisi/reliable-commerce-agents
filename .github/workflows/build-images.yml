@@ -1,30 +1,28 @@
-name: Build Images
+name: 构建镜像
 
-# Builds the ten container images this stack runs on, in three build shapes:
+# 构建本技术栈运行的十个容器镜像，共三种构建形态：
 #
 #   agent   -> agents/python/Dockerfile      (ARG AGENT_NAME + AGENT_PORT)
 #   mcp     -> agents/python/Dockerfile.mcp  (ARG MCP_PACKAGE/MCP_DIR/MCP_MODULE/MCP_PORT)
 #   web     -> web/Dockerfile                (no build args)
 #
-# ── This workflow never decides to publish on its own ────────────────────────
+# ── 本工作流从不自行决定发布 ────────────────────────────────────────────────
 #
-# It used to push on a semver tag with no dependency on the test suite. GitHub
-# Actions has no cross-workflow `needs:`, so `tests.yml` and this file ran in
-# parallel and never saw each other -- a tag pushed onto a red commit published
-# images, and the tag path ran no tests at all.
+# 它过去会在 semver 标签上推送，且不依赖测试套件。GitHub Actions 没有跨工作流的
+# `needs:`，所以 `tests.yml` 与本文件并行运行、彼此从不相见 —— 打在一个红色提交上的
+# 标签会发布镜像，而标签路径根本不会跑任何测试。
 #
-# Publishing is now caller-driven via `workflow_call`, so the gate lives with
-# whoever calls it:
+# 现在发布由调用方通过 `workflow_call` 驱动，因此门禁跟着调用方走：
 #
-#   pull_request  -> this file's own trigger. Build, load, smoke-test, discard.
-#                    Never pushes. Fork PRs have no packages:write, so this path
-#                    must stay push-free regardless.
-#   push to main  -> tests.yml's `publish-main` job, which `needs:` all four
-#                    test jobs. Publishes :main and :sha-<7>.
-#   version tag   -> release.yml, after a full test re-run AND a human approval
-#                    on the `release` environment. Publishes :vX.Y.Z and :latest.
+#   pull_request  -> 本文件自身的触发器。构建、加载、冒烟测试、丢弃。
+#                    从不推送。来自 fork 的 PR 没有 packages:write，因此这条路径
+#                    无论如何都必须保持不推送。
+#   push 到 main  -> tests.yml 的 `publish-main` job，它对全部三个测试 job 加
+#                    `needs:`。发布 :main 与 :sha-<7>。
+#   版本标签      -> release.yml，在完整重跑测试并且有人在 `release` 环境上人工批准
+#                    之后。发布 :vX.Y.Z 与 :latest。
 #
-# The design and the reason for each piece is in docs/releasing.md.
+# 设计与每一部分的原因见 docs/releasing.md。
 
 on:
   pull_request:
@@ -33,22 +31,22 @@ on:
   workflow_call:
     inputs:
       publish:
-        description: "Push images to GHCR"
+        description: "把镜像推送到 GHCR"
         type: boolean
         default: false
       tag_mode:
-        description: "Which tag set to produce: 'main' or 'release'"
+        description: "生成哪一组标签：'main' 或 'release'"
         type: string
         default: main
       version:
-        description: "Version tag for tag_mode=release, e.g. v1.1.0"
+        description: "tag_mode=release 时使用的版本标签，例如 v1.1.0"
         type: string
         default: ""
 
   workflow_dispatch:
     inputs:
       publish:
-        description: "Push images to GHCR (escape hatch)"
+        description: "把镜像推送到 GHCR（逃生口）"
         type: boolean
         default: false
 
@@ -56,32 +54,30 @@ permissions:
   contents: read
 
 concurrency:
-  # The group must distinguish *why* the workflow is running, not just the ref.
+  # 分组必须区分工作流运行的**原因**，而不只是 ref。
   #
-  # An earlier version collapsed both a manual publish and a pull-request build
-  # into the same "-pr" group, because workflow_dispatch defines no `tag_mode`
-  # input and the fallback was a constant. Pushing to the PR then cancelled an
-  # in-flight publish that had already pushed several of the ten images —
-  # observed, not theoretical.
+  # 早先的版本把手动发布与 pull-request 构建都塌缩进同一个 "-pr" 分组，
+  # 因为 workflow_dispatch 没有定义 `tag_mode` 输入，而兜底值是个常量。
+  # 之后向 PR 推送就取消了一场已经推送了十个镜像中若干个的发布 ——
+  # 这是实测到的，不是理论推测。
   #
   #   pull_request      -> ...-pull_request
   #   workflow_dispatch -> ...-workflow_dispatch
-  #   workflow_call     -> ...-main / ...-release  (tag_mode wins)
+  #   workflow_call     -> ...-main / ...-release  (tag_mode 优先)
   group: build-images-${{ github.ref }}-${{ inputs.tag_mode || github.event_name }}
-  # Only a pull-request build is safe to cancel — a newer push supersedes it and
-  # nothing was published. Every publishing path runs to completion, because
-  # cancelling mid-matrix leaves some images pushed at the new tag and the rest
-  # stale, which is worse than a slow queue. For workflow_call this evaluates
-  # against the caller's event (push), so it is false there too.
+  # 只有 pull-request 构建可以安全取消 —— 更新的推送会取代它，且什么都没发布过。
+  # 每条发布路径都跑到底，因为中途取消会让部分镜像已在新标签下推送、其余仍是旧的，
+  # 这比排队慢更糟。对 workflow_call 而言，这里求值的是调用方的事件（push），
+  # 因此在那里也是 false。
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_BASE: ghcr.io/nitin27may/e-commerce-agents
+  IMAGE_BASE: ghcr.io/s1encisi/reliable-commerce-agents
 
 jobs:
   build:
-    name: Build ${{ matrix.image }}
+    name: 构建 ${{ matrix.image }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -90,10 +86,10 @@ jobs:
       packages: write
 
     strategy:
-      fail-fast: false # build every image even if one fails
+      fail-fast: false # 即使某个镜像失败也构建全部镜像
       matrix:
         include:
-          # ── Agents: one Dockerfile, ARG AGENT_NAME selects the module ──
+          # ── 智能体：一个 Dockerfile，由 ARG AGENT_NAME 选择模块 ──
           - image: orchestrator
             context: ./agents/python
             dockerfile: ./agents/python/Dockerfile
@@ -136,8 +132,8 @@ jobs:
               AGENT_NAME=inventory_fulfillment
               AGENT_PORT=8085
             smoke_module: inventory_fulfillment.main
-          # auth-server is an agent-shaped image too (AUTH_MODE=oauth path).
-          # docker-compose.yml builds it from the same Dockerfile.
+          # auth-server 也是智能体形态的镜像（AUTH_MODE=oauth 路径）。
+          # docker-compose.yml 用同一个 Dockerfile 构建它。
           - image: auth-server
             context: ./agents/python
             dockerfile: ./agents/python/Dockerfile
@@ -146,7 +142,7 @@ jobs:
               AGENT_PORT=8090
             smoke_module: auth_server.main
 
-          # ── MCP servers: separate Dockerfile, uv workspace packages ──
+          # ── MCP 服务器：独立 Dockerfile，uv 工作区包 ──
           - image: mcp-product
             context: ./agents/python
             dockerfile: ./agents/python/Dockerfile.mcp
@@ -166,11 +162,10 @@ jobs:
               MCP_PORT=9001
             smoke_module: ecommerce_mcp_inventory.server
 
-          # ── Frontend: Node multi-stage, no build args ──
-          # Deliberately no NEXT_PUBLIC_API_URL. The backend address is a
-          # runtime variable (ORCHESTRATOR_URL) read by the server-side
-          # /api/* proxy, so this image is environment-independent and the
-          # same digest runs locally and on Azure.
+          # ── 前端：Node 多阶段构建，无构建参数 ──
+          # 刻意不设 NEXT_PUBLIC_API_URL。后端地址是运行时变量（ORCHESTRATOR_URL），
+          # 由服务端 /api/* 代理读取，因此这个镜像与环境无关，同一个 digest
+          # 既能在本地运行也能在 Azure 上运行。
           - image: frontend
             context: ./web
             dockerfile: ./web/Dockerfile
@@ -180,12 +175,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ── Resolve publish intent ───────────────────────────────────────────
+      # ── 判定发布意图 ─────────────────────────────────────────────────────
       #
-      # `pull_request` has no `inputs` context at all, so `inputs.publish` is
-      # empty there and this correctly resolves to false. Fork PRs cannot be
-      # granted packages:write, so the PR path must never attempt a push.
-      - name: Resolve publish flag
+      # `pull_request` 完全没有 `inputs` 上下文，因此那里的 `inputs.publish` 为空，
+      # 这里会正确地解析为 false。来自 fork 的 PR 无法获得 packages:write，
+      # 所以 PR 路径绝不能尝试推送。
+      - name: 判定发布开关
         id: publish
         run: |
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
@@ -196,18 +191,18 @@ jobs:
             echo "should_push=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # ── Derive image tags ────────────────────────────────────────────────
+      # ── 推导镜像标签 ─────────────────────────────────────────────────────
       #
-      # :sha-<7>  immutable, one per commit  (main)
-      # :main     rolling tip of main, tests green
-      # :vX.Y.Z   immutable release
-      # :latest   newest RELEASE -- deliberately not tip of main, because
-      #           docker-compose.demo.yml pins it and a first-time visitor
-      #           should land on something that passed the full gate.
+      # :sha-<7>  不可变，每个提交一个  (main)
+      # :main     main 的滚动最新，测试全绿
+      # :vX.Y.Z  不可变的发布版本
+      # :latest  最新的**发布版本** —— 刻意不是 main 的最新提交，因为
+      #           docker-compose.demo.yml 固定使用它，首次到访者应该落到
+      #           通过了完整门禁的东西上。
       #
-      # A pre-release tag (any version containing a hyphen, e.g. v1.2.0-rc.1)
-      # publishes its own version tag and does NOT move :latest.
-      - name: Derive image tags
+      # 预发布标签（任何含连字符的版本，例如 v1.2.0-rc.1）只发布自己的版本标签，
+      # 不会移动 :latest。
+      - name: 推导镜像标签
         id: meta
         run: |
           IMAGE_NAME="${{ env.IMAGE_BASE }}/${{ matrix.image }}"
@@ -216,11 +211,11 @@ jobs:
           if [[ "${{ inputs.tag_mode }}" == "release" ]]; then
             VERSION="${{ inputs.version }}"
             if [[ -z "$VERSION" ]]; then
-              echo "::error::tag_mode=release requires a non-empty version input"
+              echo "::error::tag_mode=release 需要非空的 version 输入"
               exit 1
             fi
             if [[ "$VERSION" == *-* ]]; then
-              echo "Pre-release ${VERSION}: publishing version tag only, not moving :latest"
+              echo "预发布 ${VERSION}：仅发布版本标签，不更新 :latest"
               echo "tags=${IMAGE_NAME}:${VERSION}" >> "$GITHUB_OUTPUT"
             else
               echo "tags=${IMAGE_NAME}:${VERSION},${IMAGE_NAME}:latest" >> "$GITHUB_OUTPUT"
@@ -230,27 +225,25 @@ jobs:
             if [[ "${{ steps.publish.outputs.should_push }}" == "true" ]]; then
               echo "tags=${IMAGE_NAME}:main,${IMAGE_NAME}:sha-${SHA}" >> "$GITHUB_OUTPUT"
             else
-              # PR builds are loaded locally and discarded; the tag is only a
-              # handle for the smoke-test step below.
+              # PR 构建在本地加载后即被丢弃；该标签只是下面冒烟测试步骤的句柄。
               echo "tags=${IMAGE_NAME}:pr-${SHA}" >> "$GITHUB_OUTPUT"
             fi
           fi
 
-      # ── Multi-arch only on the publish path ──────────────────────────────
+      # ── 仅发布路径使用多架构 ─────────────────────────────────────────────
       #
-      # `load: true` cannot load a multi-platform image, and the import
-      # smoke-test below depends on `load`. So PRs stay amd64-only. Readers on
-      # Apple Silicon otherwise get QEMU emulation on a published image, which
-      # is why the publish path builds arm64 too -- at roughly 3x build time,
-      # acceptable on main, not on every PR.
-      - name: Set up QEMU
+      # `load: true` 无法加载多平台镜像，而下面的导入冒烟测试依赖 `load`。
+      # 因此 PR 只做 amd64。否则 Apple Silicon 上的读者拿到的已发布镜像要走 QEMU 模拟，
+      # 这就是发布路径也构建 arm64 的原因 —— 构建时间约为 3 倍，在 main 上可以接受，
+      # 但不可能每个 PR 都这样。
+      - name: 配置 QEMU
         if: steps.publish.outputs.should_push == 'true'
         uses: docker/setup-qemu-action@v3
 
-      - name: Set up Docker Buildx
+      - name: 配置 Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to GHCR
+      - name: 登录 GHCR
         if: steps.publish.outputs.should_push == 'true'
         uses: docker/login-action@v3
         with:
@@ -258,7 +251,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build ${{ matrix.image }}
+      - name: 构建 ${{ matrix.image }}
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
@@ -268,22 +261,20 @@ jobs:
           push: ${{ steps.publish.outputs.should_push == 'true' }}
           load: ${{ steps.publish.outputs.should_push != 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
-          # Without these, each GHCR package page renders empty instead of
-          # showing the repository README and the MIT licence.
+          # 没有这些，每个 GHCR 包页面都会渲染成空白，而不会显示仓库 README 与 MIT 许可证。
           labels: |
-            org.opencontainers.image.source=https://github.com/nitin27may/e-commerce-agents
+            org.opencontainers.image.source=https://github.com/s1encisi/reliable-commerce-agents
             org.opencontainers.image.licenses=MIT
             org.opencontainers.image.title=${{ matrix.image }}
             org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
 
-      # ── Import smoke-test (PR path only -- needs a locally loaded image) ──
+      # ── 导入冒烟测试（仅 PR 路径 —— 需要本地已加载的镜像）──────────────────
       #
-      # Catches the class of break that a unit test never sees: a module that
-      # imports fine in the repo but not inside the image, because a dependency
-      # was declared in the wrong extra or a path assumption differs.
-      - name: Smoke-test ${{ matrix.image }} image
+      # 捕获单测永远看不到的那类故障：某个模块在仓库里能干净导入，在镜像内却不行，
+      # 因为依赖被声明在了错误的 extra 里，或路径假设不同。
+      - name: 冒烟测试 ${{ matrix.image }} 镜像
         if: steps.publish.outputs.should_push != 'true' && matrix.smoke_module != ''
         run: |
           IMAGE_TAG=$(echo "${{ steps.meta.outputs.tags }}" | cut -d',' -f1)
@@ -305,10 +296,9 @@ jobs:
           sys.exit(0)
           "
 
-      # The frontend image has no Python module to import. `node server.js` is
-      # the standalone Next.js entry point; starting it and getting a listening
-      # socket is the equivalent check.
-      - name: Smoke-test frontend image
+      # 前端镜像没有可导入的 Python 模块。`node server.js` 是 Next.js 独立模式的入口；
+      # 启动它并拿到一个监听中的套接字就是等价的检查。
+      - name: 冒烟测试前端镜像
         if: steps.publish.outputs.should_push != 'true' && matrix.image == 'frontend'
         run: |
           IMAGE_TAG=$(echo "${{ steps.meta.outputs.tags }}" | cut -d',' -f1)
@@ -321,23 +311,23 @@ jobs:
             fi
             sleep 2
           done
-          echo "::error::frontend image did not respond on :3000 within 60s"
+          echo "::error::前端镜像未在 60 秒内于 :3000 响应"
           docker logs "$CID"
           docker rm -f "$CID" > /dev/null
           exit 1
 
-  # A single job the branch protection rule can require, instead of listing ten
-  # matrix legs by name (which breaks every time the matrix changes).
+  # 一个可供分支保护规则要求的单一 job，而不必按名字列出十个矩阵分支
+  # （那样每次矩阵变化都会失效）。
   build-images-ok:
-    name: Build images · all green
+    name: 构建镜像 · 全部通过
     runs-on: ubuntu-latest
     needs: build
     if: always()
     steps:
-      - name: Check matrix result
+      - name: 检查矩阵结果
         run: |
           if [[ "${{ needs.build.result }}" != "success" ]]; then
-            echo "::error::one or more image builds failed"
+            echo "::error::一个或多个镜像构建失败"
             exit 1
           fi
-          echo "all ten images built"
+          echo "全部十个镜像构建完成"

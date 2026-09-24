@@ -1,4 +1,4 @@
-"""Pricing & Promotions agent definition."""
+"""定价与促销（pricing & promotions）智能体定义。"""
 
 from agent_framework import Agent
 
@@ -38,7 +38,7 @@ AGENT_TOOLS = [
 
 
 def create_pricing_promotions_agent() -> Agent:
-    """Create the Pricing & Promotions ChatAgent with all tools."""
+    """创建带全部工具的定价与促销 ChatAgent。"""
     return Agent(
         client=create_chat_client(),
         name="pricing-promotions",

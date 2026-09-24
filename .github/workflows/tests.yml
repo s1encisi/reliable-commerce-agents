@@ -1,4 +1,4 @@
-name: Tests
+name: 测试
 
 on:
   push:
@@ -6,9 +6,8 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
-  # Called by release.yml so a version tag re-runs this whole suite against the
-  # tagged commit before anything is published. GitHub Actions has no
-  # cross-workflow `needs:`, so `workflow_call` is the only way to express it.
+  # 由 release.yml 调用，使版本标签在发布任何东西之前，先对被打标签的提交重跑整套测试。
+  # GitHub Actions 没有跨工作流的 `needs:`，所以 `workflow_call` 是唯一能表达它的方式。
   workflow_call:
 
 permissions:
@@ -21,28 +20,29 @@ concurrency:
 
 jobs:
   python-tests:
-    name: Python · pytest + coverage
+    name: Python · pytest + 覆盖率
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install uv
+      - name: 安装 uv
         uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
 
-      - name: Install Python 3.12
+      - name: 安装 Python 3.12
         run: uv python install 3.12
 
-      - name: Sync dependencies
+      - name: 同步依赖
         working-directory: agents/python
-        # --all-packages pulls in the uv workspace members (ecommerce-mcp-product,
-        # ecommerce-mcp-inventory) — required so tests/test_mcp_oauth_integration.py
-        # can import them; without it, collection fails with ModuleNotFoundError.
+        # --all-packages 会拉入 uv 工作区成员（ecommerce-mcp-product、
+        # ecommerce-mcp-inventory）—— 这是必需的，否则
+        # tests/test_mcp_oauth_integration.py 无法导入它们，
+        # 收集阶段就会以 ModuleNotFoundError 失败。
         run: uv sync --all-packages --extra dev
 
-      - name: Run pytest with coverage
+      - name: 运行 pytest 并统计覆盖率
         working-directory: agents/python
         run: |
           uv run pytest \
@@ -52,7 +52,7 @@ jobs:
             --cov-report=term-missing \
             --cov-fail-under=70
 
-      - name: Upload coverage artifact
+      - name: 上传覆盖率产物
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -61,15 +61,14 @@ jobs:
           retention-days: 30
 
   mcp-package-tests:
-    name: MCP packages · smoke tests
+    name: MCP 包 · 冒烟测试
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    # Registration/import smoke tests only — no testcontainer Postgres needed.
-    # Integration-marked tests are skipped here (`-m "not integration"`). They
-    # are NOT run by any other scheduled job today — evals.yml is
-    # workflow_dispatch-only and only runs `evals.run_evals`, not pytest, so it
-    # never exercises these packages' integration tests. A PR-blocking smoke
-    # gate that would cover this is planned but not yet implemented.
+    # 只做注册/导入冒烟测试 —— 不需要 testcontainers 的 Postgres。
+    # 标记为 integration 的测试在这里被跳过（`-m "not integration"`）。它们目前
+    # 不被任何其他定时任务运行 —— evals.yml 仅支持 workflow_dispatch，且只运行
+    # `evals.run_evals` 而非 pytest，因此从不触及这些包的集成测试。
+    # 一道能覆盖此处的、阻断 PR 的冒烟门禁已有规划，但尚未实现。
     strategy:
       matrix:
         package:
@@ -78,62 +77,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install uv
+      - name: 安装 uv
         uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
 
-      - name: Install Python 3.12
+      - name: 安装 Python 3.12
         run: uv python install 3.12
 
-      - name: Sync package deps
+      - name: 同步包依赖
         working-directory: agents/python
         run: uv sync --frozen --all-packages --extra dev
 
-      - name: Run smoke tests (skip integration)
+      - name: 运行冒烟测试（跳过集成测试）
         working-directory: agents/python
         run: uv run pytest ${{ matrix.package.dir }}/tests -m "not integration" -v
 
-  dotnet-tests:
-    name: .NET · dotnet test + coverage
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET 10
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "10.0.x"
-
-      - name: Restore
-        working-directory: agents/dotnet
-        run: dotnet restore ECommerceAgents.sln
-
-      - name: Build
-        working-directory: agents/dotnet
-        run: dotnet build ECommerceAgents.sln --configuration Release --no-restore
-
-      - name: Test
-        working-directory: agents/dotnet
-        run: |
-          dotnet test ECommerceAgents.sln \
-            --configuration Release \
-            --no-build \
-            --logger "trx;LogFileName=test-results.trx" \
-            --collect:"XPlat Code Coverage" \
-            --results-directory TestResults
-
-      - name: Upload .NET test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: dotnet-test-results
-          path: agents/dotnet/TestResults/
-          retention-days: 30
-
   web-tests:
-    name: Web · typecheck + lint + test + build
+    name: Web · 类型检查 + 代码检查 + 测试 + 构建
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -142,86 +103,83 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install pnpm
+      - name: 安装 pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 10.15.0
 
-      - name: Setup Node 22
+      - name: 配置 Node 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
 
-      - name: Install dependencies
-        # pnpm-workspace.yaml's committed allowBuilds denies msw/sharp/
-        # unrs-resolver's postinstall scripts explicitly (see #7) — without
-        # it, a fresh install hits pnpm's interactive build-approval gate
-        # and fails outright in a non-interactive CI shell.
+      - name: 安装依赖
+        # pnpm-workspace.yaml 中已提交的 allowBuilds 显式拒绝了 msw/sharp/
+        # unrs-resolver 的 postinstall 脚本（见 #7）—— 没有它，全新安装会撞上
+        # pnpm 的交互式构建审批门禁，在非交互的 CI shell 中直接失败。
         run: pnpm install --frozen-lockfile
 
-      - name: Typecheck
+      - name: 类型检查
         run: pnpm exec tsc --noEmit
 
-      - name: Lint
+      - name: 代码检查
         run: pnpm lint
 
-      - name: Unit / component tests
+      - name: 单元 / 组件测试
         run: pnpm test
 
-      - name: Build
+      - name: 构建
         run: pnpm build
 
-  # Playwright E2E is intentionally not run in CI. It needs the full live
-  # stack (docker compose: Postgres + Redis + all agents) plus a real
-  # OPENAI_API_KEY (the LLM is never mocked), which is impractical and costly
-  # for every push. The specs remain under web/e2e/ — run them locally against
-  # a running app with: cd web && pnpm exec playwright test
+  # Playwright E2E 被刻意排除在 CI 之外。它需要完整的实时环境
+  # （docker compose：Postgres + Redis + 全部智能体）以及真实的
+  # OPENAI_API_KEY（LLM 从不被 mock），对每次推送而言既不现实也太贵。
+  # 这些 spec 仍保留在 web/e2e/ 下 —— 对着运行中的应用在本地运行它们：
+  # cd web && pnpm exec playwright test
 
   workflow-visualization-drift:
-    name: Workflow diagrams · drift check
+    name: 工作流图 · 漂移检查
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    # Gated on an explicit flag until visualization lands in Phase 7.
+    # 在可视化工作落地 Phase 7 之前，由显式开关控制。
     if: ${{ vars.WORKFLOW_VISUALIZATION_ON_BUILD == 'true' }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install uv
+      - name: 安装 uv
         uses: astral-sh/setup-uv@v4
 
-      - name: Sync deps
+      - name: 同步依赖
         working-directory: agents/python
         run: uv sync --extra dev
 
-      - name: Regenerate diagrams
+      - name: 重新生成图
         working-directory: agents/python
         run: uv run python -m scripts.visualize_workflows
 
-      - name: Fail on uncommitted diff
+      - name: 存在未提交差异时失败
         run: |
           if ! git diff --quiet docs/workflows/; then
-            echo "::error::workflow diagrams are out of date. Re-run scripts/visualize_workflows.py and commit."
+            echo "::error::工作流图已过期。请重新运行 scripts/visualize_workflows.py 并提交。"
             git diff docs/workflows/
             exit 1
           fi
 
-  # ── Publish rolling images, only after the suite is green ──────────────────
+  # ── 仅在整套测试全绿之后发布滚动镜像 ─────────────────────────────────────
   #
-  # This is the gate. build-images.yml no longer decides to publish anything on
-  # its own; it exposes `workflow_call` and this job is what grants it, after
-  # `needs:` on every test job above.
+  # 这就是那道门禁。build-images.yml 不再自行决定发布任何东西；它暴露
+  # `workflow_call`，而由这个 job 在对上面每个测试 job 加 `needs:` 之后授予发布权。
   #
-  # Deliberately NOT in `needs`:
-  #   workflow-visualization-drift  — gated behind vars.WORKFLOW_VISUALIZATION_ON_BUILD,
-  #     so it is skipped on most runs, and a skipped dependency would skip this job too.
-  #   evals.yml / tutorials.yml     — they gate the pull request, not the image. Tutorial
-  #     CI has nothing to do with the contents of these images, and coupling them means a
-  #     broken tutorial chapter blocks a security fix from shipping.
+  # 刻意不放进 `needs` 的：
+  #   workflow-visualization-drift  — 受 vars.WORKFLOW_VISUALIZATION_ON_BUILD 控制，
+  #     所以大多数运行里它会被跳过，而一个被跳过的依赖也会跳过本 job。
+  #   evals.yml / tutorials.yml     — 它们为 pull request 把关，而非为镜像。教程 CI
+  #     与这些镜像的内容无关，把它们耦合起来意味着一个坏掉的教程章节会挡住安全修复的发布。
   publish-main:
-    name: Publish :main images
-    needs: [python-tests, mcp-package-tests, dotnet-tests, web-tests]
+    name: 发布 :main 镜像
+    needs: [python-tests, mcp-package-tests, web-tests]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: read

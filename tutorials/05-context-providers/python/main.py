@@ -1,13 +1,13 @@
 """
-MAF v1 — Chapter 05: Context Providers (Python)
+MAF v1 — 第 05 章：上下文提供器（Python）
 
-Inject per-request context into the agent without hard-coding it in the system
-prompt. Demonstrates the ContextProvider.before_run hook calling
-context.extend_instructions(...) — the MAF-native way to add dynamic context.
+把逐请求的上下文注入智能体，而不必把它硬编码进系统提示词。演示
+ContextProvider.before_run 钩子调用 context.extend_instructions(...) ——
+这是 MAF 原生的动态上下文注入方式。
 
-Run:
+运行：
     python tutorials/05-context-providers/python/main.py
-    # Uses the default user (Alice). Or pass an email / name to swap:
+    # 使用默认用户（Alice）。也可以传入邮箱 / 姓名来切换：
     python tutorials/05-context-providers/python/main.py bob@example.com Bob gold
 """
 
@@ -33,11 +33,11 @@ INSTRUCTIONS = "You are a personal shopping assistant. Greet the user by name if
 FIXTURES_DIR = pathlib.Path(__file__).resolve().parent / "tests" / "fixtures" / "replay"
 
 
-# ─────────────── The ContextProvider ───────────────
+# ─────────────── 上下文提供器 ───────────────
 
 
 class UserProfileProvider(ContextProvider):
-    """Injects the current user's profile as additional instructions for each run."""
+    """把当前用户的档案作为额外指令，注入到每一次运行中。"""
 
     def __init__(self, *, email: str, name: str, loyalty_tier: str = "silver") -> None:
         super().__init__(source_id="user-profile")
@@ -53,16 +53,16 @@ class UserProfileProvider(ContextProvider):
         context: Any,
         state: dict[str, Any],
     ) -> None:
-        """Runs before the LLM call. We extend instructions so the model sees the user."""
+        """在 LLM 调用之前运行。我们扩展指令，让模型看到这位用户。"""
         context.extend_instructions(
             "user-profile",
             f"Current user: {self.name} ({self.email}). Loyalty tier: {self.loyalty_tier}.",
         )
-        # Also stash in the shared state so tools (Ch02 pattern) can read it.
+        # 同时也放进共享状态，好让工具（第 02 章的模式）能读到它。
         state["user"] = {"email": self.email, "name": self.name, "loyalty_tier": self.loyalty_tier}
 
 
-# ─────────────── Client + agent factories ───────────────
+# ─────────────── 客户端与智能体工厂 ───────────────
 
 
 def _default_client() -> OpenAIChatClient | OpenAIChatCompletionClient | ReplayChatClient:
@@ -83,9 +83,9 @@ def _default_client() -> OpenAIChatClient | OpenAIChatCompletionClient | ReplayC
     return OpenAIChatClient(
         model=os.environ.get("LLM_MODEL", "gpt-4.1"),
         api_key=os.environ["OPENAI_API_KEY"],
-        # Phase 9: any OpenAI-compatible endpoint (GitHub Models, OpenRouter,
-        # vLLM, LM Studio, Ollama) instead of api.openai.com — see
-        # tutorials/00-setup/README.md's "Don't have a paid API key?" section.
+        # Phase 9：可指向任何兼容 OpenAI 的端点（GitHub Models、OpenRouter、
+        # vLLM、LM Studio、Ollama），而不必是 api.openai.com —— 见
+        # tutorials/00-setup/README.md 的「没有付费 API key？」一节。
         base_url=os.environ.get("LLM_BASE_URL") or None,
     )
 
@@ -105,7 +105,7 @@ async def ask(agent: Agent, question: str) -> str:
 
 
 async def main() -> None:
-    # CLI args: email, name, loyalty_tier (all optional)
+    # 命令行参数：邮箱、姓名、会员等级（均为可选）
     email = sys.argv[1] if len(sys.argv) > 1 else "alice@example.com"
     name = sys.argv[2] if len(sys.argv) > 2 else "Alice"
     tier = sys.argv[3] if len(sys.argv) > 3 else "gold"
@@ -114,7 +114,7 @@ async def main() -> None:
     agent = build_agent(provider)
 
     answer = await ask(agent, "Greet me and tell me what tier I'm on.")
-    print(f"A: {answer}")
+    print(f"答：{answer}")
 
 
 if __name__ == "__main__":

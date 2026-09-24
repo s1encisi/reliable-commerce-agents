@@ -29,7 +29,7 @@ export default function LoginPage() {
     setError("");
 
     if (!email || !password) {
-      setError("Email and password are required.");
+      setError("请输入邮箱和密码。");
       return;
     }
 
@@ -39,7 +39,7 @@ export default function LoginPage() {
       router.push("/chat");
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : "Login failed. Please try again.";
+        err instanceof Error ? err.message : "登录失败，请稍后重试。";
       setError(message);
     } finally {
       setIsLoading(false);
@@ -51,18 +51,18 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            E-Commerce Agents
+            可靠电商多智能体平台
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Multi-agent e-commerce platform
+            多智能体电商平台
           </p>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Sign in</CardTitle>
+            <CardTitle className="text-lg">登录</CardTitle>
             <CardDescription>
-              Enter your credentials to access the platform.
+              输入您的账号密码以进入平台。
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -74,7 +74,7 @@ export default function LoginPage() {
               )}
 
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">邮箱</Label>
                 <Input
                   id="email"
                   type="email"
@@ -87,11 +87,11 @@ export default function LoginPage() {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password">密码</Label>
                 <Input
                   id="password"
                   type="password"
-                  placeholder="Your password"
+                  placeholder="请输入密码"
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -105,16 +105,16 @@ export default function LoginPage() {
                 disabled={isLoading}
                 className="mt-2 w-full"
               >
-                {isLoading ? "Signing in..." : "Sign in"}
+                {isLoading ? "登录中…" : "登录"}
               </Button>
 
               <p className="text-center text-sm text-muted-foreground">
-                Don&apos;t have an account?{" "}
+                还没有账号？{" "}
                 <Link
                   href="/signup"
                   className="font-medium text-primary hover:underline"
                 >
-                  Create one
+                  立即注册
                 </Link>
               </p>
             </form>

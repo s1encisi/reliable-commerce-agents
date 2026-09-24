@@ -1,4 +1,4 @@
-"""Start a separate local demo; never reads real model credentials or resets the main stack."""
+"""启动独立本地演示，不读取真实模型凭据，也不重置主环境。"""
 
 import argparse
 import asyncio
@@ -27,7 +27,7 @@ def demo_environment() -> dict[str, str]:
         }
         path.write_text("\n".join(f"{k}={v}" for k, v in entries.items()) + "\n")
     path.chmod(0o600)
-    # This is our generated data file, not a shell script; never source or eval it.
+    # 这是生成的数据文件，不是 Shell 脚本，禁止 source 或 eval。
     values = dict(
         line.split("=", 1)
         for line in path.read_text().splitlines()
@@ -179,18 +179,18 @@ def main() -> None:
                 start_new_session=True,
             )
         )
-        print("Demo: http://localhost:3010  | API: http://localhost:8180", flush=True)
+        print("演示地址: http://localhost:3010  | API: http://localhost:8180", flush=True)
         print(
             "customer@example.test / DemoPass123!  | admin@example.test / DemoPass123!",
             flush=True,
         )
         print(
-            "No live LLM: use the Return & Replace workflow or the Orders / Approvals pages. Ctrl-C stops app processes.",
+            "未接入真实大模型：请使用「退货与换货」工作流，或访问订单 / 审批页面。Ctrl-C 可停止应用进程。",
             flush=True,
         )
         while all(process.poll() is None for process in processes):
             time.sleep(1)
-        raise RuntimeError("A demo process exited; inspect .local/demo/*.log")
+        raise RuntimeError("有演示进程退出；请查看 .local/demo/*.log")
     except KeyboardInterrupt:
         pass
     finally:

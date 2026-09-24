@@ -4,7 +4,7 @@ Standalone MCP server for the e-commerce inventory and fulfillment domain. Expos
 warehouse availability, restock schedules, shipping estimates, and carrier comparison over the
 [MCP](https://modelcontextprotocol.io) streamable HTTP transport.
 
-Part of the [E-Commerce Agents](https://github.com/nitinksingh/e-commerce-agents) demo platform.
+Part of the [E-Commerce Agents](https://github.com/s1encisi/reliable-commerce-agents) demo platform.
 
 ## Tools
 

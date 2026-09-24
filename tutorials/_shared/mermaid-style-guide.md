@@ -1,24 +1,24 @@
-# Mermaid Diagram Style Guide
+# Mermaid 图表风格指南
 
-All chapter diagrams follow this guide so the series reads consistently and every diagram renders cleanly in both light and dark Hugo themes.
+所有章节的图表都遵循本指南，以保证整个系列阅读体验一致，且每张图在文档站点的明暗两套主题下都能正常渲染。
 
-## Why this exists
+## 为什么要有这份指南
 
-Mermaid's default theme is tuned for light backgrounds. It produces washed-out nodes on dark pages and illegible arrow labels. This guide pins a palette with enough contrast in both modes (WCAG AA, text ≥ 4.5:1 on its fill) and a small set of semantic classes you can reuse.
+Mermaid 的默认主题是按浅色背景调校的。在深色页面上，它会渲染出泛白模糊的节点和难以辨认的箭头标签。本指南固定了一套在明暗两种模式下都有足够对比度的调色板（符合 WCAG AA，文字与其填充色对比度 ≥ 4.5:1），并提供一小组可复用的语义化 class。
 
-## The palette
+## 调色板
 
-| Class      | Role                                    | Fill        | Stroke      | Text     |
+| Class      | 用途                                    | 填充色      | 描边色      | 文字色   |
 |------------|-----------------------------------------|-------------|-------------|----------|
-| `core`     | Core services, agents, MAF primitives   | `#2563eb`   | `#1e40af`   | `#ffffff`|
-| `external` | External APIs, LLMs, MCP servers        | `#f59e0b`   | `#b45309`   | `#000000`|
-| `success`  | Validated output, success paths         | `#10b981`   | `#047857`   | `#ffffff`|
-| `error`    | Error paths, security boundaries        | `#ef4444`   | `#b91c1c`   | `#ffffff`|
-| `infra`    | Databases, caches, infra, supporting    | `#64748b`   | `#334155`   | `#ffffff`|
+| `core`     | 核心服务、智能体、MAF 原语              | `#2563eb`   | `#1e40af`   | `#ffffff`|
+| `external` | 外部 API、LLM、MCP 服务器               | `#f59e0b`   | `#b45309`   | `#000000`|
+| `success`  | 校验通过的输出、成功路径                | `#10b981`   | `#047857`   | `#ffffff`|
+| `error`    | 错误路径、安全边界                      | `#ef4444`   | `#b91c1c`   | `#ffffff`|
+| `infra`    | 数据库、缓存、基础设施、支撑组件        | `#64748b`   | `#334155`   | `#ffffff`|
 
-No other colours. No gradients. No emoji in node labels.
+不得使用其他颜色。不得使用渐变。节点标签中不得使用 emoji。
 
-## Boilerplate — copy this at the top of every diagram
+## 样板代码 —— 复制到每张图的顶部
 
 ```
 %%{init: {'theme':'base', 'themeVariables': {
@@ -38,7 +38,7 @@ flowchart LR
   classDef infra    fill:#64748b,stroke:#334155,color:#ffffff
 ```
 
-Then assign classes to nodes with `class` statements:
+然后用 `class` 语句给节点指定 class：
 
 ```
 class userAgent core
@@ -46,7 +46,7 @@ class openai external
 class postgres infra
 ```
 
-## Example — a tool-calling loop (Ch02)
+## 示例 —— 工具调用循环（第 02 章）
 
 ```
 %%{init: {'theme':'base', 'themeVariables': {
@@ -58,19 +58,19 @@ flowchart LR
   classDef external fill:#f59e0b,stroke:#b45309,color:#000000
   classDef success  fill:#10b981,stroke:#047857,color:#ffffff
 
-  user([User question])
-  agent[Agent]
+  user([用户提问])
+  agent[智能体]
   llm[(LLM)]
-  tool[[get_weather tool]]
-  answer([Final answer])
+  tool[[get_weather 工具]]
+  answer([最终回答])
 
   user --> agent
-  agent -- "prompt + tool schemas" --> llm
-  llm -- "decides to call tool" --> agent
-  agent -- "invokes function" --> tool
-  tool -- "result" --> agent
-  agent -- "result in context" --> llm
-  llm -- "final text" --> agent
+  agent -- "提示词 + 工具模式" --> llm
+  llm -- "决定调用工具" --> agent
+  agent -- "调用函数" --> tool
+  tool -- "结果" --> agent
+  agent -- "把结果放入上下文" --> llm
+  llm -- "最终文本" --> agent
   agent --> answer
 
   class agent core
@@ -79,34 +79,34 @@ flowchart LR
   class answer success
 ```
 
-Nodes use shape to reinforce meaning: `([rounded])` for user-facing, `[rect]` for services/agents, `[(cylinder)]` for datastores/LLMs, `[[hexagon]]` for tools/functions.
+节点用形状来强化含义：`([圆角])` 表示面向用户的部分，`[矩形]` 表示服务/智能体，`[(圆柱)]` 表示数据存储/LLM，`[[六边形]]` 表示工具/函数。
 
-## Supported diagram types
+## 支持的图表类型
 
-| Diagram       | Use when                                                  |
-|---------------|-----------------------------------------------------------|
-| `flowchart`   | Component relationships, data flow, pipelines             |
-| `sequenceDiagram` | Time-ordered message exchanges (A2A, HITL, streaming) |
-| `stateDiagram-v2` | Lifecycles (sessions, checkpoints, Magentic manager)  |
-| `classDiagram` | Rarely — only if inheritance / composition is the point  |
+| 图表类型          | 适用场景                                          |
+|-------------------|---------------------------------------------------|
+| `flowchart`       | 组件关系、数据流、管线                            |
+| `sequenceDiagram` | 按时间排序的消息往来（A2A、HITL、流式输出）        |
+| `stateDiagram-v2` | 生命周期（会话、检查点、Magentic 管理者）          |
+| `classDiagram`    | 很少用 —— 仅在继承/组合关系本身就是重点时使用      |
 
-Avoid `gantt`, `pie`, `journey`, `quadrantChart` — they don't respect the palette.
+避免使用 `gantt`、`pie`、`journey`、`quadrantChart` —— 它们不遵循本调色板。
 
-## Rules
+## 规则
 
-1. **Every chapter gets at least one diagram.** Placed in "The concept" section, before any code.
-2. **Copy the init block unchanged.** Don't tune colours per chapter.
-3. **Assign classes to every node.** Unclassed nodes fall back to Mermaid defaults and look different in dark mode.
-4. **Keep node labels short.** Under 40 chars. Use edge labels for verbs.
-5. **No emoji in labels** (per project convention).
-6. **Prefer horizontal (`LR`) over vertical (`TD`)** unless the concept is genuinely hierarchical.
-7. **Wrap long flows across 2 rows** using subgraphs rather than one giant DAG.
-8. **Link captions under diagrams.** One sentence naming what the diagram proves: *"The LLM never executes the function — it asks the framework to, then sees the result in its next context window."*
+1. **每章至少一张图。** 放在「核心概念」小节，位于任何代码之前。
+2. **原样复制 init 代码块。** 不要按章节调整颜色。
+3. **给每个节点指定 class。** 未指定 class 的节点会退回 Mermaid 默认样式，在深色模式下外观不一致。
+4. **节点标签要短。** 控制在 40 个字符以内。动作类含义用边标签表达。
+5. **标签中不得使用 emoji**（遵循项目约定）。
+6. **优先使用水平布局（`LR`）而非垂直布局（`TD`）**，除非该概念本身确实是层级结构。
+7. **长流程用子图折成 2 行**，而不是画成一张巨大的 DAG。
+8. **在图表下方加一句图注。** 用一句话点明这张图证明了什么：*「LLM 从不执行函数本身 —— 它请框架去执行，然后在下一个上下文窗口中看到结果。」*
 
-## Verification
+## 验证
 
-Before committing a diagram:
+提交图表之前：
 
-1. Preview in Hugo (`hugo server`) and toggle theme — every node must stay readable.
-2. Run the Mermaid CLI if available: `npx -y @mermaid-js/mermaid-cli -i diagram.mmd -o /tmp/d.svg` — errors fail the build.
-3. Keep the diagram under ~25 nodes. Anything larger is two diagrams.
+1. 在文档站点本地预览并切换明暗主题 —— 每个节点都必须保持可读。
+2. 若可用，运行 Mermaid CLI：`npx -y @mermaid-js/mermaid-cli -i diagram.mmd -o /tmp/d.svg` —— 报错即视为构建失败。
+3. 保持图表在 25 个节点以内。超过就拆成两张图。

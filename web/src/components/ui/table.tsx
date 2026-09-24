@@ -1,3 +1,5 @@
+// 表格基础原语：表格容器及其表头、表体、行、单元格等元素。
+
 "use client"
 
 import * as React from "react"

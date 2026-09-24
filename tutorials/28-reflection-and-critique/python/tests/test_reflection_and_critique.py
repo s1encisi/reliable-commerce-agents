@@ -1,13 +1,12 @@
 """
-Chapter 28 — Reflection and Critique: tests.
+第 28 章 —— 反思与评审：测试。
 
-- Unit tests exercise `parse_critique` and the prompt builders directly — no
-  LLM involved.
-- Agent-wiring tests check `build_draft_agent` / `build_critic_agent` produce
-  correctly named, correctly instructed agents.
-- A replay test plays back committed fixtures for the whole draft -> critique
-  -> revise loop (skips gracefully if none exist yet).
-- Integration tests hit real LLMs and are skipped without credentials.
+- 单元测试直接检验 `parse_critique` 与各提示词构造函数 —— 不涉及 LLM。
+- 智能体装配测试检验 `build_draft_agent` / `build_critic_agent` 是否产出
+  名称与指令都正确的智能体。
+- 回放测试回放已提交的夹具，覆盖整个 草稿 -> 评审 -> 改写 循环
+  （若尚无夹具则优雅跳过）。
+- 集成测试访问真实 LLM，缺少凭据时跳过。
 """
 
 from __future__ import annotations
@@ -40,7 +39,7 @@ from main import (  # noqa: E402
     run_reflection_loop,
 )
 
-# ─────────────────── parse_critique unit tests (no LLM) ──────────────────
+# ─────────────────── parse_critique 单元测试（不涉及 LLM） ──────────────────
 
 
 def test_parse_critique_all_pass() -> None:
@@ -67,8 +66,7 @@ def test_parse_critique_is_case_insensitive() -> None:
 
 
 def test_parse_critique_treats_missing_criterion_as_fail() -> None:
-    # Critic response only mentions two of the three criteria — the omitted
-    # one must NOT default to a pass.
+    # 评审者的响应只提到三项评分中的两项 —— 被漏掉的那项绝不能默认为通过。
     text = "PRICE: PASS\nFEATURE: PASS\nFEEDBACK: forgot to grade length"
     critique = parse_critique(text)
     assert critique.price_ok is True
@@ -83,7 +81,7 @@ def test_parse_critique_handles_completely_unparseable_text() -> None:
     assert critique.feedback == ""
 
 
-# ─────────────────── Prompt builder unit tests (no LLM) ──────────────────
+# ─────────────────── 提示词构造函数单元测试（不涉及 LLM） ──────────────────
 
 
 def test_draft_prompt_includes_price_features_and_word_limit() -> None:
@@ -106,11 +104,11 @@ def test_revise_prompt_folds_in_critic_feedback() -> None:
     assert "Old draft." in prompt
 
 
-# ─────────────────── Agent wiring (no LLM call made) ──────────────────
+# ─────────────────── 智能体装配（不发起 LLM 调用） ──────────────────
 
 
 def test_draft_agent_is_named_and_instructed() -> None:
-    agent = build_draft_agent(client=object())  # client isn't called; we only inspect structure
+    agent = build_draft_agent(client=object())  # 该 client 不会被调用，这里只看结构
     assert agent.name == "draft-agent"
     assert "product description" in agent.default_options.get("instructions", "").lower()
 
@@ -123,10 +121,9 @@ def test_critic_agent_is_named_and_instructed() -> None:
 
 
 def test_run_reflection_loop_respects_max_iterations_cap() -> None:
-    # A fake pair of agents where the critic never passes — this proves the
-    # loop actually stops at MAX_ITERATIONS instead of spinning forever, the
-    # load-bearing behavior this chapter exists to teach. No real LLM
-    # involved: both fakes are plain objects with an async `run()`.
+    # 一对假智能体，其中评审者永不通过 —— 以此证明循环确实会在
+    # MAX_ITERATIONS 处停下，而不是无限空转，这正是本章存在的意义所在。
+    # 不涉及真实 LLM：两个假对象都只是带异步 `run()` 的普通对象。
     class _Response:
         def __init__(self, text: str) -> None:
             self.text = text
@@ -177,34 +174,33 @@ def test_default_product_has_expected_shape() -> None:
     assert len(DEFAULT_PRODUCT.features) >= 1
 
 
-# ─────────────────── Replay test (no credentials, runs in CI) ────
+# ─────────────────── 回放测试（无需凭据，可在 CI 中运行） ────
 
 
 @pytest.mark.asyncio
 async def test_replay_reflection_loop_produces_a_trace(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Plays back tests/fixtures/replay/ — no network, no credentials.
+    """回放 tests/fixtures/replay/ —— 不走网络、不需凭据。
 
-    Recorded once against a real LLM (test_real_llm_reflection_loop_runs
-    below, run with RECORD=true) and committed. Covers the whole loop, not
-    just one call — a passing draft may need one LLM turn (draft) plus one
-    critic turn, or several of each if the recorded critic failed the first
-    draft.
+    曾针对真实 LLM 录制过一次（即下方的 test_real_llm_reflection_loop_runs，
+    以 RECORD=true 运行），随后提交入库。覆盖整个循环，而不只是一次调用 ——
+    一段通过的草稿可能需要一轮 LLM（起草）加一轮评审，或者若录制的评审者
+    判第一版草稿不通过，则各需要若干轮。
     """
     if not any(FIXTURES_DIR.glob("*.json")):
-        pytest.skip(f"no recorded fixtures in {FIXTURES_DIR} — run with RECORD=true first")
+        pytest.skip(f"{FIXTURES_DIR} 中没有已录制的夹具 —— 请先以 RECORD=true 运行")
     monkeypatch.setenv("LLM_PROVIDER", "replay")
     draft_agent = build_draft_agent()
     critic_agent = build_critic_agent()
     iterations = await run_reflection_loop(draft_agent, critic_agent, DEFAULT_PRODUCT)
     assert len(iterations) >= 1
     assert len(iterations) <= MAX_ITERATIONS
-    # Every recorded iteration must carry a real draft and a parseable critique.
+    # 每一轮录制结果都必须带有真实草稿和可解析的评审结果。
     for iteration in iterations:
         assert iteration.draft.strip()
         assert isinstance(iteration.critique, CritiqueResult)
 
 
-# ─────────────────── Real-LLM integration tests ────────────────
+# ─────────────────── 真实 LLM 集成测试 ────────────────
 
 
 def _llm_available() -> bool:
@@ -220,9 +216,9 @@ def _llm_available() -> bool:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-@pytest.mark.skipif(not _llm_available(), reason="no LLM credentials in .env")
+@pytest.mark.skipif(not _llm_available(), reason=".env 中没有 LLM 凭据")
 async def test_real_llm_reflection_loop_runs() -> None:
-    """The loop must terminate (pass or hit the cap) and never exceed MAX_ITERATIONS."""
+    """循环必须终止（通过或撞上上限），且绝不超过 MAX_ITERATIONS。"""
     draft_agent = build_draft_agent()
     critic_agent = build_critic_agent()
     iterations = await run_reflection_loop(draft_agent, critic_agent, DEFAULT_PRODUCT)
@@ -232,9 +228,9 @@ async def test_real_llm_reflection_loop_runs() -> None:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-@pytest.mark.skipif(not _llm_available(), reason="no LLM credentials in .env")
+@pytest.mark.skipif(not _llm_available(), reason=".env 中没有 LLM 凭据")
 async def test_real_llm_final_draft_mentions_price_when_passed() -> None:
-    """When the loop reports a pass, the final draft should actually contain the price."""
+    """当循环报告通过时，最终草稿应当确实包含价格。"""
     draft_agent = build_draft_agent()
     critic_agent = build_critic_agent()
     iterations = await run_reflection_loop(draft_agent, critic_agent, DEFAULT_PRODUCT)

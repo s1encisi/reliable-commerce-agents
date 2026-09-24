@@ -5,7 +5,7 @@
 
 ## 启动
 
-先安装 Python 3.12、uv、Node.js 22、pnpm 10、.NET 10（仅其示例需要）和 Docker。
+先安装 Python 3.12、uv、Node.js 22、pnpm 10 和 Docker。
 
 ```bash
 bash scripts/install-deps.sh --core --images

@@ -1,8 +1,7 @@
-"""Schema + integrity tests for eval golden datasets (Track B). No LLM/DB.
+"""评测黄金数据集的模式与完整性测试。
 
-Validates every dataset under ``evals/datasets/`` against the loader's contract
-and cross-checks that each ``expected_tools`` entry names a real tool on the
-target agent (catches typos before an expensive LLM eval run in CI).
+确认每个 expected_tools 都是目标智能体的真实工具，在模型评测前
+捕获拼写或结构错误。
 """
 
 from __future__ import annotations
@@ -17,7 +16,7 @@ from evals.evaluator import load_dataset
 
 DATASETS_DIR = Path(__file__).resolve().parent.parent / "evals" / "datasets"
 
-# dataset filename (stem) -> (module, attribute holding the tool list)
+# 数据集文件名映射到模块与工具列表属性。
 _AGENT_TOOLSETS: dict[str, tuple[str, str]] = {
     "product_discovery": ("product_discovery.agent", "AGENT_TOOLS"),
     "order_management": ("order_management.agent", "AGENT_TOOLS"),
@@ -27,8 +26,8 @@ _AGENT_TOOLSETS: dict[str, tuple[str, str]] = {
 }
 
 
-# red_team.json uses the safety-suite schema (validated in test_eval_safety.py),
-# not the standard golden-dataset schema, so exclude it from the checks here.
+# red_team.json 使用独立安全数据模式，
+# 由 test_eval_safety.py 校验，不套用普通数据集规则。
 _SAFETY_DATASETS = {"red_team"}
 
 
@@ -47,13 +46,13 @@ def _tool_names(module: str, attr: str) -> set[str]:
 
 def test_datasets_exist() -> None:
     found = {p.stem for p in _all_datasets()}
-    # The five specialist datasets must all be present (Track B1).
+    # 五个专业智能体的数据集必须齐全。
     assert _AGENT_TOOLSETS.keys() <= found, f"missing datasets: {_AGENT_TOOLSETS.keys() - found}"
 
 
 @pytest.mark.parametrize("path", _all_datasets(), ids=lambda p: p.stem)
 def test_dataset_loads_and_has_cases(path: Path) -> None:
-    cases = load_dataset(path)  # raises on schema violations
+    cases = load_dataset(path)  # 违反数据模式时抛错。
     assert cases, f"{path.name} has no cases"
     for case in cases:
         assert isinstance(case.input, str) and case.input.strip()

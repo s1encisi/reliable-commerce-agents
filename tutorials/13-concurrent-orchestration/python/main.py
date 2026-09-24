@@ -1,12 +1,11 @@
 """
-MAF v1 — Chapter 13: Concurrent Orchestration (Python)
+MAF v1 — 第 13 章：并发编排（Python）
 
-Three agents analyze the same product idea in parallel: Researcher checks
-market fit, Marketer suggests positioning, Legal flags risks. The
-ConcurrentBuilder collects each agent's response; we log all three and
-show the aggregate.
+三个智能体并行分析同一个产品创意：研究员检查市场契合度，市场人员建议
+定位角度，法务标记风险。ConcurrentBuilder 收集每个智能体的响应；我们
+把三份都打印出来，并展示汇总结果。
 
-Run:
+运行：
     python tutorials/13-concurrent-orchestration/python/main.py "ultrasonic pet collar"
 """
 
@@ -49,9 +48,9 @@ def _default_client() -> OpenAIChatClient | OpenAIChatCompletionClient | ReplayC
     return OpenAIChatClient(
         model=os.environ.get("LLM_MODEL", "gpt-4.1"),
         api_key=os.environ["OPENAI_API_KEY"],
-        # Phase 9: any OpenAI-compatible endpoint (GitHub Models, OpenRouter,
-        # vLLM, LM Studio, Ollama) instead of api.openai.com — see
-        # tutorials/00-setup/README.md's "Don't have a paid API key?" section.
+        # 阶段 9：可改用任意 OpenAI 兼容端点（GitHub Models、OpenRouter、
+        # vLLM、LM Studio、Ollama）替代 api.openai.com —— 见
+        # tutorials/00-setup/README.md 的「没有付费 API 密钥？两条路」一节。
         base_url=os.environ.get("LLM_BASE_URL") or None,
     )
 
@@ -92,21 +91,20 @@ def build_workflow():
 
 
 async def _workflow_events(workflow, message: str):
-    """Yield workflow events from a streaming run.
+    """从一次流式运行中产出工作流事件。
 
-    ``workflow.run(..., stream=True)`` drives each participant's turn through
-    MAF's streaming AgentExecutor path, which in turn streams the chat
-    client's response. ``ReplayChatClient`` (see
-    tutorials/_shared/replay_client.py) wires the same finalizer real clients
-    use, so replay mode streams correctly through this same path — no
-    provider-specific branch needed here.
+    ``workflow.run(..., stream=True)`` 会通过 MAF 的流式 AgentExecutor 路径
+    驱动每个参与者的一轮，而该路径又对流式聊天客户端的响应进行流转。
+    ``ReplayChatClient``（见 tutorials/_shared/replay_client.py）接上了真实
+    客户端所用的同一个收尾器，因此回放模式能沿着这条相同路径正确流式输出 ——
+    这里无需针对特定提供方写分支。
     """
     async for event in workflow.run(message, stream=True):
         yield event
 
 
 async def analyze(idea: str) -> tuple[dict[str, str], float]:
-    """Run the Concurrent analysis. Returns {agent_name: response} + wall-clock seconds."""
+    """运行并发分析。返回 {agent_name: response} 以及墙钟耗时（秒）。"""
     workflow = build_workflow()
     per_agent: dict[str, str] = {}
     start = time.perf_counter()

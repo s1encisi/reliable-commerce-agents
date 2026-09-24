@@ -28,32 +28,31 @@ interface SentimentData {
 }
 
 const SENTIMENT_CONFIG: Record<NonNullable<SentimentData["overall_sentiment"]>, { label: string; tone: SemanticTone }> = {
-  very_positive: { label: "Very Positive", tone: "success" },
-  positive: { label: "Positive", tone: "success" },
-  mixed: { label: "Mixed", tone: "warning" },
-  negative: { label: "Negative", tone: "destructive" },
-  very_negative: { label: "Very Negative", tone: "destructive" },
+  very_positive: { label: "非常正面", tone: "success" },
+  positive: { label: "正面", tone: "success" },
+  mixed: { label: "褒贬不一", tone: "warning" },
+  negative: { label: "负面", tone: "destructive" },
+  very_negative: { label: "非常负面", tone: "destructive" },
 };
 
 const RISK_CONFIG: Record<NonNullable<SentimentData["risk_level"]>, { label: string; tone: SemanticTone }> = {
-  low: { label: "Low Risk", tone: "success" },
-  medium: { label: "Medium Risk", tone: "warning" },
-  high: { label: "High Risk", tone: "destructive" },
+  low: { label: "低风险", tone: "success" },
+  medium: { label: "中风险", tone: "warning" },
+  high: { label: "高风险", tone: "destructive" },
 };
 
 const TREND_CONFIG: Record<NonNullable<SentimentData["trend"]>, { label: string; tone: SemanticTone }> = {
-  improving: { label: "Improving", tone: "success" },
-  stable: { label: "Stable", tone: "info" },
-  declining: { label: "Declining", tone: "destructive" },
-  insufficient_data: { label: "Not enough data", tone: "neutral" },
+  improving: { label: "向好", tone: "success" },
+  stable: { label: "稳定", tone: "info" },
+  declining: { label: "下滑", tone: "destructive" },
+  insufficient_data: { label: "数据不足", tone: "neutral" },
 };
 
 export function ChatSentimentCard({ data }: { data: SentimentData }) {
-  // Nothing to show — e.g. a tool call resolved no data and the model
-  // still emitted an all-empty fence. Don't render a header with a
-  // blank body underneath it. product_name alone still counts: it
-  // identifies which product this is about, unlike pricing-card's fence
-  // (no equivalent identifying field there).
+  // 没有任何内容可展示——例如工具调用没取到数据，但模型仍然输出了一段
+  // 全空的代码块。此时不要渲染一个下方空白的标题栏。仅有 product_name
+  // 也算有效：它说明了这是哪件商品，这一点与 pricing-card 的代码块不同
+  // （那边没有等价的标识字段）。
   const hasAnyData =
     data.product_name != null ||
     data.overall_sentiment != null ||
@@ -76,12 +75,12 @@ export function ChatSentimentCard({ data }: { data: SentimentData }) {
 
   return (
     <div className="my-2 max-w-md rounded-xl border border-border bg-card shadow-sm overflow-hidden">
-      {/* Header */}
+      {/* 标题栏 */}
       <div className="flex items-center justify-between gap-3 border-b border-border bg-muted px-4 py-2.5">
         <div className="flex items-center gap-2 min-w-0">
           <MessageSquareText className="size-4 text-muted-foreground shrink-0" />
           <span className="text-sm font-medium text-foreground truncate">
-            {data.product_name || "Review Sentiment"}
+            {data.product_name || "评论情感"}
           </span>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
@@ -93,7 +92,7 @@ export function ChatSentimentCard({ data }: { data: SentimentData }) {
       </div>
 
       <div className="p-4 space-y-3">
-        {/* Headline metric */}
+        {/* 核心指标 */}
         {(data.average_rating != null || data.total_reviews != null || data.trend) && (
           <div className="flex items-baseline gap-2">
             {data.average_rating != null && (
@@ -101,7 +100,7 @@ export function ChatSentimentCard({ data }: { data: SentimentData }) {
             )}
             {data.total_reviews != null && (
               <span className="text-xs text-muted-foreground">
-                from {data.total_reviews} review{data.total_reviews !== 1 ? "s" : ""}
+                基于 {data.total_reviews} 条评论
               </span>
             )}
             {data.trend && (
@@ -112,34 +111,34 @@ export function ChatSentimentCard({ data }: { data: SentimentData }) {
           </div>
         )}
 
-        {/* Rating distribution */}
+        {/* 评分分布 */}
         {distributionData.length > 0 && (
           <div>
-            <p className="text-[11px] font-medium text-muted-foreground mb-1">Rating distribution</p>
-            <DistributionChart data={distributionData} height={140} valueLabel="Reviews" />
+            <p className="text-[11px] font-medium text-muted-foreground mb-1">评分分布</p>
+            <DistributionChart data={distributionData} height={140} valueLabel="评论数" />
           </div>
         )}
 
-        {/* Monthly trend */}
+        {/* 月度趋势 */}
         {data.monthly_data && data.monthly_data.length > 0 && (
           <div>
-            <p className="text-[11px] font-medium text-muted-foreground mb-1">Rating over time</p>
+            <p className="text-[11px] font-medium text-muted-foreground mb-1">评分随时间变化</p>
             <TrendChart
               data={data.monthly_data.map((m) => ({ month: m.month, average_rating: m.average_rating }))}
               xKey="month"
-              series={[{ key: "average_rating", label: "Avg rating" }]}
+              series={[{ key: "average_rating", label: "平均评分" }]}
               height={140}
             />
           </div>
         )}
 
-        {/* Pros / cons */}
+        {/* 优点 / 缺点 */}
         {((data.pros && data.pros.length > 0) || (data.cons && data.cons.length > 0)) && (
           <div className="grid grid-cols-2 gap-3 text-xs">
             {data.pros && data.pros.length > 0 && (
               <div className="space-y-1">
                 <p className="flex items-center gap-1 font-medium text-success">
-                  <ThumbsUp className="size-3" /> Pros
+                  <ThumbsUp className="size-3" /> 优点
                 </p>
                 <ul className="space-y-0.5 text-muted-foreground">
                   {data.pros.map((p) => (
@@ -151,7 +150,7 @@ export function ChatSentimentCard({ data }: { data: SentimentData }) {
             {data.cons && data.cons.length > 0 && (
               <div className="space-y-1">
                 <p className="flex items-center gap-1 font-medium text-destructive">
-                  <ThumbsDown className="size-3" /> Cons
+                  <ThumbsDown className="size-3" /> 缺点
                 </p>
                 <ul className="space-y-0.5 text-muted-foreground">
                   {data.cons.map((c) => (
@@ -163,10 +162,10 @@ export function ChatSentimentCard({ data }: { data: SentimentData }) {
           </div>
         )}
 
-        {/* Suspicious review count */}
+        {/* 可疑评论数量 */}
         {data.suspicious_count != null && data.suspicious_count > 0 && (
           <p className="text-[11px] text-muted-foreground">
-            {data.suspicious_count} review{data.suspicious_count !== 1 ? "s" : ""} flagged as potentially fake
+            {data.suspicious_count} 条评论被标记为疑似虚假评论
           </p>
         )}
       </div>

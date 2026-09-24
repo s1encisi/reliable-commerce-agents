@@ -1,4 +1,4 @@
-"""Agent memory tools — store and recall user preferences across conversations."""
+"""智能体记忆工具，跨会话保存和读取用户偏好。"""
 
 from __future__ import annotations
 
@@ -32,14 +32,20 @@ async def store_memory(
             return {"error": "User not found"}
 
         memory_id = await conn.fetchval(
-            """INSERT INTO agent_memories (user_id, category, content, importance)
-               VALUES ($1, $2, $3, $4) RETURNING id""",
+            """INSERT INTO agent_memories (user_id, category, content, importance, source_kind, expires_at)
+               VALUES ($1, $2, $3, $4, 'model_proposal', NOW() + INTERVAL '30 days') RETURNING id""",
             user["id"],
             category,
             content,
             min(max(importance, 1), 10),
         )
-        return {"stored": True, "memory_id": str(memory_id), "category": category}
+        return {
+            "stored": True,
+            "memory_id": str(memory_id),
+            "category": category,
+            "confirmed": False,
+            "next_action": "USER_CONFIRMATION",
+        }
 
 
 @tool(
@@ -58,7 +64,12 @@ async def recall_memories(
         return [{"error": "No authenticated user"}]
 
     safe_limit = clamp_limit(limit, default=10, maximum=50)
-    conditions = ["m.is_active = TRUE", "u.email = $1", "(m.expires_at IS NULL OR m.expires_at > NOW())"]
+    conditions = [
+        "m.is_active = TRUE",
+        "m.confirmed_at IS NOT NULL",
+        "u.email = $1",
+        "(m.expires_at IS NULL OR m.expires_at > NOW())",
+    ]
     args: list = [email]
     idx = 2
 

@@ -1,8 +1,8 @@
-# Frozen return-path baselines
+# 冻结的退货链路基线
 
-These modules are immutable evaluation inputs, not production imports.
+这些模块是不可变的评测输入，不作为生产实现导入。本文只更新说明，基线源码及其散列保持原样。
 
-- B0: upstream-derived private snapshot `2ca851fd74d45531ce794c0f6cdb56b3f2f4ec91`, return tool implementation; source attribution and MIT license remain in the repository root.
-- B1: M2 return policy/service and tool adapter saved before M3 changes on 2026-09-16. SHA-256 values are in manifest.json.
-- The harness loads each baseline in a separate process. Shared database/auth utilities and package versions are held constant. No LLM is involved.
-- B2 is the current implementation. Reported comparisons concern the selected return path, not all six agents or all framework features.
+- B0：来自原项目的早期快照 `2ca851fd74d45531ce794c0f6cdb56b3f2f4ec91`，保存当时的退货工具；来源归属与 MIT 许可信息保留，不将其描述为本项目独立原创。
+- B1：2026 年 9 月 16 日、M3 改造之前保存的 M2 退货政策、服务及工具适配器。SHA-256 记录见 `manifest.json`。
+- 评测框架在独立进程加载各基线，保持数据库、认证辅助代码与依赖版本一致，不调用模型。
+- B2 是当前实现。比较结论仅针对选定退货链路，不代表全部六个智能体或所有框架能力。

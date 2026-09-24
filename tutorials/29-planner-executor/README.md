@@ -1,55 +1,29 @@
-# Chapter 29 — Planner-Executor
+# 第 29 章 · 规划器与执行器
 
-## Why this chapter
+[项目首页](../../README.md) · [教程总览](../README.md) · [术语表](../_shared/jargon-glossary.md)
 
-Most of this series' orchestration chapters (02, 12+, and this repo's own default `tool`
-orchestration mode) have the LLM decide **one tool call at a time**, reactively, based on
-whatever it currently knows. That's simple and adaptive, but for a multi-step shopping request —
-"help me put together a birthday gift for someone who likes photography under $200" — it means
-you never see the whole plan before the agent starts acting. You can't approve it, estimate its
-cost, or debug where it went wrong until it's already three tool calls deep.
+## 本章动机
 
-Planner-executor flips the order: decompose the request into an ordered list of concrete steps
-**up front** — the "plan," produced as structured output, not free text — and only then run each
-step in sequence. The plan is inspectable before a single tool fires. This chapter builds a
-minimal planner-executor pair for the e-commerce domain: a planner agent that turns a shopping
-request into a `Plan` of ordered `PlanStep`s, and an executor agent that runs each step, calling
-an in-memory `search_products` tool when a step needs catalog data and reasoning directly over
-earlier results otherwise.
+本系列大多数编排章节（02、12 章之后各章，以及本仓库默认的 `tool` 编排模式）都让 LLM **一次决定一个工具调用**，反应式地、基于它当下所知的一切来做判断。这既简单又自适应，但对于一个多步购物请求 —— 「帮我给一个喜欢摄影的人挑一份 200 元以内的生日礼物」—— 这意味着在智能体开始行动之前，你永远看不到完整计划。你无法批准它、估算它的成本，或者在它已经深入三次工具调用之后才去排查哪里出了问题。
 
-## Prerequisites
+规划器-执行器把这个顺序颠倒过来：**事先**把请求分解成一个有序的具体步骤列表 —— 即「计划」，以结构化输出而非自由文本产出 —— 然后才按顺序逐步执行。计划在任何工具被触发之前就是可检视的。本章为电商领域构建一对极简的规划器-执行器：一个规划器智能体把购物请求变成由有序 `PlanStep` 组成的 `Plan`，一个执行器智能体逐条运行步骤 —— 当某一步需要商品目录数据时调用内存中的 `search_products` 工具，否则直接在前序结果之上推理。
 
-- Completed [Chapter 02 — Adding Tools](../02-add-tools/) (the `@tool` decorator shape reused here)
-- Familiar with [Chapter 04 — Sessions](../04-sessions/) (`AgentSession` — the executor shares one across steps)
-- Repo-root `.env` with a working LLM provider (`OPENAI_API_KEY`, or `AZURE_OPENAI_*`)
+## 前置条件
 
-## The concept
+- 已完成[第 02 章 · 添加工具](../02-add-tools/)（本章复用了 `@tool` 装饰器的形态）
+- 熟悉[第 04 章 · 会话持久化](../04-sessions/)（`AgentSession` —— 执行器在各步骤之间共享同一个会话）
+- 仓库根目录的 `.env` 中有可用的 LLM 提供方（`OPENAI_API_KEY`，或 `AZURE_OPENAI_*`）
 
-A planner-executor system is two agents (or two roles played by one model) with a hard boundary
-between them:
+## 核心概念
 
-1. **The planner** sees only the user's request. It never touches a tool. Its one job is to
-   produce a `Plan` — an ordered list of `PlanStep`s — as **structured output** (a Pydantic model
-   passed as `response_format`), not prose the rest of the code would have to parse with regex.
-2. **The executor** never sees the original request, only one step at a time. For each step it
-   either calls a tool (if the step names a catalog search) or reasons over what earlier steps
-   already produced, then returns a result. The plan itself never changes mid-run — no step
-   result feeds back into re-deciding what step 3 should be.
+规划器-执行器系统是两个智能体（或同一个模型扮演的两个角色），二者之间有一条硬边界：
 
-This is the deliberate trade-off: **predictable and inspectable, at the cost of adaptability.**
-The router/tool pattern (Chapter 02, and this repo's `tool` orchestration mode) has the opposite
-trade-off — the LLM decides the very next action every turn, so it reacts instantly to a
-surprising tool result, but there's no plan to show a user before execution starts, and no single
-point to log "here's everything this run intends to do" for approval or cost estimation. Use
-planner-executor when seeing the whole plan up front has real value (approval gates, cost
-estimates before execution, step-by-step debugging); use reactive tool-calling when the task is
-usually one hop and a full plan would be ceremony.
+1. **规划器**只看到用户的请求。它从不接触任何工具。它唯一的职责是产出一个 `Plan` —— 一个有序的 `PlanStep` 列表 —— 作为**结构化输出**（一个作为 `response_format` 传入的 Pydantic 模型），而不是需要其余代码用正则去解析的散文。
+2. **执行器**从来看不到原始请求，每次只看一步。对每一步，它要么调用工具（如果该步指明了一次目录检索），要么在前序步骤已经产出的结果之上推理，然后返回结果。计划本身在运行中途从不改变 —— 没有任何步骤结果会回流去重新决定第 3 步应该是什么。
 
-Note what this chapter does **not** build: automatic re-planning. If step 2's search comes back
-empty, the executor still tries to run steps 3 and 4 as written. A production planner-executor
-usually adds a loop that re-invokes the planner when a step's result invalidates the rest of the
-plan — this repo's `docs/concepts/06-orchestration-patterns.md` names that adaptive version
-**Magentic**, and it is explicitly **not implemented in this repo yet** (see Gotchas).
+这就是刻意的取舍：**可预测、可检视，代价是自适应性。** 路由/工具模式（第 02 章，以及本仓库的 `tool` 编排模式）的取舍正好相反 —— LLM 每一轮都决定紧接着的下一个动作，因此它能对意外的工具结果即时反应，但在执行开始之前没有计划可以展示给用户，也没有一个单点可以记录「本次运行打算做的全部事情」以供审批或成本估算。当「事先看到完整计划」确有价值时（审批门控、执行前的成本估算、逐步调试），就用规划器-执行器；当任务通常只有一跳、一份完整计划纯属仪式时，就用反应式工具调用。
+
+注意本章**没有**构建什么：自动重新规划。如果第 2 步的检索返回空，执行器仍会照原样尝试运行第 3、4 步。生产级的规划器-执行器通常会加一个循环，在某一步的结果使计划剩余部分失效时重新调用规划器 —— 本仓库的 `docs/concepts/06-orchestration-patterns.md` 把那个自适应版本命名为 **Magentic**，并明确指出它**尚未在本仓库中实现**（见「常见坑」）。
 
 ```mermaid
 %%{init: {'theme':'base', 'themeVariables': {
@@ -62,15 +36,15 @@ flowchart LR
   classDef success  fill:#10b981,stroke:#047857,color:#ffffff
   classDef infra    fill:#64748b,stroke:#334155,color:#ffffff
 
-  user([User request]) --> planner[Planner Agent]
-  planner -- "request + response_format=Plan" --> llm[(LLM)]
-  llm -- "structured Plan JSON" --> planner
-  planner --> plan[[Plan: ordered steps]]
-  plan --> executor[Executor Agent]
-  executor -- "step needs a search" --> tool[[search_products tool]]
-  tool -- "catalog matches" --> executor
-  executor -- "step is reasoning-only" --> llm
-  executor --> results([Per-step results, printed in order])
+  user([用户请求]) --> planner[规划器智能体]
+  planner -- "请求 + response_format=Plan" --> llm[(LLM)]
+  llm -- "结构化的 Plan JSON" --> planner
+  planner --> plan[[计划：有序步骤]]
+  plan --> executor[执行器智能体]
+  executor -- "该步需要检索" --> tool[[search_products 工具]]
+  tool -- "目录命中" --> executor
+  executor -- "该步只需推理" --> llm
+  executor --> results([逐步骤结果，按顺序打印])
 
   class user core
   class planner core
@@ -81,19 +55,18 @@ flowchart LR
   class results success
 ```
 
-The plan is fully formed — and printable — before the executor runs its first step. Nothing about
-step 2 depends on the planner reconsidering step 1.
+计划在执行器运行第一步之前就已完整成形 —— 并且可以打印出来。第 2 步不依赖规划器重新考虑第 1 步。
 
 ## Python
 
-Run from the repo root using the shared `tutorials/` uv project (one `uv sync` covers every chapter):
+在仓库根目录运行，使用共享的 `tutorials/` uv 项目（一次 `uv sync` 覆盖全部章节）：
 
 ```bash
 uv sync --project tutorials
 uv run --project tutorials python tutorials/29-planner-executor/python/main.py
 ```
 
-Source: [`python/main.py`](./python/main.py). The plan is a Pydantic model, not free text:
+源码：[`python/main.py`](./python/main.py)。计划是一个 Pydantic 模型，不是自由文本：
 
 ```python
 class PlanStep(BaseModel):
@@ -110,8 +83,7 @@ class Plan(BaseModel):
     steps: list[PlanStep] = Field(description="Ordered steps that together satisfy the goal.")
 ```
 
-The planner call asks for that shape directly via `response_format`, and `response.value` returns
-an already-parsed `Plan` — no manual JSON parsing in this chapter's code:
+规划器调用通过 `response_format` 直接要求这个形状，而 `response.value` 返回一个已经解析好的 `Plan` —— 本章代码里没有任何手写的 JSON 解析：
 
 ```python
 async def make_plan(planner: Agent, request: str) -> Plan:
@@ -122,8 +94,7 @@ async def make_plan(planner: Agent, request: str) -> Plan:
     return plan
 ```
 
-The executor runs one step at a time on a **shared session**, so step 2 ("filter by price") can
-see step 1's search results without the caller re-stating them:
+执行器在一个**共享会话**上逐条运行步骤，因此第 2 步（「按价格筛选」）能看到第 1 步的检索结果，而不需要调用方重新陈述它们：
 
 ```python
 async def run_plan(request: str) -> tuple[Plan, list[str]]:
@@ -135,122 +106,52 @@ async def run_plan(request: str) -> tuple[Plan, list[str]]:
     return plan, results
 ```
 
-`main()` prints the plan's goal and every step's action *before* printing any result, then walks
-the results in order — the plan is visible as a distinct artifact, not folded silently into the
-final answer.
+`main()` 会*先*打印计划的目标与每一步的动作，然后再打印任何结果，随后按顺序走一遍结果 —— 计划作为一个独立的产物可见，而不是被静默地折进最终回答。
 
-## .NET
+## 常见坑
 
-Source: [`dotnet/Program.cs`](./dotnet/Program.cs).
+- **`response_format` 传给 `run()`，不是传给 `Agent()`。** `Agent(client, response_format=Plan, ...)` 这种写法不存在 —— 要按调用传：`agent.run(request, options={"response_format": Plan})`。`response.value` 负责 JSON 解析；解析失败时 `response.text` 仍然给你原始的模型输出。
+- **缺失或格式错误的结构化回复会表现为 `response.value is None`，** 而不是调用时的异常 —— 本章 `make_plan()` 显式抛出并附上原始文本，让一份坏计划大声失败，而不是让执行器静默地遍历零个步骤。执行一份只解析了一半的计划，比根本不执行更糟。
+- **规划器不配任何工具。** 给它工具，它就会去检索而不是做规划，你得到的是一个反应式智能体，同时还输出一份它早已不再遵循的计划。测试断言了 `build_planner_agent()` 构建出的智能体没有任何工具。
+- **执行器的 `AgentSession` 有意在所有步骤之间共享。** 为每一步新建一个执行器（或新建一个会话），会让第 1 步的检索结果在第 2 步运行时已经丢失 —— `build_executor_agent()` 上的 `InMemoryHistoryProvider()` 正是让「筛选第 1 步的结果」无需重新传参即可成立的原因。没有共享会话时的失败模式不是报错：第 3 步看到一段空对话，无从挑选，于是编造一个看似合理的推荐。
+- **没有重新规划。** 如果某一步的工具结果与计划的假设相矛盾（例如某个检索步骤返回零命中），执行器仍会照字面写好的内容执行剩余步骤。本仓库的 `docs/concepts/06-orchestration-patterns.md` 把这个模式的自适应、可重新规划的版本命名为 **Magentic** —— 「一种规划器-执行器模式：由主导智能体动态规划并向团队分派工作，并随其了解到的情况调整计划」—— 并明确指出它**尚未在本仓库中实现**：`orchestrator/modes/get_mode()` 会为 `"magentic"` 抛出一个具名的 `UnknownModeError`，而不是静默假装它存在（见 `agents/python/orchestrator/modes/__init__.py:57`）。本章是对该通用模式的独立教学实现 —— 它刻意**没有**作为新的生产模式接入 `orchestrator/modes/`，以避免出现第二份会发散的实现，将来真正的 `magentic` 模式落地时还要去调和它。
+- **多个 LLM 轮次意味着多个夹具文件。** 一次四步计划的运行会产生一个规划器夹具，外加每一步一个执行器夹具（如果某步还驱动了一次工具调用往返则更多）—— `ReplayChatClient` 按精确请求（消息 + 工具 + 指令）给每个夹具建立键，因此规划器与执行器即便共用同一个 `FIXTURES_DIR` 也从不冲突。
 
-```bash
-cd tutorials/29-planner-executor/dotnet
-dotnet run
-dotnet test tests/PlannerExecutor.Tests.csproj
-```
-
-Structured output uses the generic `RunAsync<T>` overload rather than Python's `response_format=`:
-
-```csharp
-var response = await planner.RunAsync<Plan>(request, serializerOptions: AIJsonUtilities.DefaultOptions);
-```
-
-`AgentResponse<T>.Result` deserializes lazily and throws on bad JSON, so `MakePlanAsync` catches it and rethrows with the raw text quoted — turning "the model ignored the schema" into one actionable message instead of a `JsonException` from somewhere inside the framework. Executing a half-parsed plan is worse than not executing one.
-
-The session is `AgentSession`, created once and reused across every step:
-
-```csharp
-AgentSession session = await executor.CreateSessionAsync();
-foreach (PlanStep step in plan.Steps)
-{
-    results.Add(await RunStepAsync(executor, session, step));
-}
-```
-
-Two properties carry the pattern and neither is visible from the API:
-
-- **The planner has no tools.** `The_Planner_Is_Given_No_Tools` asserts it. Give it any and it will search instead of planning, and you get a reactive agent that also emits a plan it has already stopped following.
-- **Every step shares one session.** The failure mode without this is not an error: step 3 sees an empty conversation, has nothing to pick from, and invents a plausible recommendation. `All_Steps_Share_One_Session_So_Later_Steps_See_Earlier_Results` asserts the conversation grows, which is the only way to catch it.
-
-## Gotchas
-
-- **`response_format` goes on `run()`, not on `Agent()`.** `Agent(client, response_format=Plan, ...)` is not a
-  thing — pass it per-call: `agent.run(request, options={"response_format": Plan})`. `response.value` does
-  the JSON parsing; `response.text` still gives you the raw model output if parsing fails.
-- **A missing or malformed structured response surfaces as `response.value is None`,** not an
-  exception at call time — `make_plan()` in this chapter raises explicitly with the raw text
-  attached so a bad plan fails loudly instead of the executor silently iterating zero steps.
-- **The executor's `AgentSession` is shared across all steps, on purpose.** Building a fresh
-  executor (or a fresh session) per step would lose step 1's search results by the time step 2
-  runs — `InMemoryHistoryProvider()` on `build_executor_agent()` is what makes "filter the results
-  from step 1" resolvable without re-passing them.
-- **No re-planning.** If a step's tool result contradicts what the plan assumed (e.g., a search
-  step returns zero matches), the executor still executes the remaining steps as literally
-  written. This repo's `docs/concepts/06-orchestration-patterns.md` names the adaptive,
-  re-planning version of this pattern **Magentic** — "a planner-executor pattern where a lead
-  agent dynamically plans and assigns work to a team, adjusting the plan as it learns" — and is
-  explicit that it's **not implemented in this repo yet**: `orchestrator/modes/get_mode()` raises
-  a named `UnknownModeError` for `"magentic"` rather than silently pretending it exists (see
-  `agents/python/orchestrator/modes/__init__.py:55`). This chapter is a standalone teaching
-  implementation of the general pattern — it is deliberately **not** wired into
-  `orchestrator/modes/` as a new production mode, to avoid a second, divergent implementation
-  that would need reconciling once a real `magentic` mode eventually lands there.
-- **Multiple LLM turns means multiple fixture files.** A run with a 4-step plan produces one
-  planner fixture plus one executor fixture per step (more if a step drives a tool-call round
-  trip) — `ReplayChatClient` keys each fixture on the exact request (messages + tools +
-  instructions), so the planner and executor never collide even though they share one
-  `FIXTURES_DIR`.
-
-## Tests
+## 测试
 
 ```bash
 uv run --project tutorials pytest tutorials/29-planner-executor/python/tests -v
 ```
 
-`tutorials/29-planner-executor/python/tests/test_planner_executor.py` covers, structurally:
+`tutorials/29-planner-executor/python/tests/test_planner_executor.py` 从结构上覆盖：
 
-1. **Unit tests against the tool and models directly** — `search_products` keyword matching and
-   price filtering, `PlanStep`/`Plan` construction and ordering — no LLM involved.
-2. **Agent wiring** — `search_products` shows up in `build_executor_agent()`'s registered tools;
-   `build_planner_agent()` builds with no tools at all (it only ever returns structured output).
-3. **A replay test** (`test_replay_plans_and_executes`) that plays back committed fixtures in
-   `tests/fixtures/replay/` — no network or credentials required, safe for CI. It `pytest.skip()`s
-   gracefully if no fixtures have been recorded yet.
-4. **Real-LLM integration tests**, skipped unless usable credentials are present — one asserts the
-   planner returns a `Plan` with sequentially numbered steps, the other asserts every step in a
-   full run produces a non-empty result including real catalog data.
+1. **直接针对工具与模型的单元测试** —— `search_products` 的关键词匹配与价格筛选、`PlanStep`/`Plan` 的构造与排序 —— 不涉及 LLM。
+2. **智能体接线** —— `search_products` 出现在 `build_executor_agent()` 注册的工具中；`build_planner_agent()` 构建时不带任何工具（它只返回结构化输出）。
+3. **一次回放测试**（`test_replay_plans_and_executes`），播放 `tests/fixtures/replay/` 中已提交的夹具 —— 不需要网络或凭据，可安全用于 CI。若尚无录制好的夹具，它会优雅地 `pytest.skip()`。
+4. **真实 LLM 集成测试**，在缺少可用凭据时跳过 —— 一个断言规划器返回的 `Plan` 其步骤是连续编号的，另一个断言完整运行中每一步都产出了非空结果且包含真实目录数据。
 
-Fixtures for this chapter were recorded against Azure OpenAI credentials found in the repo-root
-`.env`:
+本章的夹具是依据仓库根目录 `.env` 中的 Azure OpenAI 凭据录制的：
 
 ```bash
 LLM_PROVIDER=replay RECORD=true REPLAY_RECORD_PROVIDER=azure \
   uv run --project tutorials python tutorials/29-planner-executor/python/main.py
 ```
 
-## How this shows up in the capstone
+## 在完整项目中的落点
 
-The executor's `search_products` tool is a toy version of the real thing. `agents/python/product_discovery/tools.py:16`
-defines the production `search_products`:
+执行器的 `search_products` 工具是真实实现的一个玩具版本。`agents/python/product_discovery/tools.py:31` 定义了生产版的 `search_products`：
 
 ```python
 @tool(name="search_products", description="Search the product catalog using natural language. Supports filtering by category, price range, and rating.")
 async def search_products(
 ```
 
-Same `@tool` + `Annotated` shape as this chapter's version — production adds `async`, real
-Postgres full-text search via `get_pool()`, and several more filter parameters, but the mechanics
-of "the LLM decides when to call this and what arguments to pass" are unchanged.
+与本教程版本相同的 `@tool` + `Annotated` 形态 —— 生产实现增加了 `async`、通过 `get_pool()` 访问真实的 PostgreSQL 全文检索，以及若干筛选参数，但「LLM 决定何时调用它、传什么参数」这一机制没有变化。
 
-The planner-executor pattern itself, however, is **not** wired into the capstone's live
-orchestrator. `agents/python/orchestrator/modes/__init__.py:55` is where `get_mode()` raises a
-named `UnknownModeError` for `"magentic"` — the production-grade, re-planning generalization of
-what this chapter builds — confirming it's tracked as a later addition rather than silently
-missing. See [`docs/concepts/06-orchestration-patterns.md`](../../docs/concepts/06-orchestration-patterns.md)
-for the full comparison of every orchestration mode this repo *does* run in production.
+不过规划器-执行器这个模式本身，**没有**接入完整项目的在线编排器。`agents/python/orchestrator/modes/__init__.py:57` 正是 `get_mode()` 为 `"magentic"` 抛出具名 `UnknownModeError` 的地方 —— 那是本章所构建内容的、生产级的可重新规划泛化版 —— 这也确认了它被记为后续新增项，而不是静默缺失。关于本仓库*确实*在生产中运行的每一种编排模式的完整对比，参见 [`docs/concepts/06-orchestration-patterns.md`](../../docs/concepts/06-orchestration-patterns.md)。
 
-## What's next
+## 下一步
 
-- Previous: [Chapter 27 — Agent-as-Tool](../27-agent-as-tool/)
-- Full source: [`python/`](./python/)
-- Shared: [Mermaid style guide](../_shared/mermaid-style-guide.md) · [Orchestration patterns](../../docs/concepts/06-orchestration-patterns.md)
+- 上一章：[第 27 章 · 把智能体作为工具](../27-agent-as-tool/)
+- 完整源码：[`python/`](./python/)
+- 共享资料：[Mermaid 风格指南](../_shared/mermaid-style-guide.md) · [编排模式](../../docs/concepts/06-orchestration-patterns.md)

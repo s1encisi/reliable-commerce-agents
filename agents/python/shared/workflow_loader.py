@@ -1,42 +1,11 @@
-"""YAML-defined MAF workflows for the capstone.
+"""根据 YAML 声明构建 MAF 工作流。
 
-Loads a workflow spec from ``agents/config/workflows/*.yaml`` and builds a
-MAF :class:`~agent_framework._workflows._workflow.Workflow`. Keeps the
-schema tight and op-based (you declare *which behavior* each executor
-has; the loader wires the real Executor class) so non-engineers can
-reorder a pipeline without touching Python.
+读取 agents/python/config/workflows/*.yaml，按 op 注册表创建执行器
+和连边。内置 passthrough、upper、lower、strip、reverse、non_empty
+与 prefix；分别支持透传、字符串变换、空值短路和带前缀的终止输出。
 
-The schema intentionally stays small:
-
-.. code-block:: yaml
-
-    name: return-replace
-    start: check-eligibility
-    executors:
-      - id: check-eligibility
-        op: passthrough      # built-in: forwards the message as-is
-      - id: finalize
-        op: prefix
-        prefix: "FINAL: "
-    edges:
-      - from: check-eligibility
-        to: finalize
-
-Built-in ops today:
-
-* ``passthrough`` — forward the input unchanged (useful placeholders).
-* ``upper`` / ``lower`` / ``strip`` / ``reverse`` — string transforms.
-* ``non_empty`` — short-circuits blank input with a terminal output.
-* ``prefix`` — terminal output with a configurable prefix.
-
-The registry in ``_OPS`` is the single extension point. Adding a new op
-is one function + one registry entry; specialists and workflow authors
-can keep writing YAML.
-
-This module is the pedagogical scaffolding. Real production flows (the
-return/replace and pre-purchase workflows) will register themselves in
-``shared.workflow_registry`` so `scripts/visualize_workflows.py` can
-render them (plans/refactor/13).
+_OPS 是扩展入口，新增操作只需函数与注册项。当前是教学性质的声明式
+加载器，不能把未来的生产工作流注册计划写成已经实现的能力。
 """
 
 from __future__ import annotations
@@ -114,10 +83,7 @@ _OPS: dict[str, Callable[[dict[str, Any]], OpFn]] = {
 
 
 def register_op(name: str, factory: Callable[[dict[str, Any]], OpFn]) -> None:
-    """Register a new op name. Useful when production workflows need
-    domain-specific behaviors (e.g. ``check_eligibility``) that wrap a
-    shared tool call.
-    """
+    """注册新的操作名称，可用于包装领域工具行为。"""
     _OPS[name] = factory
 
 
@@ -125,7 +91,7 @@ def register_op(name: str, factory: Callable[[dict[str, Any]], OpFn]) -> None:
 
 
 class DeclarativeExecutor(Executor):
-    """Executor whose behavior is a registered op plus its config."""
+    """由注册操作和配置驱动的执行器。"""
 
     def __init__(self, executor_id: str, op: str, config: dict[str, Any]) -> None:
         super().__init__(id=executor_id)
@@ -147,14 +113,14 @@ class DeclarativeExecutor(Executor):
 
 
 class WorkflowSpecError(ValueError):
-    """Raised when a YAML spec is structurally invalid."""
+    """YAML 工作流结构不合法时抛出的异常。"""
 
 
 def load_workflow(spec_path: str | Path) -> Workflow:
-    """Load a Workflow from ``spec_path`` (a YAML file).
+    """从 YAML 文件加载工作流。
 
-    Raises :class:`WorkflowSpecError` with an actionable message when the
-    file is missing, malformed, or references undeclared executors.
+    文件缺失、格式错误或引用未声明执行器时，抛出含明确说明的
+    WorkflowSpecError。
     """
     path = Path(spec_path)
     if not path.is_file():
@@ -172,7 +138,7 @@ def load_workflow(spec_path: str | Path) -> Workflow:
         if required not in spec:
             raise WorkflowSpecError(f"{path}: missing required key {required!r}")
 
-    # Build executors.
+    # 创建执行器。
     executors_by_id: dict[str, DeclarativeExecutor] = {}
     for raw in spec["executors"]:
         if not isinstance(raw, dict):
@@ -186,7 +152,7 @@ def load_workflow(spec_path: str | Path) -> Workflow:
         config = {k: v for k, v in raw.items() if k not in {"id", "op"}}
         executors_by_id[eid] = DeclarativeExecutor(eid, op, config)
 
-    # Validate start + edges reference known ids.
+    # 验证起点和边只引用已声明标识。
     start_id = spec["start"]
     if start_id not in executors_by_id:
         raise WorkflowSpecError(
@@ -218,10 +184,9 @@ def load_workflow(spec_path: str | Path) -> Workflow:
 
 
 def load_workflows_directory(directory: str | Path) -> dict[str, Workflow]:
-    """Load every ``*.yaml`` file in *directory* into a ``{name: Workflow}`` dict.
+    """加载目录中全部 YAML，返回名称到工作流的映射。
 
-    Useful for bulk-registering the capstone's workflows with
-    ``scripts/visualize_workflows.py`` (plans/refactor/13).
+    供工作流可视化脚本等批量使用。
     """
     path = Path(directory)
     if not path.is_dir():

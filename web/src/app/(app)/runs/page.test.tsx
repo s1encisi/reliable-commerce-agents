@@ -16,19 +16,18 @@ const PENDING_RUN: RunEntry = {
   status: "success",
   trace_id: null,
   created_at: new Date().toISOString(),
-  steps: [], // workflow modes never produce agent_execution_steps rows
+  steps: [], // 工作流模式不会产生 agent_execution_steps 行
 };
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("RunsPage — checkpoint resume", () => {
-  it("shows the 'Needs approval' badge in the collapsed list, without expanding first", async () => {
-    // Regression test: checkpoint/HITL data used to be fetched lazily on
-    // expand, so the badge — meant to be scannable across the whole list
-    // — could never actually show until a row had already been opened
-    // once. Fixed by fetching for every visible row up front.
+describe("RunsPage —— 检查点续跑", () => {
+  it("在折叠列表中即显示「待审批」徽章，无需先展开", async () => {
+    // 回归测试：checkpoint/HITL 数据此前是展开时才懒加载的，
+    // 导致这个本应能整列扫视的徽章，在行被打开过一次之前永远
+    // 显示不出来。修复方式是对每个可见行提前拉取。
     vi.spyOn(api, "getRuns").mockResolvedValue({ entries: [PENDING_RUN], total: 1, limit: 20, offset: 0 });
     vi.spyOn(api, "getRunCheckpoints").mockResolvedValue({
       run_id: "run-1",
@@ -44,12 +43,12 @@ describe("RunsPage — checkpoint resume", () => {
     });
 
     render(<RunsPage />);
-    await waitFor(() => expect(screen.getByText("Needs approval")).toBeInTheDocument());
-    // Still collapsed — no Approve button visible yet.
-    expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("待审批")).toBeInTheDocument());
+    // 仍处于折叠状态 —— 尚未显示「批准」按钮。
+    expect(screen.queryByRole("button", { name: "批准" })).not.toBeInTheDocument();
   });
 
-  it("shows a 'Needs approval' badge and lets the row expand even with no steps", async () => {
+  it("即使没有任何步骤，也显示「待审批」徽章并允许展开该行", async () => {
     vi.spyOn(api, "getRuns").mockResolvedValue({ entries: [PENDING_RUN], total: 1, limit: 20, offset: 0 });
     vi.spyOn(api, "getRunCheckpoints").mockResolvedValue({
       run_id: "run-1",
@@ -68,10 +67,10 @@ describe("RunsPage — checkpoint resume", () => {
     await waitFor(() => expect(screen.getByText("return order abc")).toBeInTheDocument());
 
     fireEvent.click(screen.getByText("return order abc"));
-    await waitFor(() => expect(screen.getByText(/Return approval — pending/)).toBeInTheDocument());
-    expect(screen.getByText(/order order-abc/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Reject" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/退货审批 —— 待审批/)).toBeInTheDocument());
+    expect(screen.getByText(/订单 order-abc/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "批准" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "拒绝" })).toBeInTheDocument();
   });
 
   it("approving calls resumeRun and refreshes to show the resolved state", async () => {
@@ -103,14 +102,14 @@ describe("RunsPage — checkpoint resume", () => {
     render(<RunsPage />);
     await waitFor(() => expect(screen.getByText("return order abc")).toBeInTheDocument());
     fireEvent.click(screen.getByText("return order abc"));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("button", { name: "批准" })).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    fireEvent.click(screen.getByRole("button", { name: "批准" }));
 
     await waitFor(() => expect(resume).toHaveBeenCalledWith("run-1", true));
-    await waitFor(() => expect(screen.getByText(/Return approval — approved/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/退货审批 —— 已批准/)).toBeInTheDocument());
     expect(getCheckpoints).toHaveBeenCalledTimes(2);
-    expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "批准" })).not.toBeInTheDocument();
   });
 
   it("shows a resume error inline without crashing", async () => {
@@ -132,9 +131,9 @@ describe("RunsPage — checkpoint resume", () => {
     render(<RunsPage />);
     await waitFor(() => expect(screen.getByText("return order abc")).toBeInTheDocument());
     fireEvent.click(screen.getByText("return order abc"));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Reject" })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("button", { name: "拒绝" })).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+    fireEvent.click(screen.getByRole("button", { name: "拒绝" }));
     await waitFor(() => expect(screen.getByText("No pending approval found for this run")).toBeInTheDocument());
   });
 });

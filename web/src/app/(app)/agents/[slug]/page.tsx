@@ -5,7 +5,7 @@ export function generateStaticParams() {
   return AGENTS.map((a) => ({ slug: a.slug }));
 }
 
-// Next.js 16: params is a Promise — must be awaited
+// Next.js 16：params 是 Promise —— 必须 await
 export default async function AgentDetailPage({
   params,
 }: {

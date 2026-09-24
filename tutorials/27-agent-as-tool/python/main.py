@@ -1,12 +1,12 @@
 """
-MAF v1 — Chapter 27: Agent-as-tool (Python)
+MAF v1 —— 第 27 章：把智能体作为工具（Python）
 
-Wrap a small, single-purpose "product-lookup" Agent as a FunctionTool via
-`Agent.as_tool(...)` and hand it to a "coordinator" agent's own toolset.
-No network hop, no handoff mesh — just a Agent presented to another agent
-the same way any ordinary `@tool`-decorated function would be.
+通过 `Agent.as_tool(...)` 把一个范围清晰的单一用途「商品查询」Agent 包装成
+FunctionTool，并把它交给一个「协调者」智能体自己的工具集。没有网络跳转，
+没有交接网 —— 只是把一个 Agent 以任何普通 `@tool` 装饰函数相同的方式
+呈现给另一个智能体。
 
-Run:
+运行：
     source agents/.venv/bin/activate
     python tutorials/27-agent-as-tool/python/main.py "Look up the Wireless Headphones, \
         then tell me the price after a 20% discount."
@@ -30,7 +30,7 @@ from agent_framework.openai import OpenAIChatClient, OpenAIChatCompletionClient 
 from pydantic import Field  # noqa: E402
 from tutorials._shared.replay_client import ReplayChatClient  # noqa: E402
 
-# ─────────────────── In-memory product catalog ──────────────────
+# ─────────────────── 内存商品目录 ──────────────────
 
 CATALOG: dict[str, dict] = {
     "wireless headphones": {"sku": "SKU-1001", "price": 149.99, "category": "Electronics", "stock": 42},
@@ -58,7 +58,7 @@ DEFAULT_QUESTION = "Look up the Wireless Headphones, then tell me the price afte
 FIXTURES_DIR = pathlib.Path(__file__).resolve().parent / "tests" / "fixtures" / "replay"
 
 
-# The product-lookup agent's own tool — an ordinary MAF tool, nothing special.
+# 商品查询智能体自己的工具 —— 一个普通的 MAF 工具，没有任何特殊之处。
 @tool(name="search_catalog", description="Look up a product in the catalog by name.")
 def search_catalog(
     name: Annotated[str, Field(description="The product name to look up, e.g. 'Wireless Headphones'.")],
@@ -72,8 +72,8 @@ def search_catalog(
     )
 
 
-# An ordinary local tool the coordinator can call directly, after the
-# wrapped agent has already answered and handed control back.
+# 一个协调者可以直接调用的普通本地工具 —— 在被包装的智能体已经回答、
+# 并把控制权交回之后使用。
 @tool(name="calculate_discount", description="Compute a price after a percentage discount.")
 def calculate_discount(
     price: Annotated[float, Field(description="The original price.")],
@@ -101,15 +101,15 @@ def _default_client() -> OpenAIChatClient | OpenAIChatCompletionClient | ReplayC
     return OpenAIChatClient(
         model=os.environ.get("LLM_MODEL", "gpt-4.1"),
         api_key=os.environ["OPENAI_API_KEY"],
-        # Phase 9: any OpenAI-compatible endpoint (GitHub Models, OpenRouter,
-        # vLLM, LM Studio, Ollama) instead of api.openai.com — see
-        # tutorials/00-setup/README.md's "Don't have a paid API key?" section.
+        # Phase 9：改用任何 OpenAI 兼容端点（GitHub Models、OpenRouter、
+        # vLLM、LM Studio、Ollama），而不是 api.openai.com —— 见
+        # tutorials/00-setup/README.md 的「没有付费 API 密钥？」小节。
         base_url=os.environ.get("LLM_BASE_URL") or None,
     )
 
 
 def build_product_lookup_agent(client: object | None = None) -> Agent:
-    """The small, well-scoped specialist agent that will be wrapped as a tool."""
+    """那个范围清晰的小型专业智能体，即将被包装成工具。"""
     return Agent(
         client or _default_client(),
         instructions=PRODUCT_LOOKUP_INSTRUCTIONS,
@@ -120,12 +120,11 @@ def build_product_lookup_agent(client: object | None = None) -> Agent:
 
 
 def build_agent(client: object | None = None) -> Agent:
-    """The coordinator — the agent this chapter's ask()/main() drive directly.
+    """协调者 —— 本章的 ask()/main() 直接驱动的那个智能体。
 
-    Builds the product-lookup agent, wraps it with `.as_tool()`, and hands the
-    resulting FunctionTool to the coordinator's own tools=[...] alongside an
-    ordinary local tool. Both agents share one chat client so the demo needs
-    only one LLM provider/credential set.
+    构建商品查询智能体，用 `.as_tool()` 包装它，并把得到的 FunctionTool
+    交给协调者自己的 tools=[...]，与一个普通本地工具并列。两个智能体共用
+    一个 chat client，因此演示只需要一套 LLM 提供方/凭据。
     """
     resolved_client = client or _default_client()
     product_lookup_agent = build_product_lookup_agent(resolved_client)

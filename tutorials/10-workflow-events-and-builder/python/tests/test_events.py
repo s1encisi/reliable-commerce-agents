@@ -1,7 +1,7 @@
 """
-Chapter 10 — Workflow Events and Builder: tests.
+第 10 章 —— 工作流事件与构建器：测试。
 
-No LLM — all assertions run on the event stream.
+不涉及 LLM —— 所有断言都跑在事件流上。
 """
 
 from __future__ import annotations
@@ -52,10 +52,10 @@ async def test_workflow_output_accompanies_progress() -> None:
 
 @pytest.mark.asyncio
 async def test_event_stream_yields_incrementally() -> None:
-    """Progress events should arrive before the final output, not batched.
+    """进度事件应当在最终输出之前到达，而不是攒成一批。
 
-    Bucketed by payload shape, not the workflow's type='output' /
-    type='intermediate' label — see run_with_events's docstring in main.py.
+    按载荷形状分桶，而不是按工作流的 type='output' /
+    type='intermediate' 标签 —— 见 main.py 中 run_with_events 的文档字符串。
     """
     workflow = build_workflow()
     order: list[str] = []
@@ -68,6 +68,6 @@ async def test_event_stream_yields_incrementally() -> None:
             order.append(f"progress:{data.step}")
         else:
             order.append("output")
-    # At minimum, output must come after the final progress event.
+    # 至少，输出必须出现在最后一条进度事件之后。
     assert order[-1] == "output"
     assert order.index("progress:log-order") < order.index("output")

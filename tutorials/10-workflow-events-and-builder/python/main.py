@@ -1,22 +1,19 @@
 """
-MAF v1 — Chapter 10: Workflow Events and Builder (Python)
+MAF v1 — 第 10 章：工作流事件与构建器（Python）
 
-Extend the Ch09 pipeline with a *custom* progress event. Each executor yields
-ProgressPayload('executor-id', percent) via ctx.yield_output() so callers can
-show a live progress indicator while the workflow runs, distinct from the
-pipeline's final result.
+在第 09 章的流水线上扩展出一种*自定义*进度事件。每个执行器都通过
+ctx.yield_output() 产出 ProgressPayload('executor-id', percent)，好让调用方
+在工作流运行时展示实时进度指示 —— 它与流水线的最终结果是两回事。
 
-Progress vs. final output is a build-time designation, not a per-call choice:
-every yield_output() call from a given executor carries the same event type,
-fixed by whether that executor is listed under WorkflowBuilder's
-intermediate_output_from (progress-shaped) or output_from (final-result-shaped).
-That's why `normalize` and `validate` only ever yield ProgressPayload, and `log`
-is the sole executor that yields the pipeline's actual result — the earlier
-`WorkflowEvent.emit()` API let one executor mix both freely, but that API is
-deprecated in favor of this explicit split (see the module docstring on
-`agent_framework._workflows._events.WorkflowEvent.emit`).
+「进度」与「最终输出」是构建期的定性，而不是每次调用的选择：某个执行器发出的
+每一次 yield_output() 都带同一个事件类型，由该执行器列在 WorkflowBuilder 的
+intermediate_output_from（进度形状）还是 output_from（最终结果形状）之下决定。
+这就是为什么 `normalize` 与 `validate` 永远只 yield ProgressPayload，而 `log`
+是唯一 yield 流水线真实结果的执行器 —— 早先的 `WorkflowEvent.emit()` API 允许
+一个执行器自由混用两者，但该 API 已被弃用，改用现在这种显式划分
+（见 `agent_framework._workflows._events.WorkflowEvent.emit` 的模块文档字符串）。
 
-Run:
+运行：
     python tutorials/10-workflow-events-and-builder/python/main.py "ord-8842"
 """
 
@@ -36,7 +33,7 @@ from agent_framework._workflows._executor import Executor, handler  # noqa: E402
 from agent_framework._workflows._workflow_builder import WorkflowBuilder  # noqa: E402
 from agent_framework._workflows._workflow_context import WorkflowContext  # noqa: E402
 
-# ─────────────── Custom event payload ───────────────
+# ─────────────── 自定义事件载荷 ───────────────
 
 @dataclass(frozen=True)
 class ProgressPayload:
@@ -44,7 +41,7 @@ class ProgressPayload:
     percent: int
 
 
-# ─────────────── Executors ───────────────
+# ─────────────── 执行器 ───────────────
 
 class NormalizeOrderExecutor(Executor):
     def __init__(self) -> None:
@@ -64,12 +61,11 @@ class ValidateOrderExecutor(Executor):
     async def run(self, order_id: str, ctx: WorkflowContext[str, ProgressPayload | str]) -> None:
         await ctx.yield_output(ProgressPayload("validate-order", 66))
         if not order_id:
-            # Short-circuits before log ever runs. Because validate is
-            # intermediate-designated (see intermediate_output_from below),
-            # this yield carries the same event type as its progress payload
-            # above — that's fine here, since callers tell progress from
-            # results by payload shape (ProgressPayload vs. plain str), not
-            # by the workflow's output/intermediate label. See main_test.py.
+            # 在 log 运行之前就短路。由于 validate 被指定为「中间输出」
+            # （见下方的 intermediate_output_from），这次 yield 与上面那条
+            # 进度载荷携带同一事件类型 —— 在这里没问题，因为调用方是靠
+            # 载荷形状（ProgressPayload 还是普通 str）来区分进度与结果的，
+            # 而不是靠工作流自己的 output/intermediate 标签。见 main_test.py。
             await ctx.yield_output("[rejected: empty order id]")
             return
         await ctx.send_message(order_id)
@@ -85,7 +81,7 @@ class LogOrderExecutor(Executor):
         await ctx.yield_output(f"ORDER LOGGED: {order_id}")
 
 
-# ─────────────── Build + run ───────────────
+# ─────────────── 构建 + 运行 ───────────────
 
 def build_workflow():
     normalize = NormalizeOrderExecutor()
@@ -104,13 +100,13 @@ def build_workflow():
 
 
 async def run_with_events(order_id: str) -> tuple[list[ProgressPayload], list[object]]:
-    """Run the workflow and return (progress events, final outputs).
+    """运行工作流并返回（进度事件, 最终输出）。
 
-    Bucketed by payload shape (isinstance ProgressPayload), not by the
-    workflow's own type='output' / type='intermediate' label — validate's
-    early-exit "[rejected: empty order id]" yield shares its executor's
-    intermediate designation (see ValidateOrderExecutor), so the type label
-    alone can't tell progress from a result here. The payload shape can.
+    按载荷形状（isinstance ProgressPayload）分桶，而不是按工作流自身的
+    type='output' / type='intermediate' 标签 —— validate 提前退出时 yield 的
+    "[rejected: empty order id]" 与它所属执行器的「中间输出」定性相同
+    （见 ValidateOrderExecutor），所以单看类型标签无法在这里区分进度与结果。
+    而载荷形状可以。
     """
     workflow = build_workflow()
     progress: list[ProgressPayload] = []

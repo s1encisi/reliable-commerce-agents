@@ -1,21 +1,23 @@
-# Chapter 18 — State and Checkpoints
+# 第 18 章 · 状态与检查点
 
-## Why this chapter
+[项目首页](../../README.md) · [教程总览](../README.md) · [术语表](../_shared/jargon-glossary.md)
 
-Long-running workflows — a multi-day return, an overnight research report, a paused human-in-the-loop approval (Chapter 17) — need to survive a process restart. If the workflow only lives in memory, a redeploy or a crash mid-run loses whatever state it was carrying. MAF's answer is `CheckpointStorage`: the framework snapshots every executor's state at each superstep boundary and hands it to a storage backend — `InMemoryCheckpointStorage` for tests, `FileCheckpointStorage` for durable local runs, and a Postgres/Cosmos-backed implementation for production. You don't write the serialization protocol; you implement two hooks per executor that say what to save and how to restore it, and the framework does the rest.
+## 本章动机
 
-This is not academic. This repo has a real production checkpoint store, and the `workflow:return-replace` orchestration mode uses it to make a paused approval durable *across separate HTTP requests, possibly served by different processes* — see [How this shows up in the capstone](#how-this-shows-up-in-the-capstone).
+长时间运行的工作流——跨多日的退货、通宵生成的研究报告、暂停等待人工审批的流程（第 17 章）——必须能挺过进程重启。如果工作流只存在于内存中，一次重新部署或运行途中崩溃就会丢失它携带的所有状态。MAF 的答案是 `CheckpointStorage`：框架在每个超步（superstep）边界为每个执行器的状态做快照，并交给存储后端——测试用 `InMemoryCheckpointStorage`，本地持久化运行用 `FileCheckpointStorage`，生产环境用基于 Postgres/Cosmos 的实现。你不需要编写序列化协议；只需为每个执行器实现两个钩子，说明「保存什么」与「如何恢复」，其余交给框架。
 
-## Prerequisites
+这并非纸上谈兵。本项目有真实的检查点存储，`workflow:return-replace` 编排模式用它让被暂停的审批**跨越不同的 HTTP 请求、甚至可能由不同进程处理**仍然持久——见下文「在完整项目中的落点」。
 
-- Completed [Chapter 17 — Human-in-the-Loop](../17-human-in-the-loop/)
-- No LLM needed — this chapter uses a return-refund accumulation, not agents
+## 前置条件
 
-## The concept
+- 已完成[第 17 章 · 人在回路](../17-human-in-the-loop/)
+- 无需 LLM——本章使用退货退款的累加，而非智能体
 
-An executor opts into checkpointing by implementing two hooks: `on_checkpoint_save` / `on_checkpoint_restore` in Python, `OnCheckpointingAsync` / `OnCheckpointRestoredAsync` in .NET. At the end of every superstep — the point where all executors have processed their current batch of messages and the workflow is about to move on — MAF calls `on_checkpoint_save` (or queues state via `QueueStateUpdateAsync` in .NET) on every executor that defines it, bundles the results with whatever messages are still in flight, and hands the bundle to the storage backend. Resuming later means pointing a *fresh* workflow instance at a `checkpoint_id`: MAF rehydrates each executor's state through the restore hook before replaying the pending messages.
+## 核心概念
 
-The important part is what checkpointing does *not* require: the process that resumes doesn't need to be the process that paused. That's what makes it useful for HITL — you can pause a workflow, return an HTTP response, let the container recycle, and resume from a completely different request days later as long as the checkpoint made it to durable storage.
+执行器通过实现两个钩子来选择启用检查点：Python 中是 `on_checkpoint_save` / `on_checkpoint_restore`。在每个超步结束时——即所有执行器都处理完当前批次消息、工作流即将继续推进的那一刻——MAF 会对每个定义了该钩子的执行器调用 `on_checkpoint_save`，把结果与仍在传输中的消息打包，交给存储后端。之后恢复，就是把一个**全新的**工作流实例指向某个 `checkpoint_id`：MAF 通过恢复钩子重新水合每个执行器的状态，然后重放待处理的消息。
+
+关键之处在于检查点**不需要**什么：执行恢复的进程不必是当初暂停的那个进程。这正是它对人在回路有价值的原因——你可以暂停工作流、返回 HTTP 响应、让容器被回收，几天后从完全不同的请求恢复，只要检查点落到了持久化存储里。
 
 ```mermaid
 %%{init: {'theme':'base', 'themeVariables': {
@@ -28,22 +30,22 @@ stateDiagram-v2
   classDef success fill:#10b981,stroke:#047857,color:#ffffff
 
   [*] --> Running
-  Running --> SuperstepEnd: message processed
-  SuperstepEnd --> Checkpointed: on_checkpoint_save() per executor
+  Running --> SuperstepEnd: 消息已处理
+  SuperstepEnd --> Checkpointed: 每个执行器执行 on_checkpoint_save()
   Checkpointed --> Storage: storage.save(snapshot)
-  Storage --> Running: workflow continues (same process)
-  Storage --> Paused: caller crashes / walks away
-  Paused --> FreshProcess: new request, new Workflow object
+  Storage --> Running: 工作流继续（同一进程）
+  Storage --> Paused: 调用方崩溃 / 离开
+  Paused --> FreshProcess: 新请求、新 Workflow 对象
   FreshProcess --> Restored: on_checkpoint_restore(state)
   Restored --> Running: run(checkpoint_id=id)
   Running --> [*]: yield_output
 ```
 
-The checkpoint written at `SuperstepEnd` is the only thing that has to survive the gap — a new process rebuilds every executor from scratch and trusts the snapshot over any constructor default.
+在 `SuperstepEnd` 写入的检查点是唯一必须跨越这段空档的东西——新进程从头重建每个执行器，并信任快照胜过任何构造函数默认值。
 
 ## Python
 
-Source: [`python/main.py`](./python/main.py).
+源码：[`python/main.py`](./python/main.py)。
 
 ```bash
 uv sync --project tutorials
@@ -51,7 +53,7 @@ uv run --project tutorials python tutorials/18-state-and-checkpoints/python/main
 uv run --project tutorials pytest tutorials/18-state-and-checkpoints/python/tests -v
 ```
 
-Two executors, standing in for a slice of a return-request pipeline: `ReturnRequestExecutor` holds a running refund amount, seeded with an initial refund and incremented as return line items get processed, then forwards it to a stateless `FinalizeReturnExecutor`, which yields the refund total as the workflow's output. `ReturnRequestExecutor`'s state round-trips through its two hooks:
+两个执行器，代表退货请求流水线的一个切片：`ReturnRequestExecutor` 持有一个累加的退款金额，以初始退款播种，并在处理退货明细项时递增，然后把它转发给无状态的 `FinalizeReturnExecutor`，后者把退款总额作为工作流输出产出。`ReturnRequestExecutor` 的状态通过两个钩子往返：
 
 ```python
 class ReturnRequestExecutor(Executor):
@@ -71,109 +73,51 @@ class ReturnRequestExecutor(Executor):
         self.refund_amount = float(state.get("refund_amount", 0.0))
 ```
 
-The demo's real proof is in `demo()`: run the workflow end to end with `FileCheckpointStorage`, grab the *first* checkpoint (superstep 1, before FinalizeReturn emitted output), then build a **second** `ReturnRequestExecutor` seeded with an initial refund of `999.0` — a deliberately wrong value — and resume from that checkpoint:
+演示的真正证明在 `demo()` 里：用 `FileCheckpointStorage` 端到端跑一遍工作流，取出**第一个**检查点（超步 1，即 `FinalizeReturn` 产出输出之前），然后构建**第二个** `ReturnRequestExecutor`，用刻意错误的初始退款 `999.0` 播种，再从该检查点恢复：
 
 ```python
 wrong_initial_refund = 999.0
 replayed = await resume_from_checkpoint(
     storage, first.checkpoint_id, resume_initial_refund=wrong_initial_refund
 )
-print(f"Phase 2 result: refund_amount = {replayed} (expected {result})")
+print(f"阶段 2 结果：refund_amount = {replayed}（期望 {result}）")
 ```
 
-If the replayed refund_amount matches the original run instead of reflecting `resume_initial_refund=999.0`, the checkpoint — not the constructor — was the actual source of truth. `main.py` accepts `initial_refund` and `item_refund` as CLI args (`python main.py 10.0 5.0`, default `10.0 5.0` → refund_amount `15.0`).
+如果重放出的 refund_amount 与原始运行一致，而没有反映 `resume_initial_refund=999.0`，那么真正的信息来源就是检查点，而不是构造函数。`main.py` 接受 `initial_refund` 与 `item_refund` 作为命令行参数（`python main.py 10.0 5.0`，默认 `10.0 5.0` → refund_amount 为 `15.0`）。
 
-## .NET
+## 常见坑
 
-Source: [`dotnet/Program.cs`](./dotnet/Program.cs).
+- **恢复时不能传入新消息。** 给 `workflow.run()` 传 `checkpoint_id=` 会从所保存超步的待处理消息继续；你不能（也无法）同时传入一条新的 `message=` 来以不同方式启动它。
+- **工作流需要一个稳定的 `name`。** `storage.list_checkpoints(workflow_name=...)` 按工作流名称查找检查点；丢失名称后，即使文件仍在磁盘上，也无法按原名称查询。
+- **状态必须能通过后端的序列化器往返。** Python 的 `on_checkpoint_save` 返回普通 `dict`，必须能通过 JSON 序列化。自定义对象需要显式的（反）序列化——不要交回带有例如打开的文件句柄或活跃数据库连接的东西。
+- **检查点会不断堆积。** `FileCheckpointStorage` 不会自动删除旧快照。生产后端需要自己的保留策略——见下文 `workflow_checkpoints` 表的说明。
+- **MAF v1.0 的空 `__init__.py` 打包缺陷已在上游修复。** `agents/python/patch_maf.py` 仍然存在，但在本项目固定 `agent-framework` 1.14.0 之后已是有文档说明的空操作，该版本随附真实的 `__init__.py`。教程完全不依赖该文件——它们调用 `tutorials/_shared/maf_bootstrap.py` 的 `bootstrap()`，它只在 `agent_framework` 的 `__init__.py` 仍为空时进行修补（防御性，实践中同样是幂等的空操作），并加载仓库根目录的 `.env`。不存在 `shared/maf.py` 或 `tutorials/_shared/maf.py` 之类的兼容垫片——不必去找。
 
-```bash
-cd tutorials/18-state-and-checkpoints/dotnet
-dotnet run
-dotnet test
-```
+## 测试
 
-Same two-executor shape, but .NET's checkpoint API is store-and-manager based rather than a single object: `FileSystemJsonCheckpointStore` writes one JSON file per checkpoint plus an index, and `CheckpointManager.CreateJson(store)` wraps it with the JSON marshaller MAF's workflow engine talks to.
+`tutorials/18-state-and-checkpoints/python/tests/test_checkpoints.py` 有 8 个测试，直接检验钩子与文件后端的往返（无 LLM，确定性）：
 
-```csharp
-var store = new FileSystemJsonCheckpointStore(checkpointDir);
-CheckpointManager checkpointManager = CheckpointManager.CreateJson(store);
-
-await using StreamingRun run = await InProcessExecution
-    .RunStreamingAsync(workflow1, input: itemRefund, checkpointManager, sessionId);
-```
-
-`ReturnRequestExecutor` uses `QueueStateUpdateAsync` / `ReadStateAsync` against a string key instead of returning a dict:
-
-```csharp
-protected override ValueTask OnCheckpointingAsync(
-    IWorkflowContext context, CancellationToken cancellationToken = default) =>
-    context.QueueStateUpdateAsync(StateKey, _refundAmount, cancellationToken: cancellationToken);
-
-protected override async ValueTask OnCheckpointRestoredAsync(
-    IWorkflowContext context, CancellationToken cancellationToken = default)
-{
-    _refundAmount = await context.ReadStateAsync<double>(StateKey, cancellationToken: cancellationToken);
-}
-```
-
-Resuming builds a fresh `Workflow` (`BuildWorkflow(initialRefund)` again, same initial refund this time — the .NET demo doesn't deliberately poison the seed the way Python's does) and calls `InProcessExecution.ResumeStreamingAsync(workflow2, firstCheckpoint, checkpointManager)`. The program exits `0` if the replayed refund_amount matches the first run, `2` if it doesn't — a cheap smoke-test contract for `dotnet run` itself, not just `dotnet test`.
-
-## Side-by-side differences
-
-| Aspect | Python | .NET |
-|--------|--------|------|
-| Save hook | `async on_checkpoint_save() -> dict` | `OnCheckpointingAsync(ctx, ct)` + `context.QueueStateUpdateAsync(key, value)` |
-| Restore hook | `async on_checkpoint_restore(state: dict)` | `OnCheckpointRestoredAsync(ctx, ct)` + `context.ReadStateAsync<T>(key)` |
-| Storage shape | One `CheckpointStorage` object (`FileCheckpointStorage`, `InMemoryCheckpointStorage`, ...) | `store` (backing files) + `CheckpointManager` (marshalling) kept separate |
-| Listing checkpoints | `await storage.list_checkpoints(workflow_name=...)` | `await store.RetrieveIndexAsync(sessionId)` |
-| Resume | `workflow.run(stream=True, checkpoint_id=id, checkpoint_storage=storage)` | `InProcessExecution.ResumeStreamingAsync(workflow, checkpointInfo, checkpointManager)` |
-
-## Gotchas
-
-- **Resume can't take a new message.** Passing `checkpoint_id=` to `workflow.run()` continues from the saved superstep's pending messages; you don't (and can't) also pass a fresh `message=` to kick it off differently.
-- **The workflow needs a stable `name`.** Python's `storage.list_checkpoints(workflow_name=...)` and the .NET `sessionId` used with `RetrieveIndexAsync` are both how you find checkpoints later — lose the name/session id and the checkpoints are still on disk but unreachable through the normal API.
-- **State must round-trip through the backend's serializer.** Python's `on_checkpoint_save` returns a plain `dict` that has to survive JSON; .NET's `QueueStateUpdateAsync` is generic but still bound by what `CheckpointManager.CreateJson` can marshal. Custom objects need explicit (de)serialization — don't hand back something with, say, an open file handle or a live DB connection.
-- **Checkpoints pile up.** Neither `FileCheckpointStorage` nor `FileSystemJsonCheckpointStore` auto-deletes old snapshots. A production backend needs its own retention policy — see the `workflow_checkpoints` table note below.
-- **The MAF v1.0 empty-`__init__.py` packaging bug is fixed upstream.** `agents/python/patch_maf.py` still exists but is a documented no-op now that the repo pins `agent-framework` 1.14.0, which ships a real `__init__.py`. Tutorials don't depend on that file at all — they call `tutorials/_shared/maf_bootstrap.py`'s `bootstrap()`, which patches `agent_framework`'s `__init__.py` only if it's still empty (defensive, same idempotent no-op in practice) and loads the repo-root `.env`. There's no `shared/maf.py` or `tutorials/_shared/maf.py` shim — don't go looking for one.
-
-## Tests
-
-
-`tutorials/18-state-and-checkpoints/python/tests/test_checkpoints.py` has 8 tests exercising the hooks and the file-backed round trip directly (no LLM, deterministic):
-
-- `on_checkpoint_save` / `on_checkpoint_restore` round-trip `refund_amount` correctly, including that restore overwrites whatever initial refund the constructor set and defaults sanely when the key is missing
-- running the workflow actually writes checkpoint files to disk (`FileCheckpointStorage`)
-- `list_checkpoints` returns a non-empty list after a run
-- resuming from a checkpoint into a **fresh** workflow instance restores the pre-resume state (the core proof of durability)
-- `InMemoryCheckpointStorage` produces the same replay result as the file-backed store
-- a plain wiring check that `build_workflow()` builds with checkpoint storage attached
+- `on_checkpoint_save` / `on_checkpoint_restore` 正确往返 `refund_amount`，包括恢复会覆盖构造函数设置的初始退款，以及键缺失时回落到合理默认值
+- 运行工作流确实会把检查点文件写到磁盘（`FileCheckpointStorage`）
+- 一次运行后 `list_checkpoints` 返回非空列表
+- 从检查点恢复到**全新**工作流实例能还原恢复前的状态（持久性的核心证明）
+- `InMemoryCheckpointStorage` 产生与文件后端相同的重放结果
+- 一项普通接线检查：`build_workflow()` 能带着检查点存储构建成功
 
 ```bash
 uv run --project tutorials pytest tutorials/18-state-and-checkpoints/python/tests -v
-cd tutorials/18-state-and-checkpoints/dotnet && dotnet test
 ```
 
-The .NET side ships [`dotnet/tests/CheckpointsTests.cs`](./dotnet/tests/CheckpointsTests.cs) — ten tests, no LLM:
+## 在完整项目中的落点
 
-```bash
-cd tutorials/18-state-and-checkpoints/dotnet && dotnet test tests/Checkpoints.Tests.csproj
-```
+本章的示例是一个很窄的近似：一个有状态执行器、一个检查点，拆掉再恢复。真实的 `workflow:return-replace` 链条（`agents/python/workflows/return_replace.py`）要大得多——六个执行器携带完整的 `WorkflowState` 数据类（订单 id、退款金额、替换商品、人在回路标志、已完成步骤列表），依次经过 `check-eligibility → initiate-return → search-replacements → hitl-gate → apply-discount → finalize`。本章并不以示例规模重建那条链条；它隔离并讲授那条链条所依赖的唯一机制——有状态执行器的检查点保存/恢复钩子——使下面那个更大的工作流读起来像是它的放大版，而不是另一套把戏。
 
-`The_Restored_Total_Is_Not_Merely_The_Constructor_Seed` is the one doing real work. The resumed run builds a fresh executor seeded with the initial refund, so a no-op `OnCheckpointRestoredAsync` produces exactly `10.0` — a plausible number that passes any assertion looser than this one, with no exception and no warning.
+本章的示例使用 `FileCheckpointStorage`。完整项目跑的是真实实现：`agents/python/shared/checkpoint_storage.py:31` 定义了 `PostgresCheckpointStorage`，一个基于 `asyncpg` 的 `CheckpointStorage` 实现，读写 `workflow_checkpoints` 表（`docker/postgres/init.sql:450`），并通过 MAF 自己的 `encode_checkpoint_value` 编码每个快照，使线上格式与 `FileCheckpointStorage` 写入磁盘的格式一致——Postgres 只是保存它的地方。当 `MAF_CHECKPOINT_BACKEND=postgres`（生产默认值）时，它由 `agents/python/shared/factory.py:207` 的 `get_checkpoint_storage()` 选中；并且每次挂载的运行都被包装进 `RecordingCheckpointStorage`（`agents/python/shared/checkpoint_storage.py:111`），使每次保存都作为独立的 `kind="checkpoint"` 事件出现在 SSE 流上——否则 MAF 自己的事件流根本不会提到保存动作（`agents/python/orchestrator/modes/workflow_mode.py:151`）。
 
-A second test pins a constraint that reads like a bug when you hit it: `FileSystemJsonCheckpointStore` takes an exclusive lock on its directory and does not release it when the run ends, so constructing a second store over the same directory throws "already in use by another process" — from the *same* process, after the first run finished.
+回报是 `workflow:return-replace` 模式的人在回路闸门（第 17 章 + 本章的组合）：当工作流在 `ctx.request_info` 处暂停时，编排器把暂停的检查点记录到对应的 `hitl_requests` 行上。`ReturnReplaceMode.resume()`（`agents/python/orchestrator/modes/workflow_mode.py:318`）由 `POST /api/orchestration/{run_id}/resume`（`agents/python/orchestrator/routes/orchestration.py:174`）触达，它会构建一个**全新的** `Workflow` 对象——没有现成的可复用，因为当初暂停的那个只存在于此前请求的进程内存中——并仅凭 `checkpoint_id` 加人工审批结果恢复，与本章的第 2 阶段完全一致。`GET /api/runs/{run_id}/checkpoints`（`agents/python/orchestrator/routes/legacy.py:1161`）把待审批项暴露给界面，`web/src/app/(app)/runs/page.tsx` 渲染调用它的「批准/驳回」按钮——你可以在线上的 `/runs` 页面里亲眼看到这套机制恢复一个被暂停的退货流程，而不只是在单元测试里。
 
-## How this shows up in the capstone
+## 下一步
 
-This chapter's toy is a narrow approximation: one stateful executor, one checkpoint, torn down and resumed. The real `workflow:return-replace` chain (`agents/python/workflows/return_replace.py`) is a much bigger thing — six executors carrying a full `WorkflowState` dataclass (order id, refund amount, replacement products, HITL flags, completed-steps list) through `check-eligibility → initiate-return → search-replacements → hitl-gate → apply-discount → finalize`. This chapter doesn't rebuild that chain at toy scale; it isolates and teaches the one mechanic all of it depends on — a stateful executor's checkpoint save/restore hooks — so the bigger workflow below reads as a scaled-up version of exactly this, not a different trick.
-
-This chapter's toy example uses `FileCheckpointStorage`. The capstone runs a real one: `agents/python/shared/checkpoint_storage.py:34` defines `PostgresCheckpointStorage`, a `CheckpointStorage` implementation backed by `asyncpg` that reads and writes the `workflow_checkpoints` table (`docker/postgres/init.sql`), encoding each snapshot through MAF's own `encode_checkpoint_value` so the wire format matches what `FileCheckpointStorage` writes to disk — Postgres is just where it's kept. It's selected by `shared.factory.get_checkpoint_storage()` when `MAF_CHECKPOINT_BACKEND=postgres` (the production default), and every attached run is wrapped in `RecordingCheckpointStorage` so each save surfaces as its own `kind="checkpoint"` event on the SSE stream — MAF's own event stream never mentions a save otherwise (`agents/python/orchestrator/modes/workflow_mode.py:132`).
-
-The payoff is `workflow:return-replace` mode's HITL gate (Chapter 17 + this chapter combined): when the workflow pauses on `ctx.request_info`, the orchestrator records the paused checkpoint against a `hitl_requests` row. `ReturnReplaceMode.resume()` (`agents/python/orchestrator/modes/workflow_mode.py:299`), reached from `POST /api/orchestration/{run_id}/resume` (`agents/python/orchestrator/routes/orchestration.py:174`), builds a **fresh** `Workflow` object — there's no live one to reuse, since the one that paused lived in a prior request's process memory — and resumes purely from `checkpoint_id` plus the human's approval, exactly like this chapter's Phase 2. `GET /api/runs/{run_id}/checkpoints` (`agents/python/orchestrator/routes/legacy.py:1117`) surfaces pending approvals to the UI, and `web/src/app/(app)/runs/page.tsx` renders Approve/Reject buttons that call it — you can watch this exact mechanism resume a paused return in the live `/runs` page, not just in a unit test.
-
-## What's next
-
-- Next chapter: [Chapter 19 — Declarative Workflows](../19-declarative-workflows/)
-- Full source: [`python/`](./python/) · [`dotnet/`](./dotnet/)
-- [MAF docs — Checkpointing](https://learn.microsoft.com/en-us/agent-framework/workflows/checkpoints/)
+- 下一章：[第 19 章 · 声明式工作流](../19-declarative-workflows/)
+- 完整源码：[`python/`](./python/)
+- [MAF 文档 —— 检查点](https://learn.microsoft.com/en-us/agent-framework/workflows/checkpoints/)

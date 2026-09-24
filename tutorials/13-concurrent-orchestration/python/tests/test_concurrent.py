@@ -1,8 +1,8 @@
 """
-Chapter 13 — Concurrent Orchestration: tests.
+第 13 章 —— 并发编排：测试。
 
-Integration-only — Concurrent fires three real LLM calls. We also assert
-wall-clock behavior to confirm they actually ran in parallel, not serially.
+仅集成测试 —— 并发执行会发起三次真实 LLM 调用。我们还会断言墙钟行为，
+以确认它们确实是并行而非串行执行的。
 """
 
 from __future__ import annotations
@@ -34,21 +34,19 @@ def _llm_available() -> bool:
 
 
 def test_workflow_builds(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Construction-only — never calls the LLM, so it shouldn't need real
-    # credentials. _default_client()'s OpenAI branch reads OPENAI_API_KEY via
-    # a hard os.environ[...] lookup, which this test tripped over in a
-    # credential-less CI job. A placeholder is enough since the client is
-    # never actually invoked.
+    # 仅构建 —— 从不调用 LLM，因此不应该需要真实凭据。_default_client() 的
+    # OpenAI 分支通过硬性 os.environ[...] 读取 OPENAI_API_KEY，无凭据的 CI
+    # 任务里曾在这里被绊住。既然客户端从未被真正调用，放一个占位符就够了。
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test-placeholder-not-used")
     assert build_workflow() is not None
 
 
 @pytest.mark.asyncio
 async def test_replay_all_three_agents_respond(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Plays back tests/fixtures/replay/ — no network, no credentials.
+    """回放 tests/fixtures/replay/ —— 无网络、无凭据。
 
-    Recorded once against a real LLM (test_real_llm_all_three_agents_respond
-    below, run with RECORD=true) and committed.
+    曾对真实 LLM 录制一次（即下方的 test_real_llm_all_three_agents_respond，
+    带 RECORD=true 运行）并提交入库。
     """
     recording = os.environ.get("RECORD", "").lower() in ("1", "true", "yes")
     if not recording and not any(FIXTURES_DIR.glob("*.json")):
@@ -76,10 +74,10 @@ async def test_real_llm_all_three_agents_respond() -> None:
 @pytest.mark.asyncio
 @pytest.mark.skipif(not _llm_available(), reason="no LLM credentials in .env")
 async def test_real_llm_runs_in_parallel_not_serial() -> None:
-    """Three LLM calls in parallel must finish faster than a serial baseline."""
+    """三次并行的 LLM 调用必须比串行基线更快完成。"""
     _, elapsed = await analyze("subscription box for rare herbal teas")
-    # Each call is ~1–3s. If they ran serially, we'd expect > 3s easily.
-    # Parallel should finish well under 6s on normal networks.
+    # 每次调用约 1–3 秒。若串行执行，很容易超过 3 秒。
+    # 在正常网络下，并行应当远低于 6 秒完成。
     assert elapsed < 6.0, f"expected parallel execution (<6s), got {elapsed:.2f}s"
 
 
@@ -88,7 +86,7 @@ async def test_real_llm_runs_in_parallel_not_serial() -> None:
 @pytest.mark.skipif(not _llm_available(), reason="no LLM credentials in .env")
 async def test_real_llm_perspectives_differ_between_agents() -> None:
     per_agent, _ = await analyze("AI-powered meal planner")
-    # Three distinct perspectives should produce three different strings.
+    # 三种不同的视角应当产出三个不同的字符串。
     r, m, lg = per_agent["researcher"], per_agent["marketer"], per_agent["legal"]
     assert r != m
     assert m != lg

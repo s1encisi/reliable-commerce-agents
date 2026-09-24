@@ -1,18 +1,17 @@
 """
-MAF v1 — Chapter 26: Evals (Python)
+MAF v1 — 第 26 章：智能体评估（Python）
 
-A tiny standalone eval loop: a handful of {prompt, expected_facts} cases run
-against a small e-commerce Q&A agent over an in-memory product catalog, each
-scored two ways — a deterministic "did the expected fact appear" check and a
-structured-output judge stub. Prints a pass/fail scorecard.
+一个极小的独立评估循环：把若干 {prompt, expected_facts} 案例，针对一个
+运行在内存商品目录之上的小型电商问答智能体跑一遍，每个案例用两种方式打分 ——
+一个确定性的「期望事实是否出现」检查，和一个结构化输出的评审桩。
+最后打印一张通过 / 未通过的记分卡。
 
-This chapter's demo agent is intentionally toy-sized; the real eval harness
-this mirrors is `agents/python/evals/harness.py`, which runs cases through
-the actual production code path (`orchestrator.modes` / the specialist A2A
-entry point) rather than a hand-rolled loop — see the README for why that
-distinction mattered here.
+本章的演示智能体刻意做成玩具规模；它所对照的真实评估框架是
+`agents/python/evals/harness.py`，后者把案例跑过真实的生产代码路径
+（`orchestrator.modes` / 专家的 A2A 入口），而不是一个手搓的循环 ——
+这一区别为何在本章重要，见 README。
 
-Run:
+运行：
     source agents/.venv/bin/activate
     python tutorials/26-evals/python/main.py
 """
@@ -45,7 +44,7 @@ INSTRUCTIONS = (
 
 FIXTURES_DIR = pathlib.Path(__file__).resolve().parent / "tests" / "fixtures" / "replay"
 
-# ─────────────────── Toy catalog + tool ──────────────────
+# ─────────────────── 玩具级目录 + 工具 ──────────────────
 
 CATALOG: dict[str, dict[str, Any]] = {
     "wireless mouse": {"price": 24.99, "stock": 42},
@@ -67,16 +66,15 @@ def search_catalog(
     return f"{product_name.title()}: ${item['price']:.2f}, {item['stock']} units ({availability})."
 
 
-# ─────────────────── Eval cases ──────────────────
+# ─────────────────── 评估案例 ──────────────────
 
 
 @dataclass
 class EvalCase:
     case_id: str
     prompt: str
-    # Substrings that MUST appear (case-insensitively) in a correct answer.
-    # This is the "checkable fact" a good eval case needs — not "does it
-    # sound plausible," but a specific string a script can grep for.
+    # 正确回答中必须出现（忽略大小写）的子串。这就是一个好的评估案例所需的
+    # 「可核查事实」—— 不是「听起来合理吗」，而是脚本能 grep 的一个具体字符串。
     expected_facts: list[str]
 
 
@@ -93,7 +91,7 @@ EVAL_CASES: list[EvalCase] = [
 ]
 
 
-# ─────────────────── Scoring: deterministic tier ──────────────────
+# ─────────────────── 打分：确定性档 ──────────────────
 
 
 @dataclass
@@ -104,13 +102,12 @@ class DeterministicResult:
 
 
 def score_deterministic(response_text: str, expected_facts: list[str]) -> DeterministicResult:
-    """Cheap, exact, CI-safe: did each expected fact literally appear in the response?
+    """廉价、精确、对 CI 友好：每条期望事实是否真的出现在响应里？
 
-    This is the same shape as the real `evals/scorers/db_groundedness.py` —
-    a ratio of verified/total claims, computed from a mechanical check, no
-    LLM call, no ambiguity. It can only ever check what's mechanically
-    checkable (a price string, a stock number) — it says nothing about
-    whether the prose around that number is well-written.
+    与真实的 `evals/scorers/db_groundedness.py` 形状相同 —— 通过 / 总数之比，
+    由机械检查算出，不调用 LLM，没有歧义。它只能检查机械上可检查的东西
+    （一个价格字符串、一个库存数字）—— 对于数字周围的文字写得好不好，
+    它什么也说不了。
     """
     lowered = response_text.lower()
     found = [fact for fact in expected_facts if fact.lower() in lowered]
@@ -119,13 +116,13 @@ def score_deterministic(response_text: str, expected_facts: list[str]) -> Determ
     return DeterministicResult(score=score, found=found, missing=missing)
 
 
-# ─────────────────── Scoring: LLM-judge tier (stub) ──────────────────
+# ─────────────────── 打分：LLM 评审档（桩） ──────────────────
 
 
 class JudgeVerdict(BaseModel):
-    """Same structured-output shape as the real `evals/scorers/llm_judge.py::JudgeVerdict`
-    (score, reasoning, failure_mode) — a Pydantic model the judge's response is parsed into,
-    not a free-text grade.
+    """与真实的 `evals/scorers/llm_judge.py::JudgeVerdict` 同样的结构化输出形状
+    （score、reasoning、failure_mode）—— 评审者的响应会被解析进这个 Pydantic 模型，
+    而不是得到一段自由文本评分。
     """
 
     score: float
@@ -134,33 +131,32 @@ class JudgeVerdict(BaseModel):
 
 
 def judge_response_stub(prompt: str, response_text: str, expected_facts: list[str]) -> JudgeVerdict:
-    """Stand-in for a second LLM call judging relevance/completeness.
+    """替代第二次 LLM 调用，用于评判相关性与完整性。
 
-    The real `evals/scorers/llm_judge.py::judge_response()` (line 57) sends the
-    question, the expected fields, and the response to a second model and parses
-    a `JudgeVerdict` back out. Spending one extra live LLM call per eval case
-    (on top of the one the agent itself makes) isn't worth it for a teaching
-    demo with a fixed replay fixture set, so this stub reproduces the same
-    *shape* of output — a structured verdict with a reasoning string — using a
-    cheap heuristic instead of a model call. Swap this function's body for a
-    real `judge.run(...)` call and nothing else in the eval loop changes.
+    真实的 `evals/scorers/llm_judge.py::judge_response()`（第 57 行）会把问题、
+    期望字段与响应发给第二个模型，再解析回一个 `JudgeVerdict`。对于夹具固定、
+    以回放为主的教学演示而言，每个评估案例都额外花一次真实 LLM 调用
+    （还是在智能体自身那次调用之外）并不划算，所以这个桩用一个廉价的启发式
+    复现同样的输出*形状* —— 带 reasoning 字符串的结构化判定 —— 而不调用模型。
+    把这个函数的函数体换成真实的 `judge.run(...)` 调用，评估循环里其它任何地方
+    都不用改。
     """
     covered = sum(1 for fact in expected_facts if fact.lower() in response_text.lower())
     total = len(expected_facts) or 1
     score = covered / total
     if score == 1.0:
-        reasoning = "Response covers every expected fact."
+        reasoning = "响应覆盖了每一条期望事实。"
         failure_mode = None
     elif score == 0.0:
-        reasoning = "Response covers none of the expected facts."
+        reasoning = "响应未覆盖任何期望事实。"
         failure_mode = "missing_field"
     else:
-        reasoning = f"Response covers {covered}/{total} expected facts."
+        reasoning = f"响应覆盖了 {covered}/{total} 条期望事实。"
         failure_mode = "partial_coverage"
     return JudgeVerdict(score=score, reasoning=reasoning, failure_mode=failure_mode)
 
 
-# ─────────────────── Client / agent plumbing (same shape as every chapter) ──────────────────
+# ─────────────────── 客户端 / 智能体接线（与各章形状相同） ──────────────────
 
 
 def _default_client() -> OpenAIChatClient | OpenAIChatCompletionClient | ReplayChatClient:
@@ -181,9 +177,9 @@ def _default_client() -> OpenAIChatClient | OpenAIChatCompletionClient | ReplayC
     return OpenAIChatClient(
         model=os.environ.get("LLM_MODEL", "gpt-4.1"),
         api_key=os.environ["OPENAI_API_KEY"],
-        # Phase 9: any OpenAI-compatible endpoint (GitHub Models, OpenRouter,
-        # vLLM, LM Studio, Ollama) instead of api.openai.com — see
-        # tutorials/00-setup/README.md's "Don't have a paid API key?" section.
+        # Phase 9：可指向任何兼容 OpenAI 的端点（GitHub Models、OpenRouter、
+        # vLLM、LM Studio、Ollama），而不必是 api.openai.com —— 见
+        # tutorials/00-setup/README.md 的「没有付费 API key？」一节。
         base_url=os.environ.get("LLM_BASE_URL") or None,
     )
 
@@ -202,7 +198,7 @@ async def ask(agent: Agent, question: str) -> str:
     return response.text
 
 
-# ─────────────────── Eval loop + scorecard ──────────────────
+# ─────────────────── 评估循环 + 记分卡 ──────────────────
 
 
 async def run_eval_suite(agent: Agent) -> list[dict[str, Any]]:
@@ -226,14 +222,16 @@ async def run_eval_suite(agent: Agent) -> list[dict[str, Any]]:
 
 
 def print_scorecard(results: list[dict[str, Any]]) -> None:
-    print(f"{'Case':<26}{'Deterministic':<15}{'Judge':<8}Notes")
+    # 列宽按显示宽度调过：CJK 字符占两列，所以「案例」用 :<24 才能与
+    # ASCII 表头原本的 26 列对齐。
+    print(f"{'案例':<24}{'确定性':<12}{'评审':<6}备注")
     print("-" * 80)
     for r in results:
-        notes = f"missing: {r['det_missing']}" if r["det_missing"] else r["judge_reasoning"]
+        notes = f"缺失：{r['det_missing']}" if r["det_missing"] else r["judge_reasoning"]
         print(f"{r['case_id']:<26}{r['det_score']:<15.2f}{r['judge_score']:<8.2f}{notes}")
     print("-" * 80)
     passed = sum(1 for r in results if r["det_score"] == 1.0)
-    print(f"{passed}/{len(results)} cases fully grounded (deterministic score == 1.0)")
+    print(f"{passed}/{len(results)} 个案例完全有据（确定性得分 == 1.0）")
 
 
 async def main() -> None:

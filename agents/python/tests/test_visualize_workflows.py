@@ -1,9 +1,4 @@
-"""
-Phase 7 Refactor 13 — visualize_workflows.py tests.
-
-Import the script's module and exercise its helpers + CLI entry point
-against isolated temp directories.
-"""
+"""工作流可视化脚本测试，在隔离临时目录中覆盖辅助函数与命令行入口。"""
 
 from __future__ import annotations
 
@@ -18,7 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT_PATH = REPO_ROOT / "scripts" / "visualize_workflows.py"
 
 
-# Load the module by path — it's not installed as a package.
+# 按文件路径导入，脚本未安装为包。
 _spec = importlib.util.spec_from_file_location("visualize_workflows", SCRIPT_PATH)
 _module = importlib.util.module_from_spec(_spec)
 sys.modules["visualize_workflows"] = _module
@@ -85,14 +80,14 @@ def test_check_drift_reports_content_changes(specs_dir, out_dir) -> None:
     (out_dir / "tiny.mmd").write_text("## tampered")
 
     problems = _module.check_drift(rendered, out_dir)
-    assert any("content drift" in reason for _, reason in problems)
+    assert any("内容漂移" in reason for _, reason in problems)
 
 
 def test_check_drift_reports_missing_files(specs_dir, out_dir) -> None:
-    rendered = _module.render_all(specs_dir, out_dir)  # intentionally do NOT write
+    rendered = _module.render_all(specs_dir, out_dir)  # 有意不写入文件。
     problems = _module.check_drift(rendered, out_dir)
-    assert any("missing" in reason for _, reason in problems)
-    assert len(problems) == 2  # both .mmd and .dot missing
+    assert any("缺失" in reason for _, reason in problems)
+    assert len(problems) == 2  # Mermaid 和 DOT 产物均缺失。
 
 
 def test_check_drift_flags_orphan_files(specs_dir, out_dir) -> None:
@@ -126,4 +121,4 @@ def test_main_check_fails_on_drift(specs_dir, out_dir) -> None:
 
 def test_main_noops_when_specs_dir_missing(tmp_path) -> None:
     exit_code = _module.main(["--specs", str(tmp_path / "nope"), "--out", str(tmp_path), "--quiet"])
-    assert exit_code == 0  # missing specs = nothing to render; not an error
+    assert exit_code == 0  # 无规格时无需渲染，不视为错误。

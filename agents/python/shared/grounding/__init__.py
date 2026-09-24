@@ -1,10 +1,7 @@
-"""Server-side grounding — verifies an agent's final response against real data.
+"""服务端事实核验，根据真实数据检查最终回答。
 
-``ledger.py`` records typed facts as tools run this turn; ``extractor.py`` pulls
-claims (fenced product/order cards, bare UUIDs, dollar amounts, tracking numbers)
-out of the agent's composed reply; ``verifier.py`` checks each claim against the
-ledger first, then the database; ``middleware.py`` wires verification into the
-agent-level middleware stack per ``GROUNDING_MODE``.
+ledger 记录本轮工具事实，extractor 提取商品、订单卡片及正文声明，
+verifier 先查台账再查数据库，middleware 按 GROUNDING_MODE 接入。
 """
 
 from __future__ import annotations

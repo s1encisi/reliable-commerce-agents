@@ -1,10 +1,6 @@
-"""Track D4 — orchestrator call_specialist_agent error-branch coverage.
+"""专业智能体调用异常分支测试。
 
-Tests every non-happy-path branch in call_specialist_agent without a live LLM
-or real HTTP. httpx.AsyncClient is replaced by an AsyncMock; a2a_call_span is
-replaced by a no-op context manager.
-
-No DB required. No live LLM required.
+替换 HTTP 客户端与追踪上下文，不使用真实模型、HTTP 或数据库。
 """
 
 from __future__ import annotations
@@ -25,19 +21,16 @@ from shared.context import current_session_id, current_user_email, current_user_
 
 @contextlib.contextmanager
 def _noop_span(*args, **kwargs):
-    """Drop-in replacement for a2a_call_span in tests."""
+    """测试用的 A2A 跨度空操作替身。"""
     yield
 
 
 def _mock_client(response_json: dict | None = None, *, raise_exc: Exception | None = None):
-    """Build a mock httpx.AsyncClient context manager.
-
-    Returns (mock_class, mock_instance) so tests can inspect the call args.
-    """
+    """构造异步 HTTP 上下文替身，返回类与实例供检查调用参数。"""
     mock_resp = MagicMock()
     if response_json is not None:
         mock_resp.json.return_value = response_json
-    mock_resp.raise_for_status = MagicMock()  # no-op for success
+    mock_resp.raise_for_status = MagicMock()  # 成功路径为空操作。
 
     mock_instance = AsyncMock()
     mock_instance.__aenter__.return_value = mock_instance

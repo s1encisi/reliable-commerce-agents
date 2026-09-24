@@ -1,28 +1,32 @@
-# Chapter 13 — Concurrent Orchestration
+# 第 13 章 · 并发编排
 
-## Why this chapter
+[项目首页](../../README.md) · [教程总览](../README.md) · [术语表](../_shared/jargon-glossary.md)
 
-If Sequential (Chapter 12) is an assembly line, Concurrent is a panel. Send one input to N independent agents at the same time, collect N perspectives, then — optionally — reduce them to a single output with an aggregator. Use it whenever the agents don't depend on each other's output and you want wall-clock latency bounded by the slowest branch, not the sum of all of them.
+如果顺序编排是流水线，并发编排就是**圆桌**：把同一个输入同时发给 N 个彼此独立的智能体，收集 N 种视角，然后（可选）用一个聚合器把它们归约成单一输出。
 
-Worked example: a product-idea review. Researcher checks market fit, Marketer proposes a positioning angle, Legal flags one regulatory concern — all three fire at once instead of waiting on each other.
+## 本章动机
 
-This is not a toy pattern invented for the tutorial. The capstone app runs a real concurrent fan-out/fan-in workflow in production — see [How this shows up in the capstone](#how-this-shows-up-in-the-capstone) below.
+把同一个输入同时发给 N 个彼此独立的智能体，收集 N 种视角，然后 —— 可选地 —— 用一个聚合器把它们归约成单一输出。只要各智能体彼此不依赖对方的输出，且你希望墙钟延迟由**最慢的分支**而非所有分支之和决定，就该用它。
 
-## Prerequisites
+贯穿示例：一次产品创意评审。Researcher 检查市场契合度，Marketer 提出定位角度，Legal 标出一个合规顾虑 —— 三者同时触发，而不是互相等待。
 
-- Completed [Chapter 12 — Sequential Orchestration](../12-sequential-orchestration/)
-- Repo-root `.env` with one LLM provider configured:
+这不是为教程发明的玩具模式。完整项目在生产环境中运行着一个真实的并发扇出/扇入工作流 —— 见下文「在完整项目中的落点」。
 
-| Provider | Required | Optional |
-|----------|----------|----------|
-| **OpenAI** | `OPENAI_API_KEY` | `LLM_MODEL` (default `gpt-4.1`) |
-| **Azure OpenAI** | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_KEY`, `AZURE_OPENAI_DEPLOYMENT` | `AZURE_OPENAI_API_VERSION` (default `2024-10-21`) |
+## 前置条件
 
-## The concept
+- 已完成 [第 12 章 · 顺序编排](../12-sequential-orchestration/)
+- 仓库根目录的 `.env` 中已配置一个 LLM 提供方：
 
-Concurrent orchestration fans one input out to a fixed set of participants, runs them in parallel, and fans the results back in. There's no coordination between branches while they run — each agent sees only the original input, not its siblings' output — so the pattern only fits problems that are genuinely independent per-branch. If branch B needs branch A's answer, that's Sequential (or a custom graph), not Concurrent.
+| 提供方 | 必填 | 选填 |
+|--------|------|------|
+| **OpenAI** | `OPENAI_API_KEY` | `LLM_MODEL`（默认 `gpt-4.1`） |
+| **Azure OpenAI** | `AZURE_OPENAI_ENDPOINT`、`AZURE_OPENAI_KEY`、`AZURE_OPENAI_DEPLOYMENT` | `AZURE_OPENAI_API_VERSION`（默认 `2024-10-21`） |
 
-The fan-in side is where the two SDKs differ in default behavior. Python's `ConcurrentBuilder` collects every participant's response into a list by default and only reduces it to one value if you attach `.with_aggregator(fn)`. .NET's `AgentWorkflowBuilder.BuildConcurrent` takes the aggregator as a constructor argument up front — in this chapter's demo it's a deterministic string-concatenation aggregator, not another LLM call, so wall-clock time still tracks the slowest of the three branches.
+## 核心概念
+
+并发编排把一个输入扇出给一组固定的参与者，让它们并行运行，再把结果扇入。分支运行期间彼此**没有**协调 —— 每个智能体只看到原始输入，看不到兄弟分支的输出 —— 因此这个模式只适用于各分支确实独立的问题。如果分支 B 需要分支 A 的答案，那属于顺序编排（或自定义图），不是并发。
+
+扇入侧是两个 SDK 默认行为不同之处。Python 的 `ConcurrentBuilder` 默认把每个参与者的响应收进一个列表，只有你挂上 `.with_aggregator(fn)` 才归约成单值。
 
 ```mermaid
 %%{init: {'theme':'base', 'themeVariables': {
@@ -34,20 +38,20 @@ flowchart LR
   classDef external fill:#f59e0b,stroke:#b45309,color:#000000
   classDef success  fill:#10b981,stroke:#047857,color:#ffffff
 
-  idea([Product idea])
-  researcher[Researcher agent]
-  marketer[Marketer agent]
-  legal[Legal agent]
+  idea([产品创意])
+  researcher[Researcher 智能体]
+  marketer[Marketer 智能体]
+  legal[Legal 智能体]
   llm[(LLM)]
-  aggregator[[Aggregator]]
-  summary([Aggregated summary])
+  aggregator[[聚合器]]
+  summary([聚合后的结论])
 
   idea --> researcher
   idea --> marketer
   idea --> legal
-  researcher -- "parallel call" --> llm
-  marketer -- "parallel call" --> llm
-  legal -- "parallel call" --> llm
+  researcher -- "并行调用" --> llm
+  marketer -- "并行调用" --> llm
+  legal -- "并行调用" --> llm
   researcher --> aggregator
   marketer --> aggregator
   legal --> aggregator
@@ -61,25 +65,25 @@ flowchart LR
   class summary success
 ```
 
-Three fan-out branches hit the same LLM concurrently; the aggregator only runs once all three have returned, so total latency tracks `max(researcher, marketer, legal)`, not their sum.
+三个扇出分支并发打到同一个 LLM；聚合器要等三者都返回才运行，因此总延迟是 `max(researcher, marketer, legal)`，而不是它们的和。
 
 ## Python
 
-Source: [`python/main.py`](./python/main.py).
+源码：[`python/main.py`](./python/main.py)。
 
 ```bash
 uv sync --project tutorials
 uv run --project tutorials python tutorials/13-concurrent-orchestration/python/main.py
 ```
 
-`build_workflow()` wires the three participants with `ConcurrentBuilder` (no aggregator — the demo collects each agent's raw response instead of reducing it):
+`build_workflow()` 用 `ConcurrentBuilder` 接起三个参与者（不带聚合器 —— 演示收集每个智能体的原始响应，而不是归约它）：
 
 ```python
 def build_workflow():
     return ConcurrentBuilder(participants=[researcher(), marketer(), legal()]).build()
 ```
 
-`analyze()` drives the workflow with `stream=True` and reads each participant's response off `executor_completed` events, keyed by `executor_id`:
+`analyze()` 用 `stream=True` 驱动工作流，并从 `executor_completed` 事件里按 `executor_id` 读取每个参与者的响应：
 
 ```python
 async def analyze(idea: str) -> tuple[dict[str, str], float]:
@@ -102,91 +106,30 @@ async def analyze(idea: str) -> tuple[dict[str, str], float]:
     return per_agent, elapsed
 ```
 
-`main.py` prints each agent's verdict plus the wall-clock time, so you can see the three calls overlap rather than queue up.
+`main.py` 会打印每个智能体的结论以及墙钟耗时，于是你能看到三次调用是**重叠**的，而不是排着队。
 
-## .NET
+## 常见坑
 
-Source: [`dotnet/Program.cs`](./dotnet/Program.cs).
+- **并行是真的，不是模拟的。** 三次 LLM 调用并发触发。如果你的提供方有并发限制（Azure OpenAI 的 TPM/RPM 配额），更宽的扇出会比顺序链更快撞上它们。
+- **顺序没有保证。** 智能体按各自完成的时间到达，而不是你列出的顺序 —— 不要假定 `researcher` 的事件先于 `marketer` 的。
+- **分支之间是隔离的。** 并发参与者在运行期间永远看不到彼此的输出；如果某个分支需要另一个的结果，那就是用错了模式 —— 请改用顺序编排或自定义图。
+- **MAF v1.0 的空 `__init__.py` 打包缺陷已在上游修复。** `agents/python/patch_maf.py` 仍然存在，但在仓库锁定 `agent-framework` 1.14.0（附带真实 `__init__.py`）之后已是已记录的空操作。教程完全不依赖那个文件 —— 它们调用 `tutorials/_shared/maf_bootstrap.py` 的 `bootstrap()`，后者只在 `agent_framework` 的 `__init__.py` 仍为空时才修补（防御性，实践中同样是幂等的空操作），并加载仓库根目录的 `.env`。
 
-```bash
-cd tutorials/13-concurrent-orchestration/dotnet
-dotnet run
-```
+## 测试
 
-`AgentWorkflowBuilder.BuildConcurrent` takes the aggregator up front, unlike Python's opt-in `.with_aggregator(fn)`:
+`tutorials/13-concurrent-orchestration/python/tests/` 下的 `test_concurrent.py` 围绕一个 `ReplayChatClient` fixture 模式（`tests/fixtures/replay/`）组织，因此套件的大部分无需真实凭据即可运行：
 
-```csharp
-Workflow workflow = AgentWorkflowBuilder.BuildConcurrent(
-    new[] { researcher, marketer, legal },
-    aggregator: SynthesizeReview);
-```
-
-`SynthesizeReview` receives one `List<ChatMessage>` per agent, in call order, and reduces them to a single message that surfaces as the workflow's terminal `WorkflowOutputEvent`:
-
-```csharp
-private static List<ChatMessage> SynthesizeReview(IList<List<ChatMessage>> perAgentMessages)
-{
-    var builder = new StringBuilder();
-    builder.AppendLine("Cross-functional review:");
-
-    foreach (List<ChatMessage> agentOutput in perAgentMessages)
-    {
-        if (agentOutput.Count == 0) continue;
-        ChatMessage final = agentOutput[^1];
-        string label = final.AuthorName ?? "agent";
-        builder.Append("- ").Append(label).Append(": ").AppendLine(final.Text.Trim());
-    }
-
-    return new List<ChatMessage>
-    {
-        new(ChatRole.Assistant, builder.ToString().TrimEnd()) { AuthorName = "concurrent-aggregator" },
-    };
-}
-```
-
-No LLM call inside the aggregator — it's a deterministic reduction, so it doesn't add latency on top of the slowest branch.
-
-## Side-by-side differences
-
-| Aspect | Python | .NET |
-|--------|--------|------|
-| Build | `ConcurrentBuilder(participants=[...]).build()` | `AgentWorkflowBuilder.BuildConcurrent(agents, aggregator: fn)` |
-| Aggregator | Opt-in via `.with_aggregator(fn)` — default is a raw list of responses | Passed as a constructor argument; this demo's aggregator is deterministic string reduction |
-| Per-agent response | `executor_completed` events carry a `list` payload keyed by `executor_id` | One `AgentResponseEvent` per agent, then a `WorkflowOutputEvent` for the aggregator's result |
-| Streaming | `workflow.run(message, stream=True)` | `InProcessExecution.RunStreamingAsync` + `run.WatchStreamAsync()` |
-
-## Gotchas
-
-- **Parallelism is real, not simulated.** All three LLM calls fire concurrently. If your provider enforces concurrency limits (Azure OpenAI TPM/RPM quotas), a wider fan-out can hit them faster than a sequential chain would.
-- **Order is not guaranteed.** Agents complete as they finish, not in the order you listed them — don't assume `researcher`'s event arrives before `marketer`'s.
-- **Branches are isolated.** Concurrent participants never see each other's output while running; if one branch needs another's result, this is the wrong pattern — use Sequential or a custom graph instead.
-- **The MAF v1.0 empty-`__init__.py` packaging bug is fixed upstream.** `agents/python/patch_maf.py` still exists but is a documented no-op now that the repo pins `agent-framework` 1.14.0, which ships a real `__init__.py`. Tutorials don't depend on that file at all — they call `tutorials/_shared/maf_bootstrap.py`'s `bootstrap()`, which patches `agent_framework`'s `__init__.py` only if it's still empty (defensive, same idempotent no-op in practice) and loads the repo-root `.env`. Don't go looking for a `shared/maf.py` or similar shim — it doesn't exist.
-- **The .NET aggregator here is not an LLM call.** If you want a synthesizing LLM summary instead of deterministic concatenation, call an agent inside `SynthesizeReview` — the signature is on an async boundary, so awaiting is safe there.
-
-## Tests
-
-
-`tutorials/13-concurrent-orchestration/python/tests/` holds `test_concurrent.py`, structured around a `ReplayChatClient` fixture pattern (`tests/fixtures/replay/`) so most of the suite runs without live credentials:
-
-- a wiring check that `build_workflow()` constructs without error
-- a replay-based test asserting all three agents (`researcher`, `marketer`, `legal`) respond, using recorded fixtures — no network call
-- three `@pytest.mark.integration` tests, skipped unless real LLM credentials are present, that hit a live provider to confirm responses arrive, that wall-clock stays under 6s (parallel, not serial), and that the three perspectives are genuinely distinct strings
+- 一个接线检查，确认 `build_workflow()` 能无错构造
+- 一个基于回放的测试，断言三个智能体（`researcher`、`marketer`、`legal`）都作出了响应，使用已录制的 fixture —— 不发网络请求
+- 三个 `@pytest.mark.integration` 测试，除非存在真实 LLM 凭据否则跳过；它们访问真实提供方，确认响应确实到达、墙钟耗时低于 6 秒（是并行而非串行），以及三种视角确实是不同的字符串
 
 ```bash
 uv run --project tutorials pytest tutorials/13-concurrent-orchestration/python/tests -v
 ```
 
-The .NET side ships [`dotnet/tests/ConcurrentTests.cs`](./dotnet/tests/ConcurrentTests.cs) — eight tests, no key, no network:
+## 在完整项目中的落点
 
-```bash
-cd tutorials/13-concurrent-orchestration/dotnet && dotnet test tests/Concurrent.Tests.csproj
-```
-
-The one that matters is `The_Three_Calls_Overlap_In_Time`. It asserts concurrency from recorded per-call start/end timestamps rather than from total elapsed time — a wall-clock threshold would flake the first time CI got busy, and "it finished quickly" is not the same claim as "they ran at once". Chapter 12 makes the same assertion and expects the opposite answer.
-
-## How this shows up in the capstone
-
-`agents/python/workflows/pre_purchase.py` is a live production concurrent fan-out/fan-in workflow, not a hypothetical. Its `_build_maf_workflow()` method (`agents/python/workflows/pre_purchase.py:229`) does exactly what this chapter teaches, with `WorkflowBuilder` instead of `ConcurrentBuilder`:
+`agents/python/workflows/pre_purchase.py` 是一个正在运行的**生产**并发扇出/扇入工作流，不是假设。它的 `_build_maf_workflow()` 方法（`agents/python/workflows/pre_purchase.py:229`）正是本章所教的内容，只是用 `WorkflowBuilder` 而不是 `ConcurrentBuilder`：
 
 ```python
 return (
@@ -198,10 +141,11 @@ return (
 )
 ```
 
-Three specialist data-gathering steps — reviews, stock, price history — fan out in parallel, fan in to a merge step (which runs a sequential shipping estimate if stock allows), then a synthesis step produces the final recommendation. It's wired live in the orchestrator as `PrePurchaseMode` (`agents/python/orchestrator/modes/workflow_mode.py:89`), reachable in the running app as `mode=workflow:pre-purchase` — contrast it against `tool` mode, which would make the same three calls one at a time, serially.
+三个专家级数据采集步骤 —— 评价、库存、价格历史 —— 并行扇出，扇入到一个合并步骤（若库存允许，它会跑一次顺序的运费估算），随后一个综合步骤产出最终建议。它在编排器里作为 `PrePurchaseMode`（`agents/python/orchestrator/modes/workflow_mode.py:89`）实时接线，可在运行中的应用里通过 `mode=workflow:pre-purchase` 触达 —— 与之相对的是 `tool` 模式，它会把这三次调用一次一个地串行执行。
 
-## What's next
+## 下一步
 
-- Next chapter: [Chapter 14 — Handoff Orchestration](../14-handoff-orchestration/)
-- Full source: [`python/`](./python/) · [`dotnet/`](./dotnet/)
-- [MAF docs — Concurrent Orchestration](https://learn.microsoft.com/en-us/agent-framework/workflows/orchestrations/concurrent/)
+- 下一章：[第 14 章 · 交接编排](../14-handoff-orchestration/)
+- 完整源码：[`python/`](./python/)
+- 共享材料：[Mermaid 风格指南](../_shared/mermaid-style-guide.md) · [术语表](../_shared/jargon-glossary.md)
+- [MAF 官方文档 —— 并发编排](https://learn.microsoft.com/en-us/agent-framework/workflows/orchestrations/concurrent/)

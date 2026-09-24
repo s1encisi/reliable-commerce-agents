@@ -60,7 +60,7 @@ function AddToCartButton({
         }}
       >
         <LogIn className="mr-1 size-3" />
-        Sign in to buy
+        登录后购买
       </Button>
     );
   }
@@ -83,7 +83,7 @@ function AddToCartButton({
         addItem(product.id!)
           .then(() => {
             if (onAction && product.name) {
-              onAction(`I just added ${product.name} to my cart. Show me my updated cart.`);
+              onAction(`我刚把 ${product.name} 加入购物车，给我看看更新后的购物车。`);
             }
           })
           .catch(() => {
@@ -100,7 +100,7 @@ function AddToCartButton({
       ) : (
         <ShoppingCart className="mr-1 size-3" />
       )}
-      {error ? "Retry" : added ? "Added" : "Add to Cart"}
+      {error ? "重试" : added ? "已加入" : "加入购物车"}
     </Button>
   );
 }
@@ -119,7 +119,7 @@ function ProductColumn({
   const { isAuthenticated } = useAuth();
   return (
     <div className="flex flex-col gap-2 min-w-0">
-      {/* Product image */}
+      {/* 商品图片 */}
       <div className="aspect-square w-full max-w-[120px] mx-auto rounded-lg overflow-hidden bg-muted flex items-center justify-center">
         {product.id ? (
           <img
@@ -133,43 +133,43 @@ function ProductColumn({
         )}
       </div>
 
-      {/* Badges */}
+      {/* 徽章 */}
       <div className="flex flex-wrap gap-1 justify-center">
         {isBetterValue && (
           <Badge className="bg-success text-success-foreground border-0 text-[9px] px-1.5 py-0">
-            Better value
+            更划算
           </Badge>
         )}
         {isBetterRated && (
           <Badge className="bg-warning text-warning-foreground border-0 text-[9px] px-1.5 py-0">
-            Higher rated
+            评分更高
           </Badge>
         )}
       </div>
 
-      {/* Name */}
+      {/* 名称 */}
       <h4 className="text-xs font-semibold text-foreground text-center line-clamp-2 leading-snug">
         {product.name}
       </h4>
 
-      {/* Brand */}
+      {/* 品牌 */}
       {product.brand && (
         <p className="text-[10px] text-muted-foreground text-center">{product.brand}</p>
       )}
 
-      {/* Price */}
+      {/* 价格 */}
       <div className="text-center">
         {product.price != null && (
-          <span className="text-base font-bold text-primary">${product.price.toFixed(2)}</span>
+          <span className="text-base font-bold text-primary">¥{product.price.toFixed(2)}</span>
         )}
         {product.original_price && product.original_price > (product.price ?? 0) && (
           <span className="ml-1 text-xs text-muted-foreground line-through">
-            ${product.original_price.toFixed(2)}
+            ¥{product.original_price.toFixed(2)}
           </span>
         )}
       </div>
 
-      {/* Rating */}
+      {/* 评分 */}
       {product.rating != null && (
         <div className="flex items-center justify-center gap-1">
           <div className="flex">
@@ -191,7 +191,7 @@ function ProductColumn({
         </div>
       )}
 
-      {/* Actions */}
+      {/* 操作 */}
       <div className="flex flex-col gap-1.5 mt-auto pt-1">
         <AddToCartButton product={product} onAction={onAction} />
         {product.id && (
@@ -203,7 +203,7 @@ function ProductColumn({
           >
             <Button size="sm" variant="outline" className="h-7 w-full text-xs">
               <ExternalLink className="mr-1 size-3" />
-              Details
+              详情
             </Button>
           </Link>
         )}
@@ -227,19 +227,19 @@ export function ComparisonCard({ products, onAction }: ComparisonCardProps) {
   const p1BetterRated = p1Rating > p2Rating;
   const p2BetterRated = p2Rating > p1Rating;
 
-  // Build a shared spec comparison if both have specs
+  // 当两件商品都有规格参数时，构建一份共有的参数对比
   const sharedSpecKeys = p1.specs && p2.specs
     ? Object.keys(p1.specs).filter((k) => k in p2.specs!)
     : [];
 
   return (
     <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden max-w-lg">
-      {/* Header */}
+      {/* 标题栏 */}
       <div className="bg-muted/50 px-4 py-2 border-b border-border">
-        <p className="text-xs font-medium text-muted-foreground text-center">Side-by-side comparison</p>
+        <p className="text-xs font-medium text-muted-foreground text-center">并排对比</p>
       </div>
 
-      {/* Product columns */}
+      {/* 商品两列 */}
       <div className="grid grid-cols-2 gap-4 p-4">
         <ProductColumn
           product={p1}
@@ -248,7 +248,7 @@ export function ComparisonCard({ products, onAction }: ComparisonCardProps) {
           onAction={onAction}
         />
 
-        {/* Divider */}
+        {/* 分隔线 */}
         <div className="absolute left-1/2 top-12 bottom-4 w-px bg-border hidden sm:block" aria-hidden />
 
         <ProductColumn
@@ -259,13 +259,13 @@ export function ComparisonCard({ products, onAction }: ComparisonCardProps) {
         />
       </div>
 
-      {/* Spec comparison table */}
+      {/* 参数对比表 */}
       {sharedSpecKeys.length > 0 && (
         <div className="border-t border-border">
           <table className="w-full text-[11px]">
             <thead>
               <tr className="border-b border-border bg-muted/30">
-                <th className="px-3 py-1.5 text-left font-medium text-muted-foreground w-1/3">Spec</th>
+                <th className="px-3 py-1.5 text-left font-medium text-muted-foreground w-1/3">参数</th>
                 <th className="px-3 py-1.5 text-center font-medium text-foreground w-1/3">{p1.name?.split(" ").slice(0, 2).join(" ")}</th>
                 <th className="px-3 py-1.5 text-center font-medium text-foreground w-1/3">{p2.name?.split(" ").slice(0, 2).join(" ")}</th>
               </tr>

@@ -23,10 +23,9 @@ const CardMotion = ({ children }: { children: React.ReactNode }) => (
   </motion.div>
 );
 
-// rehype-sanitize's default schema strips `<script>`, on* attributes,
-// `javascript:` URLs and similar. We allow class names so the prose
-// styling on `<code>` / `<pre>` / `<table>` keeps working — that's the
-// only deviation from the default.
+// rehype-sanitize 的默认模式会剔除 `<script>`、on* 属性、
+// `javascript:` URL 等。我们放行 class 名，以便 `<code>` / `<pre>` /
+// `<table>` 上的 prose 样式继续生效——这是相对默认值的唯一偏离。
 const SANITIZE_SCHEMA = {
   ...defaultSchema,
   attributes: {
@@ -125,7 +124,7 @@ export function RichMessage({ content, streaming, onAction }: RichMessageProps) 
   );
 }
 
-// ─── Types ────────────────────────────────────────────────────────────
+// ─── 类型 ─────────────────────────────────────────────────────────────
 
 export interface Segment {
   type: string;
@@ -133,16 +132,16 @@ export interface Segment {
   data?: Record<string, unknown>;
 }
 
-// ─── Streaming helper: drop a trailing unclosed structured fence ─────
+// ─── 流式辅助：丢弃末尾未闭合的结构化代码块 ──────────────────────────
 //
-// While chunks arrive, a fence like ```product\n{"id":"p1"... may be
-// half-written. We don't want raw JSON flickering in the bubble — hide
-// everything from the unclosed opener until the stream finishes.
+// 分块到达时，形如 ```product\n{"id":"p1"... 的代码块可能只写了一半。
+// 我们不希望原始 JSON 在气泡里闪现——因此把未闭合的开始标记之后的所有
+// 内容都隐藏起来，直到流结束。
 
 function stripUnclosedFence(content: string): string {
-  // `products` listed before `product` so the longer kind wins; no trailing
-  // \n requirement — the SSE transport can drop the newline after the fence
-  // marker, collapsing ```product\n{...} into ```product{...}.
+  // `products` 排在 `product` 之前，让更长的类型优先匹配；不要求结尾
+  // 有 \n——SSE 传输可能丢掉代码块标记后的换行，使
+  // ```product\n{...} 塌缩为 ```product{...}。
   const openRegex = /```(products|product|order|checkout|return|sentiment|inventory|pricing)/g;
   let cursor = 0;
   let lastUnclosedStart = -1;
@@ -162,14 +161,13 @@ function stripUnclosedFence(content: string): string {
   return content.slice(0, lastUnclosedStart).trimEnd();
 }
 
-// ─── 1. Fenced Code Block Parser (primary path) ──────────────────────
+// ─── 1. 围栏代码块解析器（主路径） ───────────────────────────────────
 
 function parseCodeBlocks(content: string): Segment[] | null {
-  // The newline after the fence marker is OPTIONAL: the streaming transport
-  // frames a lone "\n" LLM token as an empty SSE data line, so it gets dropped
-  // and ```product\n{...} arrives as ```product{...}. We tolerate any
-  // whitespace (incl. none) and require the body to start with { or [ so a
-  // stray ```product-ideas block isn't misread as a card.
+  // 代码块标记后的换行是可选的：流式传输会把单独的 "\n" LLM token 封装
+  // 成空的 SSE 数据行，于是它被丢弃，```product\n{...} 到达时变成
+  // ```product{...}。我们容忍任意空白（包括没有空白），并要求正文以
+  // { 或 [ 开头，这样偶然出现的 ```product-ideas 块就不会被误读成卡片。
   const codeBlockRegex = /```(products|product|order|checkout|return|sentiment|inventory|pricing)\s*([[{][\s\S]*?)```/g;
   const segments: Segment[] = [];
   let lastIndex = 0;
@@ -185,13 +183,13 @@ function parseCodeBlocks(content: string): Segment[] | null {
     try {
       const data = JSON.parse(match[2].trim());
       if (match[1] === "products" && Array.isArray(data)) {
-        // Two products → side-by-side comparison card
+        // 两件商品 → 并排对比卡片
         if (data.length === 2) {
           const [p1, p2] = data.map((d: unknown) => validateCard("product", d));
           if (p1 && p2) {
             segments.push({ type: "comparison", text: "", data: [p1, p2] as any });
           } else {
-            // Fallback: render as individual cards
+            // 兜底：渲染为各自独立的卡片
             data.forEach((d: unknown) => {
               const validated = validateCard("product", d);
               if (validated) segments.push({ type: "product", text: "", data: validated });
@@ -211,22 +209,20 @@ function parseCodeBlocks(content: string): Segment[] | null {
         if (validated) {
           segments.push({ type: kind, text: "", data: validated });
         } else {
-          // Schema rejected the payload — drop the fence rather than
-          // showing the raw JSON, matching the "products" array branch's
-          // existing silent-drop convention above (an item that fails
-          // validateCard there is dropped too, not shown raw). The
-          // surrounding conversational text is unaffected — it was
-          // already captured as its own segment by the lastIndex
-          // bookkeeping around this match. Logged so a bad LLM response
-          // is still debuggable without being user-visible.
+          // 模式校验拒绝了这份载荷——丢弃该代码块，而不是展示原始
+          // JSON，与上面 "products" 数组分支既有的静默丢弃约定保持
+          // 一致（那里校验失败的单件商品同样被丢弃，而非原样展示）。
+          // 周围的对话文本不受影响——它已由本次匹配前后的 lastIndex
+          // 记账捕获为自己的片段。此处记录日志，以便在不让用户看到的
+          // 前提下仍能排查坏的 LLM 响应。
           if (process.env.NODE_ENV !== "production") {
             console.warn(`[rich-message] dropped a \`${kind}\` fence that failed schema validation`, data);
           }
         }
       }
     } catch (err) {
-      // Malformed JSON inside a recognized fence tag — same treatment:
-      // drop it, don't show the raw (broken) JSON to the user.
+      // 已识别的代码块标记内出现了格式错误的 JSON——同样处理：
+      // 丢弃它，不要把原始（损坏的）JSON 展示给用户。
       if (process.env.NODE_ENV !== "production") {
         console.warn(`[rich-message] dropped a \`${match[1]}\` fence with malformed JSON`, err);
       }
@@ -244,10 +240,9 @@ function parseCodeBlocks(content: string): Segment[] | null {
   return dedupeCards(suppressRedundantText(segments));
 }
 
-// Collapse duplicate cards. The orchestrator often restates a specialist's
-// product/order data, so the same item can arrive twice — once as a clean
-// fenced block (→ card) and once as a collapsed-fence copy (now also a card).
-// Keyed by kind + id so duplicates render once.
+// 合并重复卡片。编排器经常会复述专业智能体返回的商品/订单数据，因此同一
+// 条目可能到达两次——一次是干净的围栏块（→ 卡片），一次是塌缩围栏的副本
+// （现在同样会变成卡片）。以「类型 + id」为键，让重复项只渲染一次。
 function dedupeCards(segments: Segment[]): Segment[] {
   const seen = new Set<string>();
   return segments.filter((seg) => {
@@ -264,8 +259,8 @@ function dedupeCards(segments: Segment[]): Segment[] {
         "comparison:" +
         (seg.data as Array<{ id?: string }>).map((p) => p?.id ?? "").join(",");
     } else if (seg.type === "checkout" && seg.data) {
-      // No id on a checkout — key on the cart shape (the orchestrator often
-      // restates the same checkout twice in one message).
+      // 结算卡没有 id——以购物车的形态为键（编排器经常在同一条消息里
+      // 把同一份结算信息复述两次）。
       const d = seg.data as { item_count?: number; total?: number };
       key = `checkout:${d.item_count ?? ""}:${d.total ?? ""}`;
     } else if (seg.type === "return" && seg.data) {
@@ -288,7 +283,7 @@ function dedupeCards(segments: Segment[]): Segment[] {
   });
 }
 
-// Remove text segments that are plain-text dumps of adjacent structured cards.
+// 移除那些只是相邻结构化卡片纯文本转储的文本片段。
 function suppressRedundantText(segments: Segment[]): Segment[] {
   const cardTypes = new Set(["order", "product", "products", "checkout", "return"]);
   return segments.filter((seg, i) => {
@@ -303,8 +298,8 @@ function suppressRedundantText(segments: Segment[]): Segment[] {
 }
 
 function looksLikeStructuredDump(text: string): boolean {
-  // Line-prefix tolerant: lines may start with "- ", "* ", bullets, or nothing.
-  // LINE = start-of-line, optional bullet/dash, optional whitespace.
+  // 容忍行前缀：行可能以 "- "、"* "、项目符号开头，也可能什么都不带。
+  // LINE = 行首、可选的项目符号/短横线、可选的空白。
   const LINE = "^[\\s]*[-*•]?[\\s]*";
   const patterns = [
     new RegExp(`${LINE}Status[:\\s]`, "im"),
@@ -323,7 +318,7 @@ function looksLikeStructuredDump(text: string): boolean {
   return patterns.filter((p) => p.test(text)).length >= 3;
 }
 
-// ─── 2. Order Text Detection (fallback) ──────────────────────────────
+// ─── 2. 订单文本识别（兜底） ─────────────────────────────────────────
 
 interface OrderItem {
   name: string;
@@ -340,7 +335,7 @@ interface TimelineEvent {
 }
 
 function parseOrderInText(content: string): Segment[] | null {
-  // Must have a UUID in an "Order" context
+  // 必须在「订单」语境中出现一个 UUID
   if (
     !/Order\s*(?:ID|#)?[:\s]*[0-9a-f]{8}-/i.test(content)
   )
@@ -362,7 +357,7 @@ function parseOrderInText(content: string): Segment[] | null {
     );
   };
 
-  // Find first and last order-related paragraph
+  // 找出与订单相关的第一个和最后一个段落
   let startIdx = -1;
   let endIdx = -1;
   for (let i = 0; i < paragraphs.length; i++) {
@@ -370,13 +365,13 @@ function parseOrderInText(content: string): Segment[] | null {
       if (startIdx === -1) startIdx = i;
       endIdx = i;
     } else if (startIdx !== -1) {
-      // Stop at first non-order paragraph after the order block
+      // 在订单块之后的第一个非订单段落处停止
       break;
     }
   }
   if (startIdx === -1) return null;
 
-  // Merge all order paragraphs and extract structured data
+  // 合并所有订单段落并提取结构化数据
   const orderText = paragraphs.slice(startIdx, endIdx + 1).join("\n\n");
   const orderData = extractOrderData(orderText);
   if (!orderData) return null;
@@ -400,7 +395,7 @@ function extractOrderData(
 
   const id = idMatch[1];
 
-  // Use line-anchored regexes to avoid matching stray words
+  // 使用按行锚定的正则，避免匹配到零散词语
   const statusMatch = text.match(/^Status[:\s]+(\w[\w\s]*?)$/im);
   const status = statusMatch
     ? statusMatch[1].trim().toLowerCase().replace(/\s+/g, "_")
@@ -433,7 +428,7 @@ function extractOrderData(
   );
   const date = dateMatch ? dateMatch[1].trim() : undefined;
 
-  // Parse items: "Product Name (Brand, Category) — Qty × $Price = $Total"
+  // 解析商品明细："Product Name (Brand, Category) — Qty × $Price = $Total"
   const items: OrderItem[] = [];
   const itemRegex =
     /^[-•*]?\s*(.+?)\s*\(([^)]+)\)\s*[—–-]\s*(\d+)\s*[×x]\s*\$([\d,.]+)(?:\s*=\s*\$([\d,.]+))?/gm;
@@ -452,7 +447,7 @@ function extractOrderData(
     });
   }
 
-  // Parse timeline: "2026-03-25: Order placed"
+  // 解析时间线："2026-03-25: Order placed"
   const timeline: TimelineEvent[] = [];
   const tlRegex = /^(\d{4}-\d{2}-\d{2})[:\s]+(.+?)$/gm;
   while ((m = tlRegex.exec(text)) !== null) {
@@ -473,7 +468,7 @@ function extractOrderData(
   };
 }
 
-// ─── 3. Product Text Detection (fallback) ────────────────────────────
+// ─── 3. 商品文本识别（兜底） ─────────────────────────────────────────
 
 function parseProductsInText(content: string): Segment[] | null {
   const paragraphs = content.split(/\n\n+/);
@@ -506,7 +501,7 @@ function tryParseProductParagraph(
     .filter(Boolean);
   if (lines.length < 2) return null;
 
-  // First line = product name
+  // 第一行 = 商品名称
   let nameLine = lines[0]
     .replace(/^\*\*/, "")
     .replace(/\*\*$/, "")
@@ -515,7 +510,7 @@ function tryParseProductParagraph(
     .trim();
 
   if (nameLine.length < 3 || nameLine.length > 100) return null;
-  // Skip conversational/sentence lines
+  // 跳过对话性/句子式的行
   if (
     /^(Hi |Hello|Would|Here |I |Let me|Based on|If you|These |This |For |Check|You |We |Our |Sure|Of course|Great|Thank)/i.test(
       nameLine
@@ -524,7 +519,7 @@ function tryParseProductParagraph(
     return null;
   if (nameLine.endsWith("?") || nameLine.endsWith("!")) return null;
 
-  // Must have a "Price:" line somewhere in the block
+  // 块内某处必须有 "Price:" 行
   const hasPrice = lines.some((l) => /Price[:\s]*\$/i.test(l));
   const hasDollar = lines.some((l) => /\$\d/.test(l));
   const hasRating = lines.some((l) => /Rating[:\s]/i.test(l));
@@ -542,7 +537,7 @@ function tryParseProductParagraph(
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
 
-    // Price: $299.99 (was $349.99)
+    // 价格行示例：Price: $299.99 (was $349.99)
     const priceMatch = line.match(/Price[:\s]*\$([\d,.]+)/i);
     if (priceMatch) {
       price = parseFloat(priceMatch[1].replace(",", ""));
@@ -551,7 +546,7 @@ function tryParseProductParagraph(
         original_price = parseFloat(wasMatch[1].replace(",", ""));
     }
 
-    // Rating: 4.7/5 (15 reviews)
+    // 评分行示例：Rating: 4.7/5 (15 reviews)
     const ratingMatch = line.match(/Rating[:\s]*([\d.]+)\s*\/\s*5/i);
     if (ratingMatch) {
       rating = parseFloat(ratingMatch[1]);
@@ -559,18 +554,18 @@ function tryParseProductParagraph(
       if (revMatch) review_count = parseInt(revMatch[1]);
     }
 
-    // Features: ...
+    // 特性行示例：Features: ...
     if (/^Features?[:\s]/i.test(line)) {
       description = line.replace(/^Features?[:\s]*/i, "").trim();
     }
 
-    // Category / Brand explicit lines
+    // 显式的 Category / Brand 行
     if (/^Category[:\s]/i.test(line))
       category = line.replace(/^Category[:\s]*/i, "").trim();
     if (/^Brand[:\s]/i.test(line))
       brand = line.replace(/^Brand[:\s]*/i, "").trim();
 
-    // "Why it's great:" — append to description
+    // "Why it's great:" —— 追加到描述
     if (/^Why\s/i.test(line)) {
       const extra = line.replace(/^Why\s+\S+\s*[:.]?\s*/i, "").trim();
       description = description ? `${description}. ${extra}` : extra;
@@ -579,7 +574,7 @@ function tryParseProductParagraph(
 
   if (price === undefined) return null;
 
-  // Extract brand from name: "AirPods Max (Apple)"
+  // 从名称中提取品牌："AirPods Max (Apple)"
   const brandInName = nameLine.match(/\((\w[\w\s]*)\)$/);
   if (brandInName && !brand) {
     brand = brandInName[1].trim();
@@ -599,24 +594,21 @@ function tryParseProductParagraph(
   };
 }
 
-// ─── Guard: strip any JSON-shaped fence this parser doesn't know about ──
+// ─── 守卫：剥离本解析器不认识、但形似 JSON 的代码块 ──────────────────
 //
-// parseCodeBlocks only recognizes the 5 known card tags. Every real
-// backend-emitted fence tag matches one of those today (verified against
-// every prompt YAML that emits a fence), so this is defense against a
-// tag this parser was never taught — an LLM hallucinating a wrong tag
-// name, or a future card type added to the backend before this file is
-// updated for it — not a currently-reachable path. Without this, an
-// unrecognized tag falls through untouched to ReactMarkdown, which
-// treats any ``` fence as a generic code block and renders the raw JSON
-// verbatim: exactly the "never show raw JSON" failure this component
-// exists to prevent for the 5 known tags.
+// parseCodeBlocks 只识别 5 种已知的卡片标记。目前所有后端实际发出的代码块
+// 标记都落在其中（已对照每一个会输出代码块的提示词 YAML 验证过），因此这
+// 是防御本解析器从未被教过的标记——LLM 幻觉出一个错误的标记名，或后端在
+// 本文件更新之前先新增了一种卡片类型——而不是当前可达的路径。若没有这道
+// 守卫，未识别的标记会原封不动落到 ReactMarkdown，后者把任何 ``` 代码块
+// 都当作普通代码块处理并原样渲染其中的 JSON：正是本组件为 5 种已知标记
+// 所防范的「绝不展示原始 JSON」的失败场景。
 const KNOWN_CARD_TAGS = new Set(["products", "product", "order", "checkout", "return", "sentiment", "inventory", "pricing"]);
 const ANY_FENCE_RE = /```([a-zA-Z0-9_-]*)\s*([[{][\s\S]*?)```/g;
 
 function stripUnrecognizedJsonFences(content: string): string {
   return content.replace(ANY_FENCE_RE, (full, tag: string) => {
-    if (KNOWN_CARD_TAGS.has(tag)) return full; // parseCodeBlocks handles these
+    if (KNOWN_CARD_TAGS.has(tag)) return full; // 这些交给 parseCodeBlocks 处理
     if (process.env.NODE_ENV !== "production") {
       console.warn(`[rich-message] dropped an unrecognized \`${tag || "(untagged)"}\` JSON-shaped fence`);
     }
@@ -624,23 +616,23 @@ function stripUnrecognizedJsonFences(content: string): string {
   });
 }
 
-// ─── Main Parser ──────────────────────────────────────────────────────
+// ─── 主解析器 ────────────────────────────────────────────────────────
 
 export function parseContent(rawContent: string): Segment[] {
   const content = stripUnrecognizedJsonFences(rawContent);
 
-  // 1. Fenced code blocks (highest priority, most reliable)
+  // 1. 围栏代码块（优先级最高，也最可靠）
   const codeBlockResult = parseCodeBlocks(content);
   if (codeBlockResult) return codeBlockResult;
 
-  // 2. Order block with items in plain text
+  // 2. 纯文本中带商品明细的订单块
   const orderResult = parseOrderInText(content);
   if (orderResult) return orderResult;
 
-  // 3. Product blocks in plain text
+  // 3. 纯文本中的商品块
   const productResult = parseProductsInText(content);
   if (productResult) return productResult;
 
-  // 4. Default: just markdown
+  // 4. 默认：仅按 Markdown 处理
   return [{ type: "text", text: content }];
 }

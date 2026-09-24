@@ -1,47 +1,37 @@
-"""The project's decision points, expressed as Jev questions.
+"""将项目决策点表示为 Jev 问题。
 
-Each function here is one *decision*, not one *call*: it owns the question
-wording, the option set, and the threshold policy, and returns a typed result
-the caller can branch on directly.
-
-Design note — why these three decisions and not more
-----------------------------------------------------
-The e-commerce project already distinguishes decisions that are *too fuzzy for
-a hand-written ``if`` but too small for a frontier LLM*. Those are exactly the
-places Jev is meant to sit. The three below are the ones with an existing
-ground-truth label set in the repository, so they can be scored rather than
-merely asserted:
-
-``route_specialist``  replaces the orchestrator's LLM tool-routing turn.
-                      Ground truth: ``evals/datasets/orchestrator_routing.json``
-                      plus the per-specialist datasets.
-``safety_gate``       replaces the regex/denylist pre-filter in
-                      ``shared/guardrails/moderation.py``.
-                      Ground truth: ``evals/datasets/red_team.json``.
-``score_relevance``   a drop-in reranker for the hybrid retrieval path.
-                      Ground truth: none yet — included as a design sketch
-                      with an explicit note that it is unmeasured.
+每个函数负责问题措辞、候选项与阈值，并返回可直接分支的类型化结果。
+route_specialist 对应智能体路由，标签来自路由和专业智能体数据集；
+safety_gate 对应安全判断，使用 red_team.json。score_relevance 是
+检索重排设计草案，尚无相关性标签，因此未验证效果。
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Mapping, Sequence
+from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import Any
 
 from .client import JevClient, choice, noul, score
 
 # --------------------------------------------------------------------------
-# Decision 1 — specialist routing
+# 决策一：专业智能体路由。
 # --------------------------------------------------------------------------
 
-# Mirrors agents/python/orchestrator/modes/__init__.py: the orchestrator's job
-# in `tool` mode is to pick exactly one of these and hand off.
+# 对应编排器的专业智能体集合；
+# tool 模式选择目标并转交请求。
 SPECIALIST_ROUTES: dict[str, str] = {
-    "product-discovery": "finding, comparing or recommending products; product details, specs, price ranges, categories",
-    "order-management": "the user's own orders: tracking, status, cancellation, returns, refunds, addresses, order history",
-    "pricing-promotions": "coupons, discounts, promotions, sale prices, deal eligibility, loyalty pricing",
-    "review-sentiment": "what reviewers or customers say: ratings, sentiment, complaints, pros and cons of a product",
-    "inventory-fulfillment": "stock levels, availability, shipping speed, delivery estimates, warehouse or fulfilment questions",
+    "product-discovery": (
+        "finding, comparing or recommending products; product details, specs, price ranges, categories"
+    ),
+    "order-management": (
+        "the user's own orders: tracking, status, cancellation, returns, refunds, addresses, order history"
+    ),
+    "pricing-promotions": ("coupons, discounts, promotions, sale prices, deal eligibility, loyalty pricing"),
+    "review-sentiment": ("what reviewers or customers say: ratings, sentiment, complaints, pros and cons of a product"),
+    "inventory-fulfillment": (
+        "stock levels, availability, shipping speed, delivery estimates, warehouse or fulfilment questions"
+    ),
 }
 
 ROUTE_INSTRUCTIONS = (
@@ -55,7 +45,7 @@ ROUTE_INSTRUCTIONS = (
 
 @dataclass(frozen=True)
 class RouteDecision:
-    """One routing decision, with everything needed to score and cost it."""
+    """一次路由决定及其评分、用量所需信息。"""
 
     route: str
     confidence: float
@@ -76,11 +66,9 @@ def route_specialist(
     *,
     history: Sequence[str] | None = None,
 ) -> RouteDecision:
-    """Pick the specialist that should own ``message``.
+    """为 message 选择负责的专业智能体。
 
-    ``history`` is optional prior turns. Routing is a per-turn decision and
-    usually needs only the current message, but a follow-up like "and the
-    black one?" is undecidable alone, so the parameter exists.
+    history 提供可选历史，处理类似“那黑色的呢”这类无法独立判断的追问。
     """
     state: Any = message
     if history:
@@ -100,29 +88,29 @@ def route_specialist(
 
 
 # --------------------------------------------------------------------------
-# Decision 2 — safety gate
+# 决策二：安全判断。
 # --------------------------------------------------------------------------
 
 # --------------------------------------------------------------------------
-# Decision 2 — safety gate
+# 决策二：安全判断。
 #
-# v1 asked a single question: "must this message be refused?". That conflated
-# two different judgements, and the evaluation caught it: two samples in
-# red_team.json are *legitimate requests carrying an embedded payload*
-# (refusal_expected: false). v1 scored them 0.66 and 0.90 and refused both.
+# 第一版只问是否必须拒绝整条消息，混合了两种判断。
+# 评测中有两个样本是
+# 夹带恶意载荷的合法请求，
+# 其 refusal_expected 为 false，却被拒绝。
 #
-# The model was not wrong — it detected the manipulation correctly, and the
-# question it was asked was "must this be refused", so refusing was the
-# consistent answer. The defect was in the question.
+# 检测到操纵意图本身没有错，
+# 但问题把检测结果等同于处置决定，
+# 因此需要修正问题设计。
 #
-# v2 splits detection from disposition. Both are asked in the SAME round trip,
-# so this costs nothing extra in latency or tokens, and the caller gets both
-# facts instead of one collapsed probability:
+# 第二版将检测与处置拆开，并在同一次请求中询问。
+# 无需增加网络往返，但费用和延迟仍应实际测量，
+# 调用方保留两个独立结果：
 #
-#   contains_injection -> "is something in here trying to manipulate me?"
-#   should_refuse      -> "is the request as a whole illegitimate?"
+# contains_injection：是否包含试图操纵系统的内容。
+# should_refuse：整体请求是否应被拒绝。
 #
-# A request can be yes/no, yes/yes, or no/no. Only yes/yes means refuse.
+# 合法请求即使含载荷，也可以净化后继续处理。
 # --------------------------------------------------------------------------
 
 GATE_DETECT_INSTRUCTIONS = (
@@ -152,12 +140,10 @@ GATE_REFUSE_INSTRUCTIONS = (
 
 @dataclass(frozen=True)
 class GateDecision:
-    """Two calibrated probabilities, kept separate on purpose.
+    """分开保存注入检测和拒绝判断的两个概率。
 
-    ``injection_detected`` and ``refuse`` are independent: a legitimate
-    request can carry a payload (detected, not refused), and a bare attack is
-    both (detected, refused). Collapsing them into one number is what v1 got
-    wrong.
+    合法请求可能检测到注入但不需拒绝；纯攻击则可能两者都为真。
+    不能把两个语义压缩成一个数值。
     """
 
     refuse: bool
@@ -175,11 +161,11 @@ class GateDecision:
         return self.input_tokens + self.output_tokens
 
 
-# 0.5 is the honest default for a calibrated probability. Note that in a
-# safety context the two error types are not symmetric — a leaked attack costs
-# more than a refused customer — so this should be tuned against a
-# FP/FN trade-off curve rather than left at the midpoint. See the threshold
-# sweep in FINDINGS.zh-CN.md.
+# 0.5 作为初始阈值，并非已验证的最优安全阈值。
+# 漏过攻击和误拒用户的代价不对称，
+# 应结合实际业务代价，
+# 通过误报与漏报权衡调整，
+# 阈值扫描见 FINDINGS.zh-CN.md。
 DEFAULT_GATE_THRESHOLD = 0.5
 
 
@@ -189,11 +175,10 @@ def safety_gate(
     *,
     threshold: float = DEFAULT_GATE_THRESHOLD,
 ) -> GateDecision:
-    """Detect manipulation and decide disposition, in one round trip.
+    """一次请求同时检测操纵意图并判断处置。
 
-    Returns both judgements. Callers that only need the verdict read
-    ``.refuse``; callers that want to sanitise-and-continue rather than reject
-    read ``.injection_detected`` and hand the message to ``sanitize.py``.
+    只需结论时读取 refuse；需要净化后继续时读取 injection_detected，
+    再交给 sanitize.py 处理。
     """
     resp = client.ask(
         message,
@@ -219,7 +204,7 @@ def safety_gate(
 
 
 # --------------------------------------------------------------------------
-# Decision 3 — relevance reranking (design sketch, not yet measured)
+# 决策三：相关性重排，仅设计草案，尚未测量。
 # --------------------------------------------------------------------------
 
 RELEVANCE_LEVELS = [
@@ -235,16 +220,10 @@ def score_relevance(
     query: str,
     candidates: Sequence[str],
 ) -> tuple[list[float], float, int]:
-    """Score every candidate's fit to ``query`` in one round trip.
+    """一次请求评估全部候选与 query 的相关性。
 
-    Returns ``(scores_in_input_order, latency_ms, input_tokens)``.
-
-    This is the natural replacement for the fixed ``RRF_K = 60`` blend in
-    ``shared/search.py``: RRF fuses two ranked lists by position alone and is
-    blind to whether a candidate actually answers the query. A typed score can
-    see that. It is *unmeasured* here because the repository has no labelled
-    relevance judgements to score against — stated plainly rather than
-    reported as a win.
+    返回按输入顺序的分数、延迟毫秒数和输入 token 数。它是固定 RRF
+    融合的一种候选替代方案；仓库没有相关性标签，不能宣称优于现有方法。
     """
     questions = {
         f"candidate_{i}": score(

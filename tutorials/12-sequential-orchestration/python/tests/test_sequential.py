@@ -1,7 +1,7 @@
 """
-Chapter 12 — Sequential Orchestration: tests.
+第 12 章 —— 顺序编排：测试。
 
-Integration-only — the Sequential pipeline invokes three real LLM calls per run.
+仅集成测试 —— 顺序执行流水线每次运行会发起三次真实 LLM 调用。
 """
 
 from __future__ import annotations
@@ -33,11 +33,9 @@ def _llm_available() -> bool:
 
 
 def test_workflow_builds_with_three_participants(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Construction-only — never calls the LLM, so it shouldn't need real
-    # credentials. _default_client()'s OpenAI branch reads OPENAI_API_KEY via
-    # a hard os.environ[...] lookup, which this test tripped over in a
-    # credential-less CI job. A placeholder is enough since the client is
-    # never actually invoked.
+    # 仅构建 —— 从不调用 LLM，因此不应该需要真实凭据。_default_client() 的
+    # OpenAI 分支通过硬性 os.environ[...] 读取 OPENAI_API_KEY，无凭据的 CI
+    # 任务里曾在这里被绊住。既然客户端从未被真正调用，放一个占位符就够了。
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test-placeholder-not-used")
     workflow = build_workflow()
     assert workflow is not None
@@ -45,10 +43,10 @@ def test_workflow_builds_with_three_participants(monkeypatch: pytest.MonkeyPatch
 
 @pytest.mark.asyncio
 async def test_replay_runs_all_three_agents(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Plays back tests/fixtures/replay/ — no network, no credentials.
+    """回放 tests/fixtures/replay/ —— 无网络、无凭据。
 
-    Recorded once against a real LLM (test_real_llm_runs_all_three_agents
-    below, run with RECORD=true) and committed.
+    曾对真实 LLM 录制一次（即下方的 test_real_llm_runs_all_three_agents，
+    带 RECORD=true 运行）并提交入库。
     """
     recording = os.environ.get("RECORD", "").lower() in ("1", "true", "yes")
     if not recording and not any(FIXTURES_DIR.glob("*.json")):
@@ -75,9 +73,9 @@ async def test_real_llm_runs_all_three_agents() -> None:
 @pytest.mark.skipif(not _llm_available(), reason="no LLM credentials in .env")
 async def test_real_llm_writer_drafts_and_reviewer_critiques() -> None:
     writer_out, reviewer_out, _ = await run("Benefits of learning Python")
-    # Writer should produce multiple sentences (at least one period).
+    # 撰写者应当产出多个句子（至少有一个句号）。
     assert "." in writer_out
-    # Reviewer should reference the critique concepts (strength/weakness framing).
+    # 评审者应当提及批评相关概念（优点/缺点式表述）。
     lowered = reviewer_out.lower()
     assert any(k in lowered for k in ("strength", "weakness", "could", "however", "but", "improve"))
 
@@ -87,7 +85,7 @@ async def test_real_llm_writer_drafts_and_reviewer_critiques() -> None:
 @pytest.mark.skipif(not _llm_available(), reason="no LLM credentials in .env")
 async def test_real_llm_outputs_differ_between_agents() -> None:
     w, r, f = await run("The importance of exercise")
-    # Three distinct outputs — no accidental loopback.
+    # 三个各不相同的输出 —— 没有意外回环。
     assert w != r
     assert r != f
     assert w != f

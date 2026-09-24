@@ -1,12 +1,11 @@
 """
-Chapter 24 — RAG and Grounding: tests.
+第 24 章 —— 检索与事实核验：测试。
 
-- Unit tests exercise retrieval (`search_products`) and verification
-  (`extract_claims` / `verify_claims`) directly — no LLM.
-- Agent-wiring test checks `search_products` is registered.
-- A replay test plays back a committed fixture (skips gracefully if none
-  exist yet).
-- Integration tests hit the real LLM and are skipped without credentials.
+- 单元测试直接检验检索（`search_products`）与核验
+  （`extract_claims` / `verify_claims`）—— 不涉及 LLM。
+- 智能体装配测试检验 `search_products` 已被注册。
+- 回放测试回放一份已提交的夹具（若尚无夹具则优雅跳过）。
+- 集成测试访问真实 LLM，缺少凭据时跳过。
 """
 
 from __future__ import annotations
@@ -34,7 +33,7 @@ from main import (  # noqa: E402
     verify_claims,
 )
 
-# ─────────────────── Retrieval unit tests (no LLM) ──────────────────
+# ─────────────────── 检索单元测试（不涉及 LLM） ──────────────────
 
 
 def test_search_products_matches_by_keyword() -> None:
@@ -57,7 +56,7 @@ def test_search_products_is_case_insensitive() -> None:
     assert search_products.func("HOODIE") == search_products.func("hoodie")
 
 
-# ─────────────────── Verification unit tests (no LLM) ──────────────────
+# ─────────────────── 事实核验单元测试（不涉及 LLM） ──────────────────
 
 
 def test_extract_claims_finds_id_and_nearby_price() -> None:
@@ -96,8 +95,8 @@ def test_verify_claims_flags_unknown_id_as_not_found() -> None:
 
 
 def test_verify_claims_ignores_claim_with_no_price_beyond_id_match() -> None:
-    # No price claimed at all — a real id with no price attached is verified,
-    # there's nothing to be inconsistent with.
+    # 完全没有声称价格 —— 一个真实存在、未附价格的 id 判定为通过，
+    # 因为没有任何东西与之不一致。
     report = verify_claims([ProductClaim(id="P003", price=None)])
     assert report.verdicts[0].status == "verified"
 
@@ -107,27 +106,27 @@ def test_catalog_has_expected_shape() -> None:
     assert all({"id", "name", "price", "category"} <= p.keys() for p in CATALOG)
 
 
-# ─────────────────── Agent wiring ──────────────────
+# ─────────────────── 智能体装配 ──────────────────
 
 
 def test_agent_has_search_products_tool_registered() -> None:
-    agent = build_agent(client=object())  # client isn't called; we only inspect structure
+    agent = build_agent(client=object())  # 该 client 不会被调用，这里只看结构
     tool_names = [getattr(t, "name", None) for t in agent.default_options.get("tools") or []]
     assert "search_products" in tool_names
 
 
-# ─────────────────── Replay test (no credentials, runs in CI) ────
+# ─────────────────── 回放测试（无需凭据，可在 CI 中运行） ────
 
 
 @pytest.mark.asyncio
 async def test_replay_grounded_answer_names_a_real_product(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Plays back tests/fixtures/replay/ — no network, no credentials.
+    """回放 tests/fixtures/replay/ —— 不走网络、不需凭据。
 
-    Recorded once against a real LLM (test_real_llm_answer_is_grounded
-    below, run with RECORD=true) and committed.
+    曾针对真实 LLM 录制过一次（即下方的 test_real_llm_answer_is_grounded，
+    以 RECORD=true 运行），随后提交入库。
     """
     if not any(FIXTURES_DIR.glob("*.json")):
-        pytest.skip(f"no recorded fixtures in {FIXTURES_DIR} — run with RECORD=true first")
+        pytest.skip(f"{FIXTURES_DIR} 中没有已录制的夹具 —— 请先以 RECORD=true 运行")
     monkeypatch.setenv("LLM_PROVIDER", "replay")
     agent = build_agent()
     answer = await ask(agent, "Do you have any noise-cancelling headphones? What's the price and product id?")
@@ -136,7 +135,7 @@ async def test_replay_grounded_answer_names_a_real_product(monkeypatch: pytest.M
     assert report.verified_count == report.total_count
 
 
-# ─────────────────── Real-LLM integration tests ────────────────
+# ─────────────────── 真实 LLM 集成测试 ────────────────
 
 
 def _llm_available() -> bool:
@@ -152,9 +151,9 @@ def _llm_available() -> bool:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-@pytest.mark.skipif(not _llm_available(), reason="no LLM credentials in .env")
+@pytest.mark.skipif(not _llm_available(), reason=".env 中没有 LLM 凭据")
 async def test_real_llm_calls_search_products_tool() -> None:
-    """The LLM should use the retrieval tool rather than answer from memory."""
+    """LLM 应当使用检索工具，而不是凭记忆作答。"""
     agent = build_agent()
     answer = await ask(agent, "Do you have any noise-cancelling headphones? What's the price and product id?")
     assert "P001" in answer
@@ -162,11 +161,11 @@ async def test_real_llm_calls_search_products_tool() -> None:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-@pytest.mark.skipif(not _llm_available(), reason="no LLM credentials in .env")
+@pytest.mark.skipif(not _llm_available(), reason=".env 中没有 LLM 凭据")
 async def test_real_llm_answer_is_grounded() -> None:
-    """Every product claim in the real answer must verify against the catalog."""
+    """真实回答中的每一条商品断言都必须能对照目录核验通过。"""
     agent = build_agent()
     answer = await ask(agent, "Do you have any noise-cancelling headphones? What's the price and product id?")
     report = verify_claims(extract_claims(answer))
-    assert report.total_count >= 1, f"expected at least one checkable claim in: {answer!r}"
-    assert report.verified_count == report.total_count, f"unverified claims in: {answer!r} -> {report.verdicts}"
+    assert report.total_count >= 1, f"期望答案中至少有一条可核验的断言：{answer!r}"
+    assert report.verified_count == report.total_count, f"存在未通过核验的断言：{answer!r} -> {report.verdicts}"

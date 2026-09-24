@@ -1,4 +1,4 @@
-"""Product Discovery tools — search, compare, semantic search, trending."""
+"""商品发现工具 —— 搜索、对比、语义搜索、热门商品。"""
 
 from __future__ import annotations
 
@@ -47,13 +47,20 @@ async def search_products(
     args: list = []
     idx = 1
 
-    # Postgres full-text search over the weighted search_vector column.
+    # 类别已由专门过滤器限定，不要把相同类别名重复当作全文关键词。
+    if category and query and query.strip().casefold() == category.casefold():
+        query = None
+    if query:
+        from shared.search import expand_catalog_query
+
+        query = expand_catalog_query(query)
+
+    # 基于加权 search_vector 列做 Postgres 全文检索。
     tsquery: str | None = None
     if query and query.strip():
         tsquery = or_joined_tsquery(f"${idx}")
-        # A stopword- or punctuation-only query ("the", "???") reduces to an
-        # empty tsquery, which matches no rows. Treat that as "no text query"
-        # and let the remaining filters stand on their own.
+        # 仅含停用词或标点的查询（"the"、"???"）会归约为空 tsquery，
+        # 匹配不到任何行。此时按"无文本查询"处理，让其余过滤条件独立生效。
         conditions.append(f"({tsquery} = ''::tsquery OR p.search_vector @@ {tsquery})")
         args.append(query)
         idx += 1
@@ -78,9 +85,9 @@ async def search_products(
         args.append(min_rating)
         idx += 1
 
-    # An explicit sort_by always wins. Otherwise rank by text relevance when
-    # there is a query (the old code ordered by rating regardless, so a weak
-    # match with good reviews outranked an exact one), else by rating.
+    # 显式指定 sort_by 时始终优先。否则在有查询时按文本相关性排序
+    # （旧代码无论有没有查询都按评分排序，导致一个弱匹配但评价多的商品
+    # 排在精确匹配之前），没有查询时按评分排序。
     if sort_by in SORT_CLAUSES:
         order = SORT_CLAUSES[sort_by]
     elif tsquery:
@@ -195,19 +202,26 @@ async def semantic_search(
 ) -> list[dict]:
     pool = get_pool()
 
-    # Generate embedding via OpenAI / Azure OpenAI
-    client = create_embedding_client()
+    # 通过 OpenAI / Azure OpenAI 生成嵌入向量
+    from shared.factory import EmbeddingsUnavailableError
+
+    try:
+        client = create_embedding_client()
+    except EmbeddingsUnavailableError:
+        # 不调用错误的提供方，不把词法结果标记成语义相似度。
+        rows = await search_products.func(query=query, limit=limit)
+        return [{**row, "retrieval_mode": "lexical", "embedding_available": False} for row in rows]
     response = await client.embeddings.create(model=get_embedding_model(), input=[query])
     embedding = response.data[0].embedding
 
-    # Pull a wider candidate set from each arm than we return — fusion only has
-    # something to work with if a document can appear in one list but not the other.
+    # 从每一路召回比最终返回更多的候选 —— 只有当某个文档出现在一路列表中
+    # 而没出现在另一路时，融合才有可用的信息。
     candidates = max(limit * 4, 20)
 
-    # Hybrid retrieval: rank by vector cosine and by full-text relevance
-    # independently, then fuse with Reciprocal Rank Fusion. RRF sums 1/(k+rank)
-    # across arms, so a product both arms like outranks one that tops a single
-    # arm, and neither arm's raw scores need to be on a comparable scale.
+    # 混合检索：分别按向量余弦相似度和全文相关性排序，再用
+    # Reciprocal Rank Fusion 融合。RRF 对各路累加 1/(k+rank)，
+    # 因此两路都认可的商品会排在只在一路登顶的商品之前，
+    # 并且两路的原始分数无需处于可比的量纲上。
     sql = f"""
         WITH vec AS (
             SELECT pe.product_id,
@@ -243,31 +257,28 @@ async def semantic_search(
     """
 
     async with pool.acquire() as conn:
-        # Raise ivfflat's probe count for this query (#52).
+        # 为该查询调高 ivfflat 的探测数（#52）。
         #
-        # `idx_product_embedding` is created by init.sql on an EMPTY table, so
-        # ivfflat has no data to derive centroids from and every vector lands
-        # in a degenerate partition. At the default `probes = 1` a query probes
-        # one list and returns whatever is in it — or nothing at all. Measured
-        # on a seeded database: "wireless noise cancelling headphones" returned
-        # "Patagonia Better Sweater" at similarity 0.000 through the index, and
-        # "Sony WH-1000XM5" at 0.420 with an exact scan. Same data, same query.
+        # `idx_product_embedding` 由 init.sql 在空表上创建，因此 ivfflat
+        # 没有数据可用来推导质心，每个向量都会落进一个退化的分区。在默认
+        # `probes = 1` 下，查询只探测一个列表，返回其中的内容 —— 或者什么都
+        # 不返回。在一个已灌入数据的数据库上实测："wireless noise cancelling
+        # headphones" 经索引返回的是相似度 0.000 的 "Patagonia Better
+        # Sweater"，而精确扫描返回的是相似度 0.420 的 "Sony WH-1000XM5"。
+        # 同样的数据，同样的查询。
         #
-        # generate_embeddings.py now REINDEXes after writing, which fixes the
-        # normal path, but any other insert (a test, one new product) leaves
-        # the index stale again. Probing every list makes correctness
-        # independent of whether someone remembered to reindex. It costs
-        # nothing at this catalogue size — with `lists = 10` this is an exact
-        # search over 50 rows — and degrades to an ordinary recall/latency
-        # trade-off if the catalogue ever grows enough for the index to earn
-        # its keep.
+        # generate_embeddings.py 现在会在写入后 REINDEX，修复了正常路径，
+        # 但任何其他插入（一次测试、一个新商品）都会让索引重新变陈旧。
+        # 探测所有列表可以让正确性不依赖于是否有人记得重建索引。在当前
+        # 目录规模下这没有额外代价 —— `lists = 10` 时这相当于对 50 行做精确
+        # 搜索 —— 而如果目录增长到索引真正物有所值，它也只是退化为普通的
+        # 召回率/延迟权衡。
         #
-        # This matters more under RRF than it did before: the vector arm now
-        # contributes a *rank*, so a degenerate probe doesn't just return a
-        # weak row, it feeds a wrong ordering into the fusion.
+        # 在 RRF 下这一点比过去更重要：向量这一路现在贡献的是一个 *排名*，
+        # 因此退化的探测不只是返回一行弱结果，它会把错误的排序喂给融合。
         #
-        # SET LOCAL only applies inside a transaction; outside one it is a
-        # no-op that warns rather than errors, which is its own quiet trap.
+        # SET LOCAL 只在事务内生效；在事务外它是一个只会告警而不报错的
+        # 空操作，这本身就是个安静的陷阱。
         async with conn.transaction():
             await conn.execute("SET LOCAL ivfflat.probes = 10")
             rows = await conn.fetch(sql, json.dumps(embedding), query, candidates, limit)
@@ -281,8 +292,8 @@ async def semantic_search(
                 "brand": r["brand"],
                 "price": float(r["price"]),
                 "rating": float(r["rating"]),
-                # None when only the text arm matched — the product has no embedding
-                # row, or ranked outside the vector candidate window.
+                # 仅当文本这一路匹配时，该值为 None —— 说明该商品没有嵌入
+                # 记录，或排名落在向量候选窗口之外。
                 "similarity": round(float(r["similarity"]), 3) if r["similarity"] is not None else None,
                 "score": round(float(r["score"]), 5),
                 "image_url": r["image_url"],
@@ -300,7 +311,7 @@ async def find_similar_products(
 ) -> list[dict]:
     pool = get_pool()
     async with pool.acquire() as conn:
-        # Get the reference product's embedding
+        # 获取参考商品的嵌入向量
         ref = await conn.fetchrow(
             "SELECT embedding FROM product_embeddings WHERE product_id = $1",
             product_id,
@@ -308,9 +319,9 @@ async def find_similar_products(
         if not ref:
             return [{"error": f"No embedding found for product {product_id}"}]
 
-        # Same stale-ivfflat exposure as semantic_search — see the long note
-        # there. This query hits the same index, so it needs the same probe
-        # count or it returns unrelated products (or none) just as readily.
+        # 与 semantic_search 一样存在 ivfflat 陈旧索引问题 —— 参见那里的长注释。
+        # 该查询命中同一个索引，因此需要同样的探测数，否则它同样会返回
+        # 无关商品（或什么都不返回）。
         async with conn.transaction():
             await conn.execute("SET LOCAL ivfflat.probes = 10")
             rows = await conn.fetch(

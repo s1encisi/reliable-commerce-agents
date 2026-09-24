@@ -1,32 +1,34 @@
-# Chapter 01 — Your First Agent
+# 第 01 章 · 第一个智能体
 
-The smallest useful Microsoft Agent Framework program — one chat client, one instructions string, one `agent.run()` call — in both Python and .NET.
+[项目首页](../../README.md) · [教程总览](../README.md) · [术语表](../_shared/jargon-glossary.md)
 
-## Why this chapter
+最小的、真正可用的微软智能体框架（MAF）程序 —— 一个 chat client、一段指令、一次 `agent.run()` 调用。
 
-An *agent* in MAF is a chat client plus instructions. That's it. Before later chapters add tools, memory, middleware, or workflows, we need that baseline running on both stacks — every subsequent chapter adds exactly one thing to this starting point.
+## 本章动机
 
-We'll answer one question: **"What is the capital of France?"**
+MAF 中的**智能体**就是「一个 chat client + 一段指令」。仅此而已。在后续章节往上面添加工具、记忆、中间件或工作流之前，我们需要先把这条基线跑起来 —— 之后每一章都只在这个起点上增加一样东西。
 
-## Prerequisites
+本章只回答一个问题：**「法国的首都是哪里？」**
 
-- Completed [Chapter 00 — Setup](../00-setup/) (uv, .NET 9/10 SDK, Docker).
-- Repo-root `.env` with one LLM provider configured:
+## 前置条件
 
-| Provider | Required | Optional |
-|----------|----------|----------|
-| **OpenAI** | `OPENAI_API_KEY` | `LLM_MODEL` (default `gpt-4.1`) |
-| **Azure OpenAI** | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_KEY`, `AZURE_OPENAI_DEPLOYMENT` | `AZURE_OPENAI_API_VERSION` (default `2024-10-21`) |
+- 已完成 [第 00 章 · 环境准备](../00-setup/)（uv、Docker）。
+- 仓库根目录的 `.env` 中已配置一个 LLM 提供方：
 
-## The concept
+| 提供方 | 必填 | 选填 |
+|--------|------|------|
+| **OpenAI** | `OPENAI_API_KEY` | `LLM_MODEL`（默认 `gpt-4.1`） |
+| **Azure OpenAI** | `AZURE_OPENAI_ENDPOINT`、`AZURE_OPENAI_KEY`、`AZURE_OPENAI_DEPLOYMENT` | `AZURE_OPENAI_API_VERSION`（默认 `2024-10-21`） |
 
-A Microsoft Agent Framework agent wraps three things:
+## 核心概念
 
-1. A **chat client** — the thing that talks to the LLM (OpenAI Responses API, Chat Completions, or Azure OpenAI).
-2. **Instructions** — the agent's persona, passed as the system prompt.
-3. A **name** (optional) — for logs and telemetry.
+微软智能体框架的智能体包装了三样东西：
 
-You call `await agent.run(question)` (Python) or `await agent.RunAsync(question)` (.NET) and get back a response with `.text` / `.Text`. Nothing fancier yet — no tools, no memory, no orchestration.
+1. **chat client** —— 负责与 LLM 通信的对象（OpenAI Responses API、Chat Completions，或 Azure OpenAI）。
+2. **指令（instructions）** —— 智能体的人格设定，作为系统提示词传入。
+3. **名称（name，可选）** —— 用于日志与遥测。
+
+调用 `await agent.run(question)`，返回一个带 `.text` 的响应。到这里还没有任何花哨的东西 —— 没有工具、没有记忆、没有编排。
 
 ```mermaid
 %%{init: {'theme':'base', 'themeVariables': {
@@ -42,11 +44,11 @@ flowchart LR
   instr[[Instructions]]
   agent[Agent]
   llm[(LLM)]
-  answer([agent.run answer])
+  answer([agent.run 的回答])
 
   client --> agent
   instr --> agent
-  agent -- "prompt + question" --> llm
+  agent -- "提示词 + 问题" --> llm
   llm -- "response.text" --> agent
   agent --> answer
 
@@ -57,22 +59,24 @@ flowchart LR
   class answer success
 ```
 
-The chat client and instructions are the only two inputs to `Agent(...)`; `agent.run()` is the only call surface this chapter exercises.
+chat client 与指令是 `Agent(...)` 仅有的两个输入；`agent.run()` 是本章唯一触及的调用面。
 
-One gotcha that matters for the rest of the series: MAF v1 has two code paths to OpenAI-style APIs — the **Responses API** (newer, richer) and **Chat Completions** (older, universally supported). Public OpenAI supports both; not every Azure OpenAI deployment supports the Responses API. Both examples in this chapter default to `OpenAIChatClient`/`OpenAIClient.GetChatClient` for OpenAI and switch to the Chat Completions path (`OpenAIChatCompletionClient` in Python, the same `GetChatClient` surface via `AzureOpenAIClient` in .NET) when `LLM_PROVIDER=azure`.
+**输入、处理与输出**：默认问题即「法国的首都是哪里？」，指令要求简短回答地理类问题。客户端把信息发给模型，`ask` 返回 `response.text`，`main` 把问题与答案打印出来。这张流程描述的是**预期的调用关系**，不是本轮真实模型运行记录。
+
+有一个会贯穿整个系列的坑：MAF v1 有两条通往 OpenAI 风格 API 的代码路径 —— **Responses API**（较新、能力更全）与 **Chat Completions**（较旧、但被普遍支持）。公开的 OpenAI 两者都支持；但并非每个 Azure OpenAI 部署都支持 Responses API。因此本章示例在 OpenAI 下默认使用 `OpenAIChatClient`，而在 `LLM_PROVIDER=azure` 时切到 Chat Completions 路径（`OpenAIChatCompletionClient`）。
 
 ## Python
 
-Source: [`python/main.py`](./python/main.py).
+源码：[`python/main.py`](./python/main.py)。
 
-Run from the repo root using the shared `tutorials/` uv project (one `uv sync` covers every chapter):
+在仓库根目录运行，共用 `tutorials/` 这一个 uv 项目（一次 `uv sync` 覆盖全部章节）：
 
 ```bash
 uv sync --project tutorials
 uv run --project tutorials python tutorials/01-first-agent/python/main.py
 ```
 
-The provider switch and agent construction:
+提供方切换与智能体构造：
 
 ```python
 def _default_client() -> OpenAIChatClient | OpenAIChatCompletionClient | ReplayChatClient:
@@ -101,90 +105,46 @@ async def ask(agent: Agent, question: str) -> str:
     return response.text
 ```
 
-`build_agent()` accepts an optional pre-built client so the test suite can inject a canned one instead of hitting a real LLM. There's also a third provider, `replay`, backed by `tutorials/_shared/replay_client.py` — it plays back a committed fixture from `tests/fixtures/replay/`, which is how the test suite gets a "real answer" assertion without network access or credentials.
+关键函数一览：
 
-## .NET
+| 函数 | 作用 |
+|------|------|
+| `_default_client` | 依据环境变量创建真实模型客户端，或创建回放客户端 |
+| `build_agent` | 把客户端、`INSTRUCTIONS` 与 `name` 组装为 `Agent` |
+| `ask` | 等待 `agent.run`，然后返回文本 |
+| `main` | 接收命令行问题或默认问题，创建并运行智能体 |
 
-Source: [`dotnet/Program.cs`](./dotnet/Program.cs).
+`build_agent()` 接受一个可选的、预先构造好的客户端，因此测试套件可以注入受控客户端，而不必真的访问 LLM。依赖注入让测试能观察到**真正传给模型的消息**，而无需每次访问外网。
 
-```bash
-cd tutorials/01-first-agent/dotnet
-dotnet run
-```
+还有第三个提供方 `replay`，由 `tutorials/_shared/replay_client.py` 支撑 —— 它回放 `tests/fixtures/replay/` 下已提交的 fixture，测试套件正是靠它获得「真实答案」类断言，且不需要网络访问与凭据。
 
-The equivalent provider switch and agent construction:
+`async def` 定义异步函数，`await` 等待异步结果。它**不**意味着请求会自动无限并发，也**不**代表函数自己又创建了另一个智能体。
 
-```csharp
-public static AIAgent BuildAgent()
-{
-    var provider = Environment.GetEnvironmentVariable("LLM_PROVIDER")?.ToLowerInvariant() ?? "openai";
+## 常见坑
 
-    if (provider == "azure")
-    {
-        var endpoint = Required("AZURE_OPENAI_ENDPOINT");
-        var deployment = Required("AZURE_OPENAI_DEPLOYMENT");
-        var apiKey = Environment.GetEnvironmentVariable("AZURE_OPENAI_KEY")
-                     ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_API_KEY")
-                     ?? throw new InvalidOperationException("Azure requires AZURE_OPENAI_KEY.");
+- **Azure 上报「API version not supported」。** 遇到它说明你的部署不支持 Responses API。设置 `LLM_PROVIDER=azure` —— 示例已经会回退到 Chat Completions（Python 中为 `OpenAIChatCompletionClient`），并默认 `api_version=2024-10-21`。
+- **MAF 打包缺陷 —— 现已是空操作。** 早期 `agent-framework-core==1.0.0` 的 wheel 里带了一个空的 `__init__.py`。`tutorials/_shared/maf_bootstrap.py` 会在任何 `agent_framework` 导入之前修补它（每章的 `main.py` 都会先调用 `maf_bootstrap.bootstrap()`）。本仓库现已锁定 `agent-framework` 1.14.0，该缺陷在上游已修复，因此这一步只是防御性的、在当前安装下什么都不做 —— 保留 `bootstrap()` 主要是因为**它还负责加载仓库根目录的 `.env`**，而这是每章都需要的。完整项目里有等价的 `agents/python/patch_maf.py`，同样是空操作，原因相同（参见 `CLAUDE.md` 的「MAF 包修补」一节）。
+- **回放条件不满足 ≠ 模型不会回答。** 本章的回放记录对应固定的问题与调用配置。改变问题后缺少 fixture，属于回放条件不满足，不能解释成模型不会回答。
+- **真实服务的 API、模型名与鉴权方式以实际配置为准。** 不要只复制某个默认模型名就假定它可用。
 
-        var azureClient = new AzureOpenAIClient(new Uri(endpoint), new ApiKeyCredential(apiKey));
-        return azureClient.GetChatClient(deployment).AsAIAgent(instructions: Instructions, name: "first-agent");
-    }
-
-    var openAiKey = Required("OPENAI_API_KEY");
-    var model = Environment.GetEnvironmentVariable("LLM_MODEL") ?? "gpt-4.1";
-    var openAi = new OpenAIClient(new ApiKeyCredential(openAiKey));
-    return openAi.GetChatClient(model).AsAIAgent(instructions: Instructions, name: "first-agent");
-}
-
-public static async Task<string> Ask(AIAgent agent, string question)
-{
-    var response = await agent.RunAsync(question);
-    return response.Text;
-}
-```
-
-`Program.cs` loads the repo-root `.env` itself (`LoadDotEnv()` walks up from `AppContext.BaseDirectory` looking for it) — no `dotnet user-secrets` or shell sourcing needed. `BuildAgent()` is a static method so the test project can call it directly, and `Ask()` is the shared entry point both `Main` and the tests use.
-
-## Side-by-side differences
-
-| Aspect | Python | .NET |
-|--------|--------|------|
-| Agent type | `agent_framework.Agent` | `Microsoft.Agents.AI.AIAgent` (a `ChatClientAgent` under the hood) |
-| Chat client | `OpenAIChatClient` (Responses API) or `OpenAIChatCompletionClient` (Chat Completions) | `OpenAI.Chat.ChatClient` via `GetChatClient(...)`, then `.AsAIAgent(...)` |
-| Instructions | `Agent(client, instructions="...")` | `.AsAIAgent(instructions: "...")` |
-| Invocation | `await agent.run("...")` → `.text` | `await agent.RunAsync("...")` → `.Text` |
-| `.env` loading | `tutorials/_shared/maf_bootstrap.py` (`bootstrap()`) | hand-rolled `LoadDotEnv()` in `Program.cs` |
-| Test doubles | `BaseChatClient` subclass (`CannedChatClient`) | `IChatClient` implementation (`StubChatClient`) |
-
-## Gotchas
-
-- **"API version not supported" on Azure.** If you hit this, your deployment doesn't support the Responses API. Set `LLM_PROVIDER=azure` — both examples already fall back to Chat Completions (`OpenAIChatCompletionClient` in Python, the same `GetChatClient` surface via `AzureOpenAIClient` in .NET) and default to `api_version=2024-10-21`.
-- **MAF packaging bug — now a no-op.** Older `agent-framework-core==1.0.0` wheels shipped an empty `__init__.py`. `tutorials/_shared/maf_bootstrap.py` patches it before any `agent_framework` import (every chapter's `main.py` calls `maf_bootstrap.bootstrap()` first). This repo now pins `agent-framework` 1.14.0, which fixed the bug upstream, so the patch step is defensive and does nothing on a current install — `bootstrap()` is kept mainly because it also loads the repo-root `.env`, which every chapter still needs. The capstone app has the equivalent `agents/python/patch_maf.py`, same no-op status, for the same reason (see `CLAUDE.md`'s "MAF Package Patch" note).
-- **Don't forget `using OpenAI.Chat;`** in .NET — the `AsAIAgent` extension lives in that namespace.
-- **`TreatWarningsAsErrors` is on** in `FirstAgent.csproj` — an unused `using` or nullable warning fails the build, not just the analyzer pass.
-
-## Tests
-
-Both languages ship with tests covering the same shape:
-
-- **Python** (`python/tests/test_first_agent.py`, 7 tests): a `CannedChatClient` stub proves instructions and the user question both reach the chat client and that `ask()` returns its canned text; one test asserts `build_agent()` runs out of canned responses correctly; a replay test plays back a committed fixture (`tests/fixtures/replay/`) via `LLM_PROVIDER=replay` — no credentials needed, so it runs in CI; and one `@pytest.mark.integration` test hits a real LLM, skipped automatically when no credentials are configured.
-- **.NET** (`dotnet/tests/FirstAgentTests.cs`, 5 facts): a `StubChatClient` (implementing `IChatClient`) proves the same three things — canned answer returned, user question forwarded, instructions threaded through `ChatOptions.Instructions` — plus an `Agent_Name_Is_Set` check, and one `[Trait("Category", "Integration")]` fact that hits the real LLM and simply logs+returns if credentials are absent (xunit has no built-in conditional skip).
+## 测试
 
 ```bash
-# Python
 uv run --project tutorials pytest tutorials/01-first-agent/python/tests -v
-
-# .NET
-cd tutorials/01-first-agent/dotnet
-dotnet test tests/FirstAgent.Tests.csproj
 ```
 
-Both integration tests only run against a real Azure/OpenAI endpoint when credentials are present in `.env`; without them they no-op rather than fail, so a full pass count depends on your local `.env`.
+`python/tests/test_first_agent.py` 共 7 个测试，覆盖：
 
-## How this shows up in the capstone
+1. **正常路径** —— `CannedChatClient` 桩客户端证明指令与用户问题都到达了 chat client，且 `ask()` 返回其预设文本。
+2. **边界情况** —— 一个测试断言 `build_agent()` 在预设响应耗尽时行为正确。
+3. **回放** —— 通过 `LLM_PROVIDER=replay` 回放 `tests/fixtures/replay/` 下已提交的 fixture，无需凭据，因此可在 CI 中运行。
+4. **集成** —— 一个 `@pytest.mark.integration` 测试会访问真实 LLM，在未配置凭据时自动跳过。
 
-The orchestrator builds its agent the same way, just with more fields — `agents/python/orchestrator/agent.py:147`:
+阅读测试时请关注它**具体断言了什么**：用户问题与指令是否到达客户端、`ask` 是否返回预期文本，以及记录用尽时如何处理。真实模型能否稳定遵守指令需要单独评估 —— 本页没有声称这些测试已在本机通过。
+
+## 在完整项目中的落点
+
+编排器用同样的方式构造智能体，只是字段更多 —— `agents/python/orchestrator/agent.py:150`：
 
 ```python
 def create_orchestrator_agent() -> Agent:
@@ -201,11 +161,15 @@ def create_orchestrator_agent() -> Agent:
     )
 ```
 
-Same `client` + `instructions` + `name` triple from this chapter, plus `tools`, `context_providers`, and `middleware` that later chapters teach one at a time. Every specialist agent (`agents/python/product_discovery/agent.py:86-94` is one example) follows this identical shape.
+同样是本章的 `client` + `instructions` + `name` 三件套，另外多了 `tools`、`context_providers` 与 `middleware` —— 后面几章会逐一讲解。每个专家智能体都遵循完全相同的形态（例如 `agents/python/product_discovery/agent.py:86`）。
 
-## What's next
+完整项目中，[`shared/agent_factory.py`](../../agents/python/shared/agent_factory.py) 集中构造模型客户端；[`product_discovery/agent.py`](../../agents/python/product_discovery/agent.py) 则在此之上增加工具、上下文提供器与中间件。
 
-- Next chapter: [Chapter 02 — Adding Tools](../02-add-tools/)
-- Full source: [`python/`](./python/) · [`dotnet/`](./dotnet/)
-- Shared: [Mermaid style guide](../_shared/mermaid-style-guide.md) · [Jargon glossary](../_shared/jargon-glossary.md)
-- [MAF docs — Your first agent](https://learn.microsoft.com/en-us/agent-framework/get-started/?pivots=programming-language-csharp)
+## 下一步
+
+- 下一章：[第 02 章 · 添加工具](../02-add-tools/)
+- 完整源码：[`python/`](./python/)
+- 共享材料：[Mermaid 风格指南](../_shared/mermaid-style-guide.md) · [术语表](../_shared/jargon-glossary.md)
+- [MAF 官方文档 —— 你的第一个智能体](https://learn.microsoft.com/en-us/agent-framework/get-started/?pivots=programming-language-python)
+
+**本章验收标准**：能够解释输入在哪里进入系统、模型在哪里被调用、输出在哪里提取，以及「回放通过」能够证明什么。

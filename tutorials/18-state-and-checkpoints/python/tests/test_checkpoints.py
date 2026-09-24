@@ -1,7 +1,7 @@
 """
-Chapter 18 — State and Checkpoints: tests.
+第 18 章 —— 状态与检查点：测试。
 
-No LLM — checkpoint plumbing is deterministic.
+无 LLM——检查点管道是确定性的。
 """
 
 import pathlib
@@ -50,7 +50,7 @@ async def test_on_checkpoint_save_roundtrips_refund_amount() -> None:
 
 @pytest.mark.asyncio
 async def test_on_checkpoint_restore_overwrites_seeded_state() -> None:
-    """Restore must clobber whatever initial refund was passed to __init__."""
+    """恢复必须覆盖传给 __init__ 的初始退款。"""
     request = ReturnRequestExecutor(initial_refund=999.0)
     assert request.refund_amount == 999.0
     await request.on_checkpoint_restore({"refund_amount": 17.0})
@@ -70,7 +70,7 @@ async def test_running_workflow_writes_checkpoints_to_disk(tmp_file_storage) -> 
     result = await run_once(storage, initial_refund=10.0, item_refund=5.0)
     assert result == 15.0
     files = list(directory.iterdir())
-    assert files, "expected at least one checkpoint file on disk"
+    assert files, "磁盘上应至少有一个检查点文件"
 
 
 @pytest.mark.asyncio
@@ -84,9 +84,9 @@ async def test_list_checkpoints_returns_non_empty(tmp_file_storage) -> None:
 
 @pytest.mark.asyncio
 async def test_resume_restores_state_across_fresh_workflow(tmp_file_storage) -> None:
-    """The round-trip contract: resume from first checkpoint with a
-    deliberately wrong initial refund; on_checkpoint_restore must bring
-    the refund_amount back so FinalizeReturn yields the original result."""
+    """往返契约：以刻意错误的初始退款从第一个检查点恢复；
+    on_checkpoint_restore 必须把 refund_amount 带回原值，
+    使 FinalizeReturn 产出与原始运行相同的结果。"""
     storage, _ = tmp_file_storage
     expected = await run_once(storage, initial_refund=10.0, item_refund=5.0)
     assert expected == 15.0
@@ -101,7 +101,7 @@ async def test_resume_restores_state_across_fresh_workflow(tmp_file_storage) -> 
 
 @pytest.mark.asyncio
 async def test_in_memory_storage_produces_same_replay_result() -> None:
-    """Swap FileCheckpointStorage for InMemoryCheckpointStorage: same outcome."""
+    """把 FileCheckpointStorage 换成 InMemoryCheckpointStorage：结果相同。"""
     storage = InMemoryCheckpointStorage()
     expected = await run_once(storage, initial_refund=7.0, item_refund=3.0)
     assert expected == 10.0

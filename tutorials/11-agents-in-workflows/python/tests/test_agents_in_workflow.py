@@ -1,10 +1,9 @@
 """
-Chapter 11 — Agents in Workflows: tests.
+第 11 章 —— 工作流中的智能体：测试。
 
-Integration-only — the translator chain invokes real Azure OpenAI twice
-per run (English→French, French→Spanish). Workflow wiring is validated
-in the tests so we know the graph is correctly assembled before hitting
-the LLM.
+仅集成测试 —— 翻译链每次运行会调用两次真实 Azure OpenAI
+（英语→法语、法语→西班牙语）。测试里会校验工作流接线，
+这样在真正打 LLM 之前就能确认图是正确组装的。
 """
 
 from __future__ import annotations
@@ -25,33 +24,32 @@ from main import FIXTURES_DIR, build_workflow, translate  # noqa: E402
 
 
 def test_workflow_has_four_executors_including_two_agents(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Construction-only — never calls the LLM, so it shouldn't need real
-    # credentials. _default_client()'s OpenAI branch reads OPENAI_API_KEY via
-    # a hard os.environ[...] lookup (fails fast for real runs with no key at
-    # all), which this test tripped over in a credential-less CI job. A
-    # placeholder is enough since the client is never actually invoked.
+    # 仅构建 —— 从不调用 LLM，因此不应该需要真实凭据。_default_client() 的
+    # OpenAI 分支通过硬性 os.environ[...] 读取 OPENAI_API_KEY（在没有密钥的
+    # 真实运行中会快速失败），无凭据的 CI 任务里曾在这里被绊住。既然客户端
+    # 从未被真正调用，放一个占位符就够了。
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test-placeholder-not-used")
     workflow = build_workflow()
     ids = {getattr(e, "id", None) for e in workflow.get_executors_list()}
     assert {"input-adapter", "en-to-fr", "fr-to-es", "output-adapter"} <= ids
 
 
-# ─────────────────── Replay test (no credentials, runs in CI) ────
+# ─────────────────── 回放测试（无需凭据，可在 CI 中运行） ────
 
 
 @pytest.mark.asyncio
 async def test_replay_translates_hello_to_spanish(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Plays back tests/fixtures/replay/ — no network, no credentials.
+    """回放 tests/fixtures/replay/ —— 无网络、无凭据。
 
-    Two agent executors, two recorded fixtures (English→French,
-    French→Spanish). Recorded once against a real LLM (with RECORD=true) and
-    committed. Mirrors test_real_llm_translates_hello_to_spanish.
+    两个智能体执行器，两份录制的夹具（英语→法语、法语→西班牙语）。
+    曾对真实 LLM 录制一次（带 RECORD=true）并提交入库。
+    与 test_real_llm_translates_hello_to_spanish 对应。
     """
     if not any(FIXTURES_DIR.glob("*.json")):
         pytest.skip(f"no recorded fixtures in {FIXTURES_DIR} — run with RECORD=true first")
     monkeypatch.setenv("LLM_PROVIDER", "replay")
     result = (await translate("Hello, how are you?")).lower()
-    # Spanish equivalent is "hola, ¿cómo estás?" — accept either noun.
+    # 西班牙语对应说法是 "hola, ¿cómo estás?" —— 两个词任一命中即可。
     assert "hola" in result, f"expected Spanish in final output, got: {result!r}"
 
 
@@ -71,7 +69,7 @@ def _llm_available() -> bool:
 @pytest.mark.skipif(not _llm_available(), reason="no LLM credentials in .env")
 async def test_real_llm_translates_hello_to_spanish() -> None:
     result = (await translate("Hello, how are you?")).lower()
-    # Spanish equivalent is "hola, ¿cómo estás?" — accept either noun.
+    # 西班牙语对应说法是 "hola, ¿cómo estás?" —— 两个词任一命中即可。
     assert "hola" in result, f"expected Spanish in final output, got: {result!r}"
 
 
@@ -79,13 +77,13 @@ async def test_real_llm_translates_hello_to_spanish() -> None:
 @pytest.mark.asyncio
 @pytest.mark.skipif(not _llm_available(), reason="no LLM credentials in .env")
 async def test_real_llm_chain_fires_both_agent_executors() -> None:
-    """Track which agent executors emit output events during the run."""
+    """跟踪本次运行中哪些智能体执行器发出了输出事件。"""
     workflow = build_workflow()
     invoked: list[str] = []
     async for event in workflow.run("Good morning", stream=True):
         if getattr(event, "type", None) == "executor_completed":
             invoked.append(getattr(event, "executor_id", ""))
-    # Both the French and Spanish translators must have completed.
+    # 法语和西班牙语两个翻译器都必须已完成。
     assert "en-to-fr" in invoked
     assert "fr-to-es" in invoked
     assert invoked.index("en-to-fr") < invoked.index("fr-to-es")
@@ -96,5 +94,5 @@ async def test_real_llm_chain_fires_both_agent_executors() -> None:
 @pytest.mark.skipif(not _llm_available(), reason="no LLM credentials in .env")
 async def test_real_llm_output_contains_spanish_markers() -> None:
     result = (await translate("The sun is shining")).lower()
-    # Any of these common Spanish words likely appear.
+    # 这些常见西班牙语词大概率会出现其中之一。
     assert any(word in result for word in ("el ", "la ", "está", "sol"))

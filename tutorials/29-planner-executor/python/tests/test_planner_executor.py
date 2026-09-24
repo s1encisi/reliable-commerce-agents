@@ -1,10 +1,10 @@
 """
-Chapter 29 — Planner-Executor: tests.
+第 29 章 —— 规划器-执行器：测试。
 
-- Unit tests exercise the catalog tool and the Plan/PlanStep models directly (no LLM).
-- A wiring test checks both agents are assembled correctly (no LLM call made).
-- A replay test plays back committed fixtures for the full plan-then-execute run.
-- Integration tests hit a real LLM and assert planner + executor behavior end to end.
+- 单元测试直接检验目录检索工具与 Plan/PlanStep 模型（不涉及 LLM）。
+- 装配测试检验两个智能体是否装配正确（不发起 LLM 调用）。
+- 回放测试回放已提交的夹具，覆盖完整的「先规划后执行」流程。
+- 集成测试访问真实 LLM，端到端断言规划器 + 执行器的行为。
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ from main import (  # noqa: E402
 
 GIFT_REQUEST = "Help me put together a birthday gift for someone who likes photography, under $200."
 
-# ─────────────────── Tool-function unit tests (no LLM) ──────────────────
+# ─────────────────── 工具函数单元测试（不涉及 LLM） ──────────────────
 
 
 def test_search_products_matches_by_keyword() -> None:
@@ -46,7 +46,7 @@ def test_search_products_matches_by_keyword() -> None:
 def test_search_products_applies_price_ceiling() -> None:
     result = search_products.func("photography", 50.0)
     assert "Travel Camera Tripod" in result
-    assert "Professional Studio Light Kit" not in result  # $349, over the cap
+    assert "Professional Studio Light Kit" not in result  # 349 美元，超过上限
 
 
 def test_search_products_handles_no_matches() -> None:
@@ -54,7 +54,7 @@ def test_search_products_handles_no_matches() -> None:
     assert "No products found" in result
 
 
-# ─────────────────── Plan / PlanStep model unit tests (no LLM) ──────────
+# ─────────────────── Plan / PlanStep 模型单元测试（不涉及 LLM） ──────────
 
 
 def test_plan_step_defaults_query_to_none() -> None:
@@ -76,11 +76,11 @@ def test_plan_orders_steps() -> None:
     assert plan.steps[1].query is None
 
 
-# ─────────────────── Agent wiring (no LLM call made) ────────────────────
+# ─────────────────── 智能体装配（不发起 LLM 调用） ────────────────────
 
 
 def test_executor_agent_has_search_products_tool_registered() -> None:
-    agent = build_executor_agent(client=object())  # client isn't called; we only inspect structure
+    agent = build_executor_agent(client=object())  # 该 client 不会被调用，这里只看结构
     tool_names = [getattr(t, "name", None) for t in agent.default_options.get("tools") or []]
     assert "search_products" in tool_names
 
@@ -88,30 +88,30 @@ def test_executor_agent_has_search_products_tool_registered() -> None:
 def test_planner_agent_builds_without_tools() -> None:
     agent = build_planner_agent(client=object())
     tools = agent.default_options.get("tools")
-    assert not tools  # the planner only produces a structured Plan — it doesn't call tools itself
+    assert not tools  # 规划器只产出结构化的 Plan —— 它自己不调用工具
 
 
-# ─────────────────── Replay test (no credentials, runs in CI) ───────────
+# ─────────────────── 回放测试（无需凭据，可在 CI 中运行） ───────────
 
 
 @pytest.mark.asyncio
 async def test_replay_plans_and_executes(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Plays back tests/fixtures/replay/ — no network, no credentials.
+    """回放 tests/fixtures/replay/ —— 不走网络、不需凭据。
 
-    Recorded once against a real LLM (test_real_llm_produces_ordered_plan
-    below, run with RECORD=true) and committed. A planner call plus one
-    executor call per plan step means several fixture files, not one.
+    曾针对真实 LLM 录制过一次（即下方的 test_real_llm_produces_ordered_plan，
+    以 RECORD=true 运行），随后提交入库。一次规划器调用，加上每个计划步骤
+    一次执行器调用，意味着会有多个夹具文件，而不是一个。
     """
     if not any(FIXTURES_DIR.glob("*.json")):
-        pytest.skip(f"no recorded fixtures in {FIXTURES_DIR} — run with RECORD=true first")
+        pytest.skip(f"{FIXTURES_DIR} 中没有已录制的夹具 —— 请先以 RECORD=true 运行")
     monkeypatch.setenv("LLM_PROVIDER", "replay")
     plan, results = await run_plan(GIFT_REQUEST)
-    assert plan.steps, "plan must contain at least one step"
+    assert plan.steps, "计划必须至少包含一个步骤"
     assert len(results) == len(plan.steps)
-    assert all(results), "every step must produce a non-empty result"
+    assert all(results), "每一步都必须产出非空结果"
 
 
-# ─────────────────── Real-LLM integration tests ─────────────────────────
+# ─────────────────── 真实 LLM 集成测试 ─────────────────────────
 
 
 def _llm_available() -> bool:
@@ -127,9 +127,9 @@ def _llm_available() -> bool:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-@pytest.mark.skipif(not _llm_available(), reason="no LLM credentials in .env")
+@pytest.mark.skipif(not _llm_available(), reason=".env 中没有 LLM 凭据")
 async def test_real_llm_produces_ordered_plan() -> None:
-    """The planner should return a structured Plan with multiple, sequentially numbered steps."""
+    """规划器应返回带多个、按顺序编号步骤的结构化 Plan。"""
     planner = build_planner_agent()
     plan = await make_plan(planner, GIFT_REQUEST)
     assert len(plan.steps) >= 2
@@ -138,11 +138,11 @@ async def test_real_llm_produces_ordered_plan() -> None:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-@pytest.mark.skipif(not _llm_available(), reason="no LLM credentials in .env")
+@pytest.mark.skipif(not _llm_available(), reason=".env 中没有 LLM 凭据")
 async def test_real_llm_executes_every_step() -> None:
-    """Every planned step should produce a non-empty executor result, including catalog data."""
+    """每个计划步骤都应产出非空的执行器结果，且其中包含目录数据。"""
     plan, results = await run_plan(GIFT_REQUEST)
     assert len(results) == len(plan.steps)
     assert all(r.strip() for r in results)
-    # At least one step's result should surface catalog data (a dollar amount).
+    # 至少有一个步骤的结果应当透出目录数据（一个美元金额）。
     assert any("$" in r for r in results)

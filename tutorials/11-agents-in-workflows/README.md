@@ -1,26 +1,30 @@
-# Chapter 11 — Agents in Workflows
+# 第 11 章 · 工作流中的智能体
 
-## Why this chapter
+[项目首页](../../README.md) · [教程总览](../README.md) · [术语表](../_shared/jargon-glossary.md)
 
-Chapters 09–10 built raw executors that transform plain data — strings in, strings out, no LLM involved. This chapter replaces one of those executors with an **agent**: an LLM-powered step that takes a message and produces another. The result is a workflow that can mix deterministic steps (validation, enrichment, merging) with LLM steps (translation, summarization, judgment) in the same graph, without the graph itself caring which is which.
+把工作流里的某个执行器换成**智能体** —— 一个由 LLM 驱动的步骤。于是同一张图里既能放确定性步骤（校验、补全、合并），也能放 LLM 步骤（翻译、摘要、判断），而图本身不关心哪个是哪个。
 
-The running example is deliberately simple so the wiring stays visible: **English → French → Spanish** translation. Each arrow in the graph is a real LLM call; the workflow's job is only to pass the previous agent's output as the next agent's input, with zero glue code in between.
+## 本章动机
 
-This is the same shape the capstone uses for real work — an agent embedded as one node in a bigger pipeline, its output consumed by whatever comes next. See "How this shows up in the capstone" below for the production example.
+第 09–10 章构建的是转换纯数据的原始执行器 —— 字符串进、字符串出，不涉及 LLM。本章把其中一个执行器换成**智能体**：一个由 LLM 驱动的步骤，接收一条消息并产出另一条。结果是一个能在同一张图里混用确定性步骤（校验、补全、合并）与 LLM 步骤（翻译、摘要、判断）的工作流，而图本身不关心哪个是哪个。
 
-## Prerequisites
+运行示例刻意做得简单，好让接线保持可见：**英文 → 法文 → 西班牙文**翻译。图中的每一支箭头都是一次真实的 LLM 调用；工作流的工作只是把上一个智能体的输出作为下一个智能体的输入传下去，中间零胶水代码。
 
-- Completed [Chapter 10 — Workflow Events and Builder](../10-workflow-events-and-builder/)
-- Repo-root `.env` with working LLM credentials — either OpenAI (`OPENAI_API_KEY`, optional `LLM_MODEL`, default `gpt-4.1`) or Azure OpenAI (`AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_KEY`, `AZURE_OPENAI_DEPLOYMENT`, optional `AZURE_OPENAI_API_VERSION`, default `2024-10-21`)
+这正是完整项目做真实工作时所用的形态 —— 一个智能体作为更大管线中的一个节点嵌入，其输出被下游消费。
 
-## The concept
+## 前置条件
 
-An **agent-executor** is a workflow node whose `run()` handler doesn't transform data directly — it hands the incoming message to an `Agent`, awaits the LLM call, and forwards the agent's response downstream. Two ways to get there:
+- 已完成 [第 10 章 · 工作流事件与构建器](../10-workflow-events-and-builder/)
+- 仓库根目录的 `.env` 中有可用的 LLM 凭据 —— 要么 OpenAI（`OPENAI_API_KEY`，可选 `LLM_MODEL`，默认 `gpt-4.1`），要么 Azure OpenAI（`AZURE_OPENAI_ENDPOINT`、`AZURE_OPENAI_KEY`、`AZURE_OPENAI_DEPLOYMENT`，可选 `AZURE_OPENAI_API_VERSION`，默认 `2024-10-21`）
 
-- **Manual adapter pattern** (what Python's `main.py` and .NET's `--manual` mode do): you write plain `Executor` subclasses. An `InputAdapter` coerces the workflow's raw input into whatever shape the agent step expects; the agent step calls the LLM; an `OutputAdapter` unwraps the agent's response back into a plain value the workflow can yield. Explicit, verbose, and exactly what production code does when a workflow mixes agents with non-agent steps (see the capstone pointer).
-- **Convenience builder** (.NET's default `--sequential` mode, via `AgentWorkflowBuilder.BuildSequential`): when every step in the chain is an agent and they just run in sequence, the framework wires the input/output adapters for you. One call instead of four classes.
+## 核心概念
 
-Either way, the key discipline is the same: agent steps pass structured request/response types internally (Python's `AgentExecutorRequest`/`AgentExecutorResponse` when using the framework's own `AgentExecutor`, or your own DTOs in the manual pattern) — you adapt at the workflow's boundaries so the graph's public input and output stay plain, testable types.
+**智能体执行器（agent-executor）** 是一个工作流节点，它的 `run()` 处理函数不直接转换数据 —— 它把进来的消息交给 `Agent`，等待 LLM 调用，再把智能体的响应转发给下游。有两条路到达那里：
+
+- **手工适配器模式**（Python 的 `main.py` 走的就是这条）：你自己写普通的 `Executor` 子类。一个 `InputAdapter` 把工作流的原始输入强制转换成智能体步骤期望的形态；智能体步骤调用 LLM；一个 `OutputAdapter` 把智能体的响应解包回工作流可以产出的普通值。显式、啰嗦，而当工作流把智能体与非智能体步骤混在一起时，这正是生产代码的做法。
+- **便捷构建器**：当链上每一步都是智能体、且只是顺序执行时，框架替你接好输入/输出适配器。一次调用，而不是四个类。
+
+无论走哪条路，关键纪律相同：智能体步骤在**内部**传递结构化的请求/响应类型 —— 你在工作流的**边界**上做适配，使图对外的输入与输出保持为普通、可测试的类型。
 
 ```mermaid
 %%{init: {'theme':'base', 'themeVariables': {
@@ -32,22 +36,22 @@ flowchart LR
   classDef external fill:#f59e0b,stroke:#b45309,color:#000000
   classDef success  fill:#10b981,stroke:#047857,color:#ffffff
 
-  input([English text])
+  input([英文文本])
   inAdapter[InputAdapter]
-  fr[[en-to-fr agent]]
+  fr[[en-to-fr 智能体]]
   llm1[(LLM)]
-  es[[fr-to-es agent]]
+  es[[fr-to-es 智能体]]
   llm2[(LLM)]
   outAdapter[OutputAdapter]
-  output([Spanish text])
+  output([西班牙文文本])
 
   input --> inAdapter
   inAdapter -- "AgentExecutorRequest" --> fr
-  fr -- "prompt" --> llm1
-  llm1 -- "French text" --> fr
+  fr -- "提示词" --> llm1
+  llm1 -- "法文文本" --> fr
   fr -- "AgentExecutorResponse" --> es
-  es -- "prompt" --> llm2
-  llm2 -- "Spanish text" --> es
+  es -- "提示词" --> llm2
+  llm2 -- "西班牙文文本" --> es
   es --> outAdapter
   outAdapter --> output
 
@@ -60,19 +64,18 @@ flowchart LR
   class output success
 ```
 
-Two real LLM calls happen inside this graph — the French translator's output becomes the Spanish translator's input with no application code touching the string in between.
+这张图内部发生两次真实的 LLM 调用 —— 法文译者的输出成为西班牙文译者的输入，中间没有任何应用代码碰过那个字符串。
 
 ## Python
 
-Run from the repo root using the shared `tutorials/` uv project (one `uv sync` covers every chapter):
+在仓库根目录运行，共用 `tutorials/` 这一个 uv 项目（一次 `uv sync` 覆盖全部章节）：
 
 ```bash
 uv sync --project tutorials
 uv run --project tutorials python tutorials/11-agents-in-workflows/python/main.py
-uv run --project tutorials pytest tutorials/11-agents-in-workflows/python/tests -v
 ```
 
-`tutorials/11-agents-in-workflows/python/main.py` uses the framework's built-in `AgentExecutor` to wrap each translator, plus two hand-written adapters at the boundaries:
+`python/main.py` 用框架内置的 `AgentExecutor` 包装每个译者，并在边界处加两个手写适配器：
 
 ```python
 class InputAdapter(Executor):
@@ -106,84 +109,34 @@ def build_workflow():
     )
 ```
 
-`OutputAdapter` is the mirror image — it unwraps the final `AgentExecutorResponse` and yields `response.agent_response.text` as the workflow's plain-string output. Running the demo prints:
+`OutputAdapter` 是它的镜像 —— 它解包最终的 `AgentExecutorResponse`，并把 `response.agent_response.text` 作为工作流的普通字符串输出产出。运行演示会打印：
 
 ```
 English input: Hello, how are you?
 Spanish output: Hola, ¿cómo estás?
 ```
 
-## .NET
+## 常见坑
 
-```bash
-cd tutorials/11-agents-in-workflows/dotnet
-dotnet build
-dotnet run -- --sequential "Hello, how are you?"   # convenience builder
-dotnet run -- --manual     "Hello, how are you?"   # manual adapter pattern
-dotnet test
-```
+- **不要跨智能体执行器混用输入类型。** 框架的 `AgentExecutor` 以 `AgentExecutorRequest` / `AgentExecutorResponse` 通信 —— 直接给它发一个裸字符串（跳过 `InputAdapter`）会在**运行时**失败，而不是构建时。
+- **`should_respond=True` 很重要。** 当它为 `False` 时，被包装的智能体会把消息追加进历史但不调用 LLM —— 这对在多轮工作流里预置上下文很有用，但也容易忘记，结果得到一个静默的空操作步骤。
+- **旧的「MAF v1.0 wheel 附带空 `__init__.py`」打包缺陷已在上游修复。** 本仓库现已锁定 `agent-framework` 1.14.0，它带有真实的 `__init__.py`。`agents/python/patch_maf.py` 作为有文档记录的空操作防御性回退保留（只有目标文件为空时它才写入）。教程实际依赖的引导入口是 `tutorials/_shared/maf_bootstrap.py`，它在每章 `main.py` 与测试模块的顶部被调用 —— 它加载仓库根目录的 `.env`，并幂等地归一化该包的再导出。
 
-`tutorials/11-agents-in-workflows/dotnet/Program.cs` teaches both patterns side by side. The convenience path (`SequentialAgentWorkflow`, the `--sequential` default) hands two `AIAgent`s straight to `AgentWorkflowBuilder.BuildSequential`:
+## 测试
 
-```csharp
-AIAgent enToFr = Program.TranslationAgent(chatClient, "French", id: "en-to-fr");
-AIAgent frToEs = Program.TranslationAgent(chatClient, "Spanish", id: "fr-to-es");
-
-// The whole chain, wrapped and wired in one call. BuildSequential
-// inserts the input/output adapters internally so the workflow
-// takes a List<ChatMessage> in and surfaces a List<ChatMessage> out.
-Workflow workflow = AgentWorkflowBuilder.BuildSequential(enToFr, frToEs);
-
-var messages = new List<ChatMessage> { new(ChatRole.User, input) };
-await using StreamingRun run = await InProcessExecution.RunStreamingAsync(workflow, messages);
-
-// TurnToken triggers the wrapped agents: AgentExecutor caches
-// inbound messages and only calls the LLM once a TurnToken arrives.
-await run.TrySendMessageAsync(new TurnToken(emitEvents: true));
-```
-
-The `--manual` path (`ManualAdapterWorkflow`) builds the graph from custom `[MessageHandler]` executors — `InputAdapter`, two `TranslationAgentExecutor`s, and `OutputAdapter` — wired with the same raw `WorkflowBuilder.AddEdge` calls Chapters 09–10 used. It exists to show what `BuildSequential` is doing under the hood, and it's the pattern you drop down to once a graph mixes agents with non-agent steps.
-
-## Side-by-side differences
-
-| Aspect | Python | .NET |
-|--------|--------|------|
-| Wrapping an agent | Manual: `AgentExecutor(agent, id="...")` inside `WorkflowBuilder` | Convenience: `AgentWorkflowBuilder.BuildSequential(agents)`, or manual `[MessageHandler]` executors for custom graphs |
-| Input/output adapters | Always explicit — you write `InputAdapter`/`OutputAdapter` | Handled internally by `BuildSequential`; explicit only in the `--manual` mode |
-| Trigger to run the LLM | `should_respond=True` on `AgentExecutorRequest` | `TurnToken` sent into the running workflow |
-| Request/response types | `AgentExecutorRequest` / `AgentExecutorResponse` | `List<ChatMessage>` in, `AgentResponseUpdate` events out (convenience path) |
-
-Python's explicit boundary executors are more verbose but make the data shape obvious in tests. .NET's convenience builder is faster once you're past the basics, and its manual mode maps onto the exact same shape as Python's.
-
-## Gotchas
-
-- **Don't mix input types across agent-executors.** The framework's `AgentExecutor` communicates in `AgentExecutorRequest`/`AgentExecutorResponse` — sending a raw string to one directly (skipping `InputAdapter`) fails at runtime, not at build time.
-- **`should_respond=True` matters** (Python). When `False`, the wrapped agent appends the message to its history but doesn't call the LLM — useful for pre-seeding context across a multi-turn workflow, easy to forget and end up with a silent no-op step.
-- **.NET's `TurnToken` is easy to miss.** `BuildSequential` wires the graph, but nothing calls the LLM until you send a `TurnToken` into the running `StreamingRun` — omit it and the workflow just sits there.
-- **The old "MAF v1.0 wheel ships an empty `__init__.py`" packaging bug is fixed upstream.** This repo now pins `agent-framework` 1.14.0, which ships a real `__init__.py`. `agents/python/patch_maf.py` is kept as a documented no-op defensive fallback (it only writes when the target file is empty). The bootstrap tutorials actually rely on is `tutorials/_shared/maf_bootstrap.py`, called at the top of every chapter's `main.py` and test module — it loads the repo-root `.env` and idempotently normalizes the package's re-exports.
-
-## Tests
-
-Python ships one workflow-wiring unit test (asserts all four executor IDs are present in the built graph, no LLM call) plus a replay-based integration test (`tutorials/11-agents-in-workflows/python/tests/fixtures/replay/*.json` — recorded once against a real LLM, replayed with `LLM_PROVIDER=replay`, no network or credentials needed) and three real-LLM integration tests gated on `OPENAI_API_KEY`/Azure credentials being present:
+Python 提供一个工作流接线单元测试（断言四个执行器 id 都在构建出的图中出现，不调用 LLM），外加一个基于回放的集成测试（`tutorials/11-agents-in-workflows/python/tests/fixtures/replay/*.json` —— 曾针对真实 LLM 录制一次，之后用 `LLM_PROVIDER=replay` 回放，无需网络与凭据），以及三个以 `OPENAI_API_KEY` / Azure 凭据为前提的真实 LLM 集成测试：
 
 ```bash
 uv run --project tutorials pytest tutorials/11-agents-in-workflows/python/tests -v
 ```
 
-.NET ships wiring tests against a scripted fake `IChatClient` (asserts the final output string and that both agent-executors fire in order) plus real-LLM integration tests skipped without credentials:
+## 在完整项目中的落点
 
-```bash
-cd tutorials/11-agents-in-workflows/dotnet
-dotnet test
-```
+在生产环境中，一个「由智能体支撑的应答者」嵌入 MAF 工作流的第一个调用方是 `agents/python/orchestrator/modes/group_chat_mode.py:65` —— `_make_agent_responder()` 为每位小组成员构造一个 MAF `Agent`，并在一个 `async` 闭包内调用 `agent.run(prompt)`。该闭包被作为 `Responder` 传给 `agents/python/workflows/group_chat.py` 的 `_PanelistExecutor`，后者在它可等待时 `await` 它（`agents/python/workflows/group_chat.py:69`）—— 与本章所教相同的手工适配器形态，只不过那个「适配器」是一个普通的 async 闭包，而不是完整的 `Executor` 子类，因为 `group_chat.py` 被写成对 LLM 无感知，只有 `orchestrator/modes/group_chat_mode.py` 知道 `Agent` 的存在。该工作流本身（小组成员围绕共享记录轮流发言，然后由主持人综合出结论）在运行中的应用里可通过 `/api/chat` 的 `mode=group-chat` 触达。
 
-## How this shows up in the capstone
+## 下一步
 
-The first production caller of an agent-backed responder inside a MAF workflow is `agents/python/orchestrator/modes/group_chat_mode.py:65` — `_make_agent_responder()` constructs a MAF `Agent` per panelist and calls `agent.run(prompt)` inside an `async` closure. That closure is passed as the `Responder` for `agents/python/workflows/group_chat.py`'s `_PanelistExecutor`, which `await`s it if it's awaitable (`agents/python/workflows/group_chat.py:69`) — the same manual-adapter shape this chapter teaches, except the "adapter" is a plain async closure instead of a full `Executor` subclass, because `group_chat.py` was written to stay LLM-agnostic and only `orchestrator/modes/group_chat_mode.py` knows about `Agent`. The workflow itself (panelists take turns over a shared transcript, then a moderator synthesizes a verdict) is reachable in the running app via `mode=group-chat` in `/api/chat`.
-
-## What's next
-
-- Next chapter: [Chapter 12 — Sequential Orchestration](../12-sequential-orchestration/)
-- Full source: [`python/`](./python/) · [`dotnet/`](./dotnet/)
-- Shared: [Mermaid style guide](../_shared/mermaid-style-guide.md)
-- [MAF docs — Agents in Workflows](https://learn.microsoft.com/en-us/agent-framework/workflows/agents-in-workflows/)
+- 下一章：[第 12 章 · 顺序编排](../12-sequential-orchestration/)
+- 完整源码：[`python/`](./python/)
+- 共享材料：[Mermaid 风格指南](../_shared/mermaid-style-guide.md) · [术语表](../_shared/jargon-glossary.md)
+- [MAF 官方文档 —— 工作流中的智能体](https://learn.microsoft.com/en-us/agent-framework/workflows/agents-in-workflows/)

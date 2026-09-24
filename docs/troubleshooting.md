@@ -1,41 +1,40 @@
-# Troubleshooting
+# 故障排查
 
-Common issues running the stack locally. Start everything with `./scripts/dev.sh`
-(or `./scripts/dev.ps1` on Windows — every `dev.sh --flag` below has a `dev.ps1 -Flag`
-equivalent: `--clean` → `-Clean`, `--seed-only` → `-SeedOnly`, `--infra-only` → `-InfraOnly`)
-(see [deployment.md](./deployment.md)).
+本地运行服务栈时的常见问题。用 `./scripts/dev.sh` 启动全部服务
+（Windows 上为 `./scripts/dev.ps1` —— 下面每个 `dev.sh --flag` 都有对应的 `dev.ps1 -Flag`：
+`--clean` → `-Clean`，`--seed-only` → `-SeedOnly`，`--infra-only` → `-InfraOnly`）
+（另见 [deployment.md](./deployment.md)）。
 
-## Docker build fails on the Python agents (`agent-framework` resolution)
+## Docker 构建在 Python 智能体处失败（`agent-framework` 依赖解析）
 
-Symptom: a wall of `agent-framework … cannot be used` / `agent-framework-azure-ai-search`
-conflicts during `uv sync`. Cause: re-resolving the pre-release MAF graph against
-live PyPI. **Fix is already in the Dockerfile** — it syncs from the committed
-`agents/python/uv.lock` with `uv sync --frozen`. If you hit this, ensure
-`uv.lock` is present and run a clean build:
+现象：`uv sync` 期间出现大量 `agent-framework … cannot be used` /
+`agent-framework-azure-ai-search` 冲突。原因：针对线上 PyPI 重新解析预发布的 MAF 依赖图。
+**修复已包含在 Dockerfile 中** —— 它通过 `uv sync --frozen` 从已提交的
+`agents/python/uv.lock` 同步。如果你遇到该问题，请确认 `uv.lock` 存在，并做一次干净构建：
 
 ```bash
-./scripts/dev.sh --clean        # nuke volumes + rebuild
-# or
+./scripts/dev.sh --clean        # 清空数据卷 + 重建
+# 或者
 docker compose build --no-cache orchestrator
 ```
 
-To refresh deps deliberately: `cd agents/python && uv lock` (commit the new lock).
+若要主动刷新依赖：`cd agents/python && uv lock`（提交新的 lock 文件）。
 
-## Port already in use (5432 / 6379 / 8080 / 3000 / 18888)
+## 端口已被占用（5432 / 6379 / 8080 / 3000 / 16686）
 
-Another stack (or a host Postgres/Redis) holds the port. Find and stop it:
+被其他服务栈（或宿主机上的 Postgres/Redis）占用了。找到并停掉它：
 
 ```bash
-lsof -nP -iTCP:5432 -sTCP:LISTEN     # who's listening
-docker compose down                   # stop this stack
+lsof -nP -iTCP:5432 -sTCP:LISTEN     # 谁在监听
+docker compose down                   # 停止本服务栈
 ```
 
-The compose services use 5432 (Postgres), 6379 (Redis), 8080 (orchestrator),
-8081–8085 (specialists), 3000 (frontend), 18888 (Aspire).
+Compose 服务使用的端口为 5432（Postgres）、6379（Redis）、8080（编排器）、
+8081–8085（专业智能体）、3000（前端）、16686（Jaeger）。
 
-## Chat returns an error / "encountered an issue"
+## 对话返回错误 / 「encountered an issue」
 
-The LLM is never mocked. Set a real key in the repo `.env`:
+LLM 从不使用模拟实现。请在仓库根目录的 `.env` 中填入真实密钥：
 
 ```bash
 LLM_PROVIDER=openai
@@ -43,26 +42,26 @@ OPENAI_API_KEY=sk-...
 LLM_MODEL=gpt-4.1
 ```
 
-(or the `AZURE_OPENAI_*` vars for Azure). Restart the orchestrator + agents.
+（Azure 则使用 `AZURE_OPENAI_*` 系列变量）。随后重启编排器与各智能体。
 
-## Login fails with "Missing Authorization header"
+## 登录失败并提示「Missing Authorization header」
 
-You're hitting the wrong backend, or the orchestrator is pointed at a different
-DB. Confirm `:8080` is the e-commerce orchestrator (`curl localhost:8080/health`
-→ `{"service":"orchestrator"}`) and that the DB was seeded (`./scripts/dev.sh --seed-only`).
+你访问的是错误的后端，或者编排器指向了另一个数据库。确认 `:8080` 是电商编排器
+（`curl localhost:8080/health` → `{"service":"orchestrator"}`），并确认数据库已灌入种子数据
+（`./scripts/dev.sh --seed-only`）。
 
-## Public storefront shows no products / redirects to login
+## 公开店铺不显示商品 / 跳转到登录页
 
-Product browse + chat are anonymous via `optional_auth`. If anonymous
-`GET /api/products` returns 401, the orchestrator image predates that change —
-rebuild it: `docker compose up -d --build --no-deps orchestrator`.
+商品浏览与对话通过 `optional_auth` 支持匿名访问。若匿名
+`GET /api/products` 返回 401，说明编排器镜像早于该改动 —— 请重建：
+`docker compose up -d --build --no-deps orchestrator`。
 
-## DB connection refused / empty data
+## 数据库连接被拒 / 数据为空
 
-Postgres not ready or not seeded. `docker compose ps` (db healthy?), then
-`./scripts/dev.sh --seed-only`. The seeder is deterministic (`random.seed(42)`).
+Postgres 尚未就绪或未灌入种子数据。先 `docker compose ps`（db 是否 healthy？），
+然后执行 `./scripts/dev.sh --seed-only`。种子脚本是确定性的（`random.seed(42)`）。
 
-## Embeddings missing (semantic search empty)
+## 向量嵌入缺失（语义检索为空）
 
 ```bash
 cd agents/python && uv run python -m scripts.generate_embeddings
@@ -70,15 +69,15 @@ cd agents/python && uv run python -m scripts.generate_embeddings
 
 ## `products.search_vector does not exist`
 
-Symptom: every product search fails and the agent replies "there was an error
-retrieving results from the database". The agent logs show
-`UndefinedColumnError: column p.search_vector does not exist`.
+现象：所有商品检索都失败，智能体回复「there was an error
+retrieving results from the database」。智能体日志中出现
+`UndefinedColumnError: column p.search_vector does not exist`。
 
-Cause: full-text search added a generated `tsvector` column to `products`.
-`docker/postgres/init.sql` only runs on an **empty** data directory, so a
-database created before that change never got the column.
+原因：全文检索给 `products` 增加了一个生成的 `tsvector` 列。
+`docker/postgres/init.sql` 只在数据目录**为空**时执行，因此在该改动之前创建的数据库
+永远不会获得这一列。
 
-Fix, without losing your data:
+不丢数据的修复方式：
 
 ```bash
 docker compose exec -T db psql -U ecommerce -d ecommerce_agents <<'SQL'
@@ -92,24 +91,21 @@ CREATE INDEX IF NOT EXISTS idx_products_search ON products USING GIN (search_vec
 SQL
 ```
 
-Postgres backfills the column for every existing row, so no re-seed is needed.
-Verify with:
+Postgres 会为所有既有数据行回填该列，因此无需重新灌入种子数据。用下面的命令验证：
 
 ```bash
 docker compose exec -T db psql -U ecommerce -d ecommerce_agents \
   -c "SELECT count(*) AS products, count(search_vector) AS indexed FROM products;"
 ```
 
-Alternatively `./scripts/dev.sh --clean` rebuilds from `init.sql` — simpler, but
-it drops all local data.
+另一种方式是 `./scripts/dev.sh --clean` 从 `init.sql` 重建 —— 更简单，但会丢掉全部本地数据。
 
-## UI changes not showing in the running stack
+## UI 改动没有在运行中的服务栈里生效
 
-The frontend is a built container. Rebuild it:
-`docker compose up -d --build --no-deps frontend` (or run `cd web && pnpm dev`
-on a free port).
+前端是一个已构建的容器。请重建它：
+`docker compose up -d --build --no-deps frontend`（或在空闲端口上运行 `cd web && pnpm dev`）。
 
-## Aspire dashboard empty (no traces)
+## Jaeger 界面为空（没有追踪）
 
-Open http://localhost:18888. Ensure `OTEL_ENABLED` is on and the OTLP endpoint
-points at the Aspire container. See [telemetry.md](./telemetry.md).
+打开 http://localhost:16686。确认 `OTEL_ENABLED` 已开启，且 OTLP 端点指向 Jaeger 容器。
+见 [telemetry.md](./telemetry.md)。

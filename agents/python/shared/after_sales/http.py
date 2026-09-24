@@ -1,4 +1,4 @@
-"""Client-generated operation IDs stay outside model-controlled tool arguments."""
+"""由客户端生成的操作 ID 保持在模型可控的工具参数之外。"""
 
 from collections.abc import AsyncIterator
 from uuid import UUID

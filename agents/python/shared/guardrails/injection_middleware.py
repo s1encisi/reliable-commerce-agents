@@ -1,21 +1,11 @@
-"""Inbound prompt-injection detection middleware.
+"""输入提示注入检测中间件。
 
-Scans inbound chat messages for high-precision injection signals and records a
-detection (counter + ``context.metadata`` flag + log line). By default this is
-observe-only: the *active* defenses are the prompt-layer refusal rules
-(``grounding-rules.yaml``) and tool-output sanitization
-(:class:`OutputSanitizationMiddleware`). This layer adds observability and the
-signal the safety / red-team evals assert on.
+扫描高精度注入信号，记录计数、元数据和日志。默认只观察，由提示词
+拒绝规则与工具输出净化共同防护。开启 GUARDRAILS_BLOCK_ON_INJECTION
+后直接返回拒绝结果，不调用 call_next()，消息不会到达模型。
 
-When ``GUARDRAILS_BLOCK_ON_INJECTION`` is set, detection escalates from
-observability to a hard block: the middleware short-circuits the chat pipeline
-with a refusal response instead of calling ``call_next()``, so the flagged
-message never reaches the LLM. ``context.metadata["guardrail_injection_detected"]``
-is set in both modes, but that dict is ``ChatContext``-local and invisible
-outside this one completion call (MAF constructs it fresh per chat call —
-see ``shared/guardrails/flags.py``). The same flag is also written to
-``current_guardrail_flags`` (a request-scoped ContextVar), which is what
-survives the call and is what the eval phase actually asserts on.
+触发标记同时写入调用局部 metadata 和请求级 current_guardrail_flags；
+后者供运行结束后的安全评测读取。
 """
 
 from __future__ import annotations
@@ -40,7 +30,7 @@ REFUSAL_MESSAGE = (
 
 
 class InjectionDetectionChatMiddleware(ChatMiddleware):
-    """Flag (and optionally block) inbound messages carrying prompt-injection signals."""
+    """标记输入中的提示注入信号，并按配置选择是否阻止。"""
 
     def __init__(self) -> None:
         self.detections = 0
@@ -64,8 +54,8 @@ class InjectionDetectionChatMiddleware(ChatMiddleware):
                 if flags is not None:
                     flags["injection_blocked"] = True
                 context.result = self._refusal_result(context)
-                # Short-circuit: do NOT call call_next() — the flagged message
-                # never reaches the chat client / LLM.
+                # 直接短路，不调用 call_next()，
+                # 被标记消息不会进入聊天客户端或模型。
                 return
 
             logger.info("guardrails.injection_detected blocking=False")
@@ -83,7 +73,7 @@ class InjectionDetectionChatMiddleware(ChatMiddleware):
 
     @staticmethod
     def _refusal_result(context: ChatContext) -> ChatResponse | ResponseStream:
-        """Build a refusal result matching the invocation shape (streaming vs not)."""
+        """构造与流式或非流式调用形态一致的拒绝响应。"""
         if getattr(context, "stream", False):
 
             async def _refusal_stream():

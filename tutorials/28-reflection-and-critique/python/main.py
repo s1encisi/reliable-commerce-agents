@@ -1,31 +1,28 @@
 """
-MAF v1 — Chapter 28: Reflection and Critique (Python)
+MAF v1 — 第 28 章：反思与评审（Python）
 
-The reflection / critic-loop pattern: an agent produces a draft, a second
-agent (the critic) scores it against explicit, named criteria and returns
-specific feedback, and — if it doesn't meet the bar — the draft agent
-revises using that feedback and the critic scores again. This repeats until
-the draft passes or a hard `MAX_ITERATIONS` cap is hit.
+反思 / 评审循环（reflection / critic-loop）模式：一个智能体产出草稿，
+第二个智能体（评审者）按明确命名的评分项打分并给出具体反馈；若未达标，
+起草智能体依据反馈改写，评审者再次打分。如此往复，直到草稿通过，或
+撞上 `MAX_ITERATIONS` 这道硬上限。
 
-Two agents, two roles:
+两个智能体，两种角色：
 
-1. `build_draft_agent()` — writes (and revises) a short product description.
-2. `build_critic_agent()`  — grades a draft against three fixed criteria
-   (price mentioned, feature mentioned, word limit respected) and returns a
-   strict, parseable verdict plus one line of feedback.
+1. `build_draft_agent()` —— 撰写（并改写）一段简短的商品描述。
+2. `build_critic_agent()` —— 按三条固定评分项给草稿打分
+   （是否提到价格、是否提到功能、是否遵守字数上限），返回严格、
+   可解析的判定，外加一行反馈。
 
-Every other chapter in this series is a single LLM call, or a tool-calling
-loop MAF itself drives and bounds. This is the first chapter where *this
-repo's own code* drives a multi-turn loop with no framework-enforced bound —
-`MAX_ITERATIONS` is the only thing standing between this and an unbounded
-token bill. See the module-level `MAX_ITERATIONS` constant and the Gotchas
-section in README.md.
+本系列其他章节要么是单次 LLM 调用，要么是 MAF 自己驱动并限定边界的
+工具调用循环。本章是第一次由 *本仓库自己的代码* 驱动多轮循环、且没有
+框架强制的边界 —— `MAX_ITERATIONS` 是唯一挡在无限 token 账单之前的东西。
+参见模块级常量 `MAX_ITERATIONS` 以及 README.md 的「常见坑」一节。
 
-No pgvector, no Postgres, no A2A — see agents/python/review_sentiment/
-tools.py::draft_seller_response for the closest single-pass analog this repo
-has, and why it is not the same pattern this chapter teaches.
+不涉及 pgvector、Postgres、A2A —— 本仓库最接近的单遍类比见
+agents/python/review_sentiment/tools.py::draft_seller_response，
+那里也说明了它为什么不是本章所讲的模式。
 
-Run:
+运行：
     source agents/.venv/bin/activate
     python tutorials/28-reflection-and-critique/python/main.py
 """
@@ -50,10 +47,9 @@ from tutorials._shared.replay_client import ReplayChatClient  # noqa: E402
 
 FIXTURES_DIR = pathlib.Path(__file__).resolve().parent / "tests" / "fixtures" / "replay"
 
-# The hard cap on draft -> critique -> revise cycles. Without this, a critic
-# that never says PASS (a strict rubric, a flaky model, a genuinely
-# unsatisfiable constraint) spins the loop forever, burning one draft call
-# and one critic call per turn indefinitely. See README.md's Gotchas.
+# 草稿 -> 评审 -> 改写 循环的硬上限。没有它，一个永远不说 PASS 的评审者
+# （评分标准过严、模型不稳定、约束本身根本无法满足）会让循环无限转下去，
+# 每一轮都白白烧掉一次起草调用和一次评审调用。见 README.md 的「常见坑」。
 MAX_ITERATIONS = 3
 WORD_LIMIT = 40
 
@@ -76,7 +72,7 @@ CRITIC_INSTRUCTIONS = (
 )
 
 
-# ─────────────────────────── Domain ───────────────────────────
+# ─────────────────────────── 领域模型 ───────────────────────────
 
 
 @dataclass(frozen=True)
@@ -125,10 +121,9 @@ def revise_prompt(product: Product, draft: str, critique: CritiqueResult) -> str
     )
 
 
-# ─────────────────────────── Critic parsing ───────────────────────────
-# The critic is a second LLM call, not framework magic — MAF has no opinion
-# on reflection loops. This module owns the loop and the parsing of the
-# critic's free-text response into something the loop can branch on.
+# ─────────────────────────── 评审结果解析 ───────────────────────────
+# 评审者是第二次 LLM 调用，不是框架魔法 —— MAF 对反思循环没有既定主张。
+# 循环本身以及「把评审者的自由文本解析成循环可分支的结果」都由本模块负责。
 
 _CRITERION_RE = re.compile(r"^\s*(PRICE|FEATURE|LENGTH)\s*:\s*(PASS|FAIL)", re.IGNORECASE | re.MULTILINE)
 _FEEDBACK_RE = re.compile(r"^\s*FEEDBACK\s*:\s*(.+)$", re.IGNORECASE | re.MULTILINE)
@@ -147,12 +142,11 @@ class CritiqueResult:
 
 
 def parse_critique(text: str) -> CritiqueResult:
-    """Parse the critic's fixed-format response into a `CritiqueResult`.
+    """把评审者固定格式的响应解析成 `CritiqueResult`。
 
-    Any criterion line the critic omits is treated as FAIL, not PASS — a
-    critic that doesn't clearly say PASS hasn't earned one. This keeps the
-    loop safe (it will revise, then eventually hit MAX_ITERATIONS) instead of
-    silently treating "unparseable" as "good enough."
+    评审者漏写的任何评分项一律按 FAIL 处理，而不是 PASS —— 没有明确说
+    PASS 的评审者不配拿到 PASS。这样循环是安全的（它会继续改写，最终
+    撞上 MAX_ITERATIONS），而不是把「解析不出来」悄悄当成「够好了」。
     """
     verdicts = {m.group(1).upper(): m.group(2).upper() == "PASS" for m in _CRITERION_RE.finditer(text)}
     feedback_match = _FEEDBACK_RE.search(text)
@@ -165,7 +159,7 @@ def parse_critique(text: str) -> CritiqueResult:
     )
 
 
-# ─────────────────────────── The loop ───────────────────────────
+# ─────────────────────────── 反思循环 ───────────────────────────
 
 
 @dataclass(frozen=True)
@@ -187,13 +181,12 @@ async def run_reflection_loop(
     *,
     max_iterations: int = MAX_ITERATIONS,
 ) -> list[Iteration]:
-    """Draft -> critique -> revise -> critique -> ... up to `max_iterations`.
+    """草稿 -> 评审 -> 改写 -> 评审 -> …… 最多 `max_iterations` 轮。
 
-    Returns every iteration's draft and critique, in order, so the caller
-    (main(), or a test) can see the whole trace, not just the final answer.
-    Stops early the moment a critique passes; otherwise stops after
-    `max_iterations` critiques even if the last one still fails — the hard
-    cap this chapter's Gotchas section is about.
+    按顺序返回每一轮的草稿与评审结果，让调用方（main() 或测试）能看到
+    完整轨迹，而不只是最终答案。一旦某次评审通过就提前结束；否则即使
+    最后一次评审仍未通过，也会在 `max_iterations` 次评审后停止 ——
+    这正是本章「常见坑」一节所讲的那道硬上限。
     """
     iterations: list[Iteration] = []
     draft = await ask(draft_agent, draft_prompt(product))
@@ -207,7 +200,7 @@ async def run_reflection_loop(
     return iterations
 
 
-# ─────────────────────────── Client / agent wiring ───────────────────────────
+# ─────────────────────────── 客户端与智能体装配 ───────────────────────────
 
 
 def _default_client() -> OpenAIChatClient | OpenAIChatCompletionClient | ReplayChatClient:
@@ -228,9 +221,9 @@ def _default_client() -> OpenAIChatClient | OpenAIChatCompletionClient | ReplayC
     return OpenAIChatClient(
         model=os.environ.get("LLM_MODEL", "gpt-4.1"),
         api_key=os.environ["OPENAI_API_KEY"],
-        # Phase 9: any OpenAI-compatible endpoint (GitHub Models, OpenRouter,
-        # vLLM, LM Studio, Ollama) instead of api.openai.com — see
-        # tutorials/00-setup/README.md's "Don't have a paid API key?" section.
+        # Phase 9：可指向任何兼容 OpenAI 的端点（GitHub Models、OpenRouter、
+        # vLLM、LM Studio、Ollama），而不必是 api.openai.com —— 见
+        # tutorials/00-setup/README.md 的「没有付费 API key？」一节。
         base_url=os.environ.get("LLM_BASE_URL") or None,
     )
 

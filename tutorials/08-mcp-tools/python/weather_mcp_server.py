@@ -1,11 +1,11 @@
 """
-Minimal MCP server exposing a canned weather tool over stdio.
+一个极小的 MCP 服务器，通过 stdio 暴露一个预置数据的天气工具。
 
-Run standalone to sanity-check:
-    python weather_mcp_server.py  # stays open, reads MCP frames from stdin
+单独运行以做冒烟检查：
+    python weather_mcp_server.py  # 会一直挂着，从 stdin 读取 MCP 帧
 
-Used by main.py / tests via agent_framework.MCPStdioTool which spawns this
-file as a subprocess and speaks MCP over stdio.
+main.py / 测试通过 agent_framework.MCPStdioTool 使用它 —— 后者把本文件作为
+子进程拉起，并通过 stdio 讲 MCP 协议。
 """
 
 from __future__ import annotations

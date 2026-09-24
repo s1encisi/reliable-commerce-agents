@@ -1,8 +1,6 @@
-"""Tests for the group-chat / round-table workflow (Track C2).
+"""群聊圆桌工作流测试。
 
-Runs the real MAF workflow with deterministic responders (no LLM): verifies
-turn order, the shared transcript (each panelist sees prior turns), and the
-moderator synthesis.
+用确定性响应者驱动真实 MAF 图，验证轮次顺序、共享记录与主持人综合。
 """
 
 from __future__ import annotations
@@ -23,7 +21,7 @@ async def test_round_table_runs_turns_in_order() -> None:
     state = await wf.execute("Is the Sony WH-1000XM5 worth it?")
 
     assert [t["speaker"] for t in state.transcript] == ["value", "quality"]
-    # The shared transcript means the quality panelist saw the value turn.
+    # 共享记录确保质量讨论者能看到价值讨论者的前一轮。
     assert "Saw 1 prior turn" in state.transcript[1]["text"]
     assert state.completed_steps == ["value", "quality", "moderator"]
     assert state.verdict
@@ -45,7 +43,7 @@ async def test_panelist_failure_is_contained() -> None:
     wf = GroupChatWorkflow(panelists=[("flaky", boom)])
     state = await wf.execute("q?")
     assert "could not respond" in state.transcript[0]["text"]
-    assert state.verdict  # moderator still synthesizes
+    assert state.verdict  # 主持人仍执行综合。
 
 
 async def test_requires_at_least_one_panelist() -> None:
@@ -59,9 +57,7 @@ def test_default_synthesis_mentions_speakers() -> None:
 
 
 async def test_async_responder_is_awaited() -> None:
-    """An agent-backed panelist returns a coroutine, not a str — the
-    executor must await it rather than threading the coroutine object
-    itself into the transcript."""
+    """智能体讨论者返回协程，执行器必须等待结果，不能把协程对象加入记录。"""
 
     async def value(_q: str, _t: list[dict[str, str]]) -> str:
         return "Great price for the feature set."

@@ -1,4 +1,4 @@
-"""M3: actual database transactions, process death and dropped COMMIT replies."""
+"""M3：真实数据库事务、进程退出与 COMMIT 回执丢失。"""
 
 import asyncio
 import os
@@ -22,7 +22,7 @@ from tests.test_after_sales_entries import EMAIL, NOW, returns_db, seed_order  #
 
 pytestmark = pytest.mark.asyncio
 
-# Imported fixture is intentionally consumed through pytest's parameter injection.
+# 导入的夹具有意通过 pytest 参数注入使用。
 # ruff: noqa: F811
 
 
@@ -94,7 +94,7 @@ async def test_workflow_operation_has_persisted_wait_and_terminal_receipts(
     operation_id = str(row["operation_id"])
     pending = await service.get_operation(operation_id)
     assert pending["outcome"] == "AWAITING_APPROVAL"
-    # A repeated initial request references the original approval, not a second one.
+    # 重复初始请求引用原审批，不创建第二份。
     assert (await http_post("/api/chat", {"message": message, "mode": "workflow:return-replace"})).status_code == 200
     assert await returns_db.fetchval("SELECT count(*) FROM hitl_requests") == 1
     response = await http_post(f"/api/orchestration/{pending['workflow_run_id']}/resume", {"approved": approved})
@@ -274,7 +274,7 @@ async def test_read_retry_budget_and_excess_retry_after() -> None:
     assert await retry_read(read, budget) == "ok"
     assert attempts == 3
     with pytest.raises(TimeoutError):
-        await budget.wait(100)  # a Retry-After longer than the remaining deadline
+        await budget.wait(100)  # Retry-After 超过剩余截止时间。
 
 
 async def test_persistent_dependency_failure_stops_after_three_preparation_attempts(
@@ -300,7 +300,7 @@ async def test_commit_reply_dropped_by_tcp_proxy_is_reconciled(
     database_url: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Real wire failure: forward COMMIT to Postgres, discard its acknowledgement."""
+    """真实网络故障：把 COMMIT 转发给数据库，但丢弃提交回执。"""
     order = await seed_order(returns_db, delivered_at=NOW - timedelta(days=5))
     url = urlsplit(database_url)
     dropped = asyncio.Event()

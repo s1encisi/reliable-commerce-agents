@@ -1,19 +1,19 @@
-# API Reference
+# API 参考
 
-E-Commerce Agents exposes 20 REST endpoints through the orchestrator service (FastAPI, port 8080). All endpoints are prefixed with `/api/`.
+可靠电商多智能体平台通过编排器（orchestrator）服务（FastAPI，端口 8080）对外暴露 20 个 REST 端点。所有端点均以 `/api/` 为前缀。
 
-## Route Overview
+## 路由总览
 
 ```mermaid
 graph LR
-    subgraph Public
+    subgraph Public["公开端点"]
         style Public fill:#10b981,stroke:#059669,color:#fff
         A1[POST /auth/signup]
         A2[POST /auth/login]
         A3[POST /auth/refresh]
     end
 
-    subgraph Authenticated
+    subgraph Authenticated["需认证端点"]
         style Authenticated fill:#0ea5e9,stroke:#0284c7,color:#fff
         C1[POST /chat]
         CV1[GET /conversations]
@@ -29,7 +29,7 @@ graph LR
         M3[GET /marketplace/my-agents]
     end
 
-    subgraph Admin Only
+    subgraph Admin["仅管理员"]
         style Admin fill:#f59e0b,stroke:#d97706,color:#fff
         AD1[GET /admin/requests]
         AD2[POST /admin/requests/:id/approve]
@@ -38,38 +38,38 @@ graph LR
         AD5[GET /admin/audit]
     end
 
-    Client([Client]) --> Public
+    Client([客户端]) --> Public
     Client --> Authenticated
     Client --> Admin
 
     style Client fill:#6366f1,stroke:#4f46e5,color:#fff
 ```
 
-## Authentication
+## 认证
 
-All authenticated endpoints require a `Bearer` token in the `Authorization` header:
+所有需要认证的端点都必须在 `Authorization` 请求头中携带 `Bearer` 令牌：
 
 ```
 Authorization: Bearer <access_token>
 ```
 
-Tokens are JWTs signed with `JWT_SECRET` (PyJWT + bcrypt). Access tokens contain `sub` (email), `role`, `user_id`, and `type: "access"`. Refresh tokens contain `sub` and `type: "refresh"`.
+令牌是使用 `JWT_SECRET` 签名的 JWT（PyJWT + bcrypt）。访问令牌包含 `sub`（邮箱）、`role`、`user_id` 和 `type: "access"`；刷新令牌包含 `sub` 和 `type: "refresh"`。
 
-Admin endpoints additionally verify `role == "admin"` and return `403` if the check fails.
+管理员端点还会额外校验 `role == "admin"`，校验失败时返回 `403`。
 
 ---
 
-## Auth (Public)
+## 认证（公开）
 
 ### POST /api/auth/signup
 
-Create a new user account and receive tokens.
+创建新的用户账号并返回令牌。
 
-| Field | Value |
+| 字段 | 取值 |
 |-------|-------|
-| Auth  | Public |
+| 认证  | 公开 |
 
-**Request Body**
+**请求体**
 
 ```json
 {
@@ -79,7 +79,7 @@ Create a new user account and receive tokens.
 }
 ```
 
-**Response** `200`
+**响应** `200`
 
 ```json
 {
@@ -96,20 +96,20 @@ Create a new user account and receive tokens.
 }
 ```
 
-**Errors**
-- `409` Email already registered
+**错误**
+- `409` 邮箱已被注册
 
 ---
 
 ### POST /api/auth/login
 
-Authenticate an existing user and receive tokens.
+认证已有用户并返回令牌。
 
-| Field | Value |
+| 字段 | 取值 |
 |-------|-------|
-| Auth  | Public |
+| 认证  | 公开 |
 
-**Request Body**
+**请求体**
 
 ```json
 {
@@ -118,7 +118,7 @@ Authenticate an existing user and receive tokens.
 }
 ```
 
-**Response** `200`
+**响应** `200`
 
 ```json
 {
@@ -135,21 +135,21 @@ Authenticate an existing user and receive tokens.
 }
 ```
 
-**Errors**
-- `401` Invalid email or password
-- `403` Account is deactivated
+**错误**
+- `401` 邮箱或密码无效
+- `403` 账号已被停用
 
 ---
 
 ### POST /api/auth/refresh
 
-Exchange a refresh token for a new access token.
+用刷新令牌换取新的访问令牌。
 
-| Field | Value |
+| 字段 | 取值 |
 |-------|-------|
-| Auth  | Public (requires valid refresh token in body) |
+| 认证  | 公开（请求体中需携带有效的刷新令牌） |
 
-**Request Body**
+**请求体**
 
 ```json
 {
@@ -157,7 +157,7 @@ Exchange a refresh token for a new access token.
 }
 ```
 
-**Response** `200`
+**响应** `200`
 
 ```json
 {
@@ -165,23 +165,23 @@ Exchange a refresh token for a new access token.
 }
 ```
 
-**Errors**
-- `401` Refresh token expired / invalid / wrong type
-- `403` Account is deactivated
+**错误**
+- `401` 刷新令牌已过期 / 无效 / 类型错误
+- `403` 账号已被停用
 
 ---
 
-## Chat
+## 聊天
 
 ### POST /api/chat
 
-Send a message to the orchestrator agent. The orchestrator routes to specialist agents as needed and returns the consolidated response.
+向编排器智能体发送一条消息。编排器会按需路由到专业智能体（specialist agent），并返回汇总后的响应。
 
-| Field | Value |
+| 字段 | 取值 |
 |-------|-------|
-| Auth  | JWT Required |
+| 认证  | 需要 JWT |
 
-**Request Body**
+**请求体**
 
 ```json
 {
@@ -190,9 +190,9 @@ Send a message to the orchestrator agent. The orchestrator routes to specialist 
 }
 ```
 
-`conversation_id` is optional. Omit or pass `null` to start a new conversation. Pass an existing ID to continue a conversation (loads the last 50 messages as context).
+`conversation_id` 为可选字段。省略或传入 `null` 即开始一个新会话；传入已有的 ID 则继续该会话（会加载最近 50 条消息作为上下文）。
 
-**Response** `200`
+**响应** `200`
 
 ```json
 {
@@ -202,23 +202,23 @@ Send a message to the orchestrator agent. The orchestrator routes to specialist 
 }
 ```
 
-**Errors**
-- `401` Missing/invalid token
-- `404` Conversation not found (if `conversation_id` is provided but doesn't belong to the user)
+**错误**
+- `401` 令牌缺失或无效
+- `404` 会话不存在（当提供了 `conversation_id` 但它不属于当前用户时）
 
 ---
 
-## Conversations
+## 会话
 
 ### GET /api/conversations
 
-List the authenticated user's conversations, ordered by most recent activity.
+列出已认证用户的会话，按最近活动时间排序。
 
-| Field | Value |
+| 字段 | 取值 |
 |-------|-------|
-| Auth  | JWT Required |
+| 认证  | 需要 JWT |
 
-**Response** `200`
+**响应** `200`
 
 ```json
 [
@@ -232,19 +232,19 @@ List the authenticated user's conversations, ordered by most recent activity.
 ]
 ```
 
-Returns up to 50 active conversations. Soft-deleted conversations are excluded.
+最多返回 50 个活跃会话，已软删除的会话不计入其中。
 
 ---
 
 ### GET /api/conversations/{conversation_id}
 
-Get a single conversation with its full message history.
+获取单个会话及其完整的消息历史。
 
-| Field | Value |
+| 字段 | 取值 |
 |-------|-------|
-| Auth  | JWT Required |
+| 认证  | 需要 JWT |
 
-**Response** `200`
+**响应** `200`
 
 ```json
 {
@@ -279,20 +279,20 @@ Get a single conversation with its full message history.
 }
 ```
 
-**Errors**
-- `404` Conversation not found or doesn't belong to the user
+**错误**
+- `404` 会话不存在或不属于当前用户
 
 ---
 
 ### DELETE /api/conversations/{conversation_id}
 
-Soft-delete a conversation (sets `is_active = FALSE`). Messages are preserved in the database.
+软删除会话（将 `is_active` 置为 `FALSE`），消息仍保留在数据库中。
 
-| Field | Value |
+| 字段 | 取值 |
 |-------|-------|
-| Auth  | JWT Required |
+| 认证  | 需要 JWT |
 
-**Response** `200`
+**响应** `200`
 
 ```json
 {
@@ -300,34 +300,34 @@ Soft-delete a conversation (sets `is_active = FALSE`). Messages are preserved in
 }
 ```
 
-**Errors**
-- `404` Conversation not found or doesn't belong to the user
+**错误**
+- `404` 会话不存在或不属于当前用户
 
 ---
 
-## Products
+## 商品
 
 ### GET /api/products
 
-Browse and search the product catalog with filtering and sorting.
+浏览和搜索商品目录，支持筛选与排序。
 
-| Field | Value |
+| 字段 | 取值 |
 |-------|-------|
-| Auth  | JWT Required |
+| 认证  | 需要 JWT |
 
-**Query Parameters**
+**查询参数**
 
-| Parameter   | Type    | Default   | Description |
+| 参数        | 类型    | 默认值    | 说明 |
 |-------------|---------|-----------|-------------|
-| `category`  | string  | -         | Filter by category (Electronics, Clothing, Home, Sports, Books) |
-| `min_price` | float   | -         | Minimum price filter |
-| `max_price` | float   | -         | Maximum price filter |
-| `search`    | string  | -         | ILIKE search against product name and description |
-| `sort`      | string  | `rating`  | Sort order: `rating`, `price_asc`, `price_desc`, `newest`, `name` |
-| `limit`     | int     | `50`      | Page size |
-| `offset`    | int     | `0`       | Pagination offset |
+| `category`  | string  | -         | 按分类筛选（Electronics、Clothing、Home、Sports、Books） |
+| `min_price` | float   | -         | 最低价格筛选 |
+| `max_price` | float   | -         | 最高价格筛选 |
+| `search`    | string  | -         | 对商品名称与描述执行 ILIKE 搜索 |
+| `sort`      | string  | `rating`  | 排序方式：`rating`、`price_asc`、`price_desc`、`newest`、`name` |
+| `limit`     | int     | `50`      | 每页数量 |
+| `offset`    | int     | `0`       | 分页偏移量 |
 
-**Response** `200`
+**响应** `200`
 
 ```json
 {
@@ -350,19 +350,19 @@ Browse and search the product catalog with filtering and sorting.
 }
 ```
 
-Product descriptions are truncated to 200 characters in the list view.
+在列表视图中，商品描述会被截断为 200 个字符。
 
 ---
 
 ### GET /api/products/{product_id}
 
-Get full product details including specs, stock levels, reviews, and rating distribution.
+获取商品的完整详情，包括规格参数、库存水平、评论以及评分分布。
 
-| Field | Value |
+| 字段 | 取值 |
 |-------|-------|
-| Auth  | JWT Required |
+| 认证  | 需要 JWT |
 
-**Response** `200`
+**响应** `200`
 
 ```json
 {
@@ -411,30 +411,30 @@ Get full product details including specs, stock levels, reviews, and rating dist
 }
 ```
 
-**Errors**
-- `404` Product not found
+**错误**
+- `404` 商品不存在
 
 ---
 
-## Orders
+## 订单
 
 ### GET /api/orders
 
-List the authenticated user's orders. Filterable by status.
+列出已认证用户的订单，可按状态筛选。
 
-| Field | Value |
+| 字段 | 取值 |
 |-------|-------|
-| Auth  | JWT Required |
+| 认证  | 需要 JWT |
 
-**Query Parameters**
+**查询参数**
 
-| Parameter | Type   | Default | Description |
+| 参数      | 类型   | 默认值  | 说明 |
 |-----------|--------|---------|-------------|
-| `status`  | string | -       | Filter by status: placed, confirmed, shipped, out_for_delivery, delivered, cancelled, returned |
-| `limit`   | int    | `20`    | Page size |
-| `offset`  | int    | `0`     | Pagination offset |
+| `status`  | string | -       | 按状态筛选：placed、confirmed、shipped、out_for_delivery、delivered、cancelled、returned |
+| `limit`   | int    | `20`    | 每页数量 |
+| `offset`  | int    | `0`     | 分页偏移量 |
 
-**Response** `200`
+**响应** `200`
 
 ```json
 {
@@ -457,13 +457,13 @@ List the authenticated user's orders. Filterable by status.
 
 ### GET /api/orders/{order_id}
 
-Get full order details including line items, status history, shipping address, and return info.
+获取订单的完整详情，包括订单项、状态历史、收货地址以及退货信息。
 
-| Field | Value |
+| 字段 | 取值 |
 |-------|-------|
-| Auth  | JWT Required |
+| 认证  | 需要 JWT |
 
-**Response** `200`
+**响应** `200`
 
 ```json
 {
@@ -511,7 +511,7 @@ Get full order details including line items, status history, shipping address, a
 }
 ```
 
-When a return exists, the `return` field contains:
+当存在退货时，`return` 字段的内容为：
 
 ```json
 {
@@ -525,22 +525,22 @@ When a return exists, the `return` field contains:
 }
 ```
 
-**Errors**
-- `404` Order not found or doesn't belong to the user
+**错误**
+- `404` 订单不存在或不属于当前用户
 
 ---
 
-## Profile
+## 个人资料
 
 ### GET /api/profile
 
-Get the authenticated user's profile, including loyalty tier benefits and activity counts.
+获取已认证用户的个人资料，包括会员等级权益与活动计数。
 
-| Field | Value |
+| 字段 | 取值 |
 |-------|-------|
-| Auth  | JWT Required |
+| 认证  | 需要 JWT |
 
-**Response** `200`
+**响应** `200`
 
 ```json
 {
@@ -561,22 +561,22 @@ Get the authenticated user's profile, including loyalty tier benefits and activi
 }
 ```
 
-**Errors**
-- `404` User not found
+**错误**
+- `404` 用户不存在
 
 ---
 
-## Marketplace
+## 智能体市场
 
 ### GET /api/marketplace/agents
 
-List all active agents in the marketplace catalog.
+列出市场中所有上架的活跃智能体。
 
-| Field | Value |
+| 字段 | 取值 |
 |-------|-------|
-| Auth  | JWT Required |
+| 认证  | 需要 JWT |
 
-**Response** `200`
+**响应** `200`
 
 ```json
 [
@@ -600,13 +600,13 @@ List all active agents in the marketplace catalog.
 
 ### POST /api/marketplace/request
 
-Submit an access request for a specific agent.
+为指定智能体提交访问申请。
 
-| Field | Value |
+| 字段 | 取值 |
 |-------|-------|
-| Auth  | JWT Required |
+| 认证  | 需要 JWT |
 
-**Request Body**
+**请求体**
 
 ```json
 {
@@ -616,7 +616,7 @@ Submit an access request for a specific agent.
 }
 ```
 
-**Response** `200` (pending approval)
+**响应** `200`（待审批）
 
 ```json
 {
@@ -627,7 +627,7 @@ Submit an access request for a specific agent.
 }
 ```
 
-**Response** `200` (auto-approved, when `requires_approval = false`)
+**响应** `200`（自动批准，当 `requires_approval = false` 时）
 
 ```json
 {
@@ -638,22 +638,22 @@ Submit an access request for a specific agent.
 }
 ```
 
-**Errors**
-- `404` Agent not found
-- `409` Pending request already exists for this agent
-- `409` User already has access to this agent
+**错误**
+- `404` 智能体不存在
+- `409` 该智能体已存在待处理的申请
+- `409` 用户已拥有该智能体的访问权限
 
 ---
 
 ### GET /api/marketplace/my-agents
 
-List agents the authenticated user has been granted access to.
+列出已认证用户已获授权访问的智能体。
 
-| Field | Value |
+| 字段 | 取值 |
 |-------|-------|
-| Auth  | JWT Required |
+| 认证  | 需要 JWT |
 
-**Response** `200`
+**响应** `200`
 
 ```json
 [
@@ -671,19 +671,19 @@ List agents the authenticated user has been granted access to.
 
 ---
 
-## Admin
+## 管理员
 
-All admin endpoints require `role: "admin"` in the JWT. Non-admin users receive `403 Admin access required`.
+所有管理员端点都要求 JWT 中携带 `role: "admin"`。非管理员用户会收到 `403 Admin access required`。
 
 ### GET /api/admin/requests
 
-List all pending access requests across all users.
+列出所有用户中待处理的访问申请。
 
-| Field | Value |
+| 字段 | 取值 |
 |-------|-------|
-| Auth  | Admin Only |
+| 认证  | 仅管理员 |
 
-**Response** `200`
+**响应** `200`
 
 ```json
 [
@@ -705,13 +705,13 @@ List all pending access requests across all users.
 
 ### POST /api/admin/requests/{request_id}/approve
 
-Approve a pending access request. Creates the corresponding `agent_permissions` record in a transaction.
+批准一条待处理的访问申请，并在同一事务中创建对应的 `agent_permissions` 记录。
 
-| Field | Value |
+| 字段 | 取值 |
 |-------|-------|
-| Auth  | Admin Only |
+| 认证  | 仅管理员 |
 
-**Request Body**
+**请求体**
 
 ```json
 {
@@ -719,9 +719,9 @@ Approve a pending access request. Creates the corresponding `agent_permissions` 
 }
 ```
 
-`admin_notes` is optional (defaults to empty string).
+`admin_notes` 为可选字段（默认为空字符串）。
 
-**Response** `200`
+**响应** `200`
 
 ```json
 {
@@ -730,21 +730,21 @@ Approve a pending access request. Creates the corresponding `agent_permissions` 
 }
 ```
 
-**Errors**
-- `404` Request not found
-- `409` Request already approved/denied
+**错误**
+- `404` 申请不存在
+- `409` 申请已被批准/拒绝
 
 ---
 
 ### POST /api/admin/requests/{request_id}/deny
 
-Deny a pending access request.
+拒绝一条待处理的访问申请。
 
-| Field | Value |
+| 字段 | 取值 |
 |-------|-------|
-| Auth  | Admin Only |
+| 认证  | 仅管理员 |
 
-**Request Body**
+**请求体**
 
 ```json
 {
@@ -752,7 +752,7 @@ Deny a pending access request.
 }
 ```
 
-**Response** `200`
+**响应** `200`
 
 ```json
 {
@@ -761,21 +761,21 @@ Deny a pending access request.
 }
 ```
 
-**Errors**
-- `404` Request not found
-- `409` Request already approved/denied
+**错误**
+- `404` 申请不存在
+- `409` 申请已被批准/拒绝
 
 ---
 
 ### GET /api/admin/usage
 
-Get aggregate usage statistics for the last 30 days, with per-agent breakdowns and a 7-day daily trend.
+获取最近 30 天的汇总使用统计，包含按智能体拆分的明细以及 7 天的每日趋势。
 
-| Field | Value |
+| 字段 | 取值 |
 |-------|-------|
-| Auth  | Admin Only |
+| 认证  | 仅管理员 |
 
-**Response** `200`
+**响应** `200`
 
 ```json
 {
@@ -827,20 +827,20 @@ Get aggregate usage statistics for the last 30 days, with per-agent breakdowns a
 
 ### GET /api/admin/audit
 
-Get a detailed audit log from `usage_logs` with associated `agent_execution_steps` for each entry.
+从 `usage_logs` 获取详细的审计日志，并为每条记录关联对应的 `agent_execution_steps`。
 
-| Field | Value |
+| 字段 | 取值 |
 |-------|-------|
-| Auth  | Admin Only |
+| 认证  | 仅管理员 |
 
-**Query Parameters**
+**查询参数**
 
-| Parameter | Type | Default | Description |
+| 参数 | 类型 | 默认值 | 说明 |
 |-----------|------|---------|-------------|
-| `limit`   | int  | `50`    | Page size (max 200) |
-| `offset`  | int  | `0`     | Pagination offset |
+| `limit`   | int  | `50`    | 每页数量（最大 200） |
+| `offset`  | int  | `0`     | 分页偏移量 |
 
-**Response** `200`
+**响应** `200`
 
 ```json
 {
@@ -877,13 +877,13 @@ Get a detailed audit log from `usage_logs` with associated `agent_execution_step
 }
 ```
 
-The `trace_id` field correlates with OpenTelemetry traces in the Aspire Dashboard, allowing drill-down from audit log to distributed traces.
+`trace_id` 字段与 Jaeger 中的 OpenTelemetry 追踪（trace）相关联，因此可以从审计日志下钻到分布式追踪。
 
 ---
 
-## Error Response Format
+## 错误响应格式
 
-All error responses follow FastAPI's standard format:
+所有错误响应都遵循 FastAPI 的标准格式：
 
 ```json
 {
@@ -891,19 +891,19 @@ All error responses follow FastAPI's standard format:
 }
 ```
 
-| Status Code | Meaning |
+| 状态码      | 含义 |
 |-------------|---------|
-| `401`       | Missing, expired, or invalid JWT |
-| `403`       | Insufficient permissions (e.g., non-admin accessing admin routes) |
-| `404`       | Resource not found or doesn't belong to the authenticated user |
-| `409`       | Conflict (duplicate email, duplicate access request, already resolved request) |
+| `401`       | JWT 缺失、已过期或无效 |
+| `403`       | 权限不足（例如非管理员访问管理员路由） |
+| `404`       | 资源不存在或不属于当前认证用户 |
+| `409`       | 冲突（邮箱重复、访问申请重复、申请已处理） |
 
 ---
 
-## Related
+## 相关文档
 
-- [`docs/architecture.md`](architecture.md) — how requests flow from browser through orchestrator to specialist agents
-- [`docs/database-schema.md`](database-schema.md) — the tables these endpoints read and write
-- [`docs/deployment.md`](deployment.md) — running the stack so endpoints are reachable
-- [`docs/frontend.md`](frontend.md) — how the Next.js client calls these endpoints
-- [Project README](../README.md)
+- [`docs/architecture.md`](architecture.md) — 请求如何从浏览器经编排器流向专业智能体
+- [`docs/database-schema.md`](database-schema.md) — 这些端点读写的数据库表
+- [`docs/deployment.md`](deployment.md) — 如何启动整个技术栈，使这些端点可被访问
+- [`docs/frontend.md`](frontend.md) — Next.js 客户端如何调用这些端点
+- [项目 README](../README.md)

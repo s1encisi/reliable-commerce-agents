@@ -1,10 +1,9 @@
-"""Orchestrator (Customer Support) — FastAPI entry point.
+"""编排器（客服）—— FastAPI 入口点。
 
-This is the main gateway for all client requests. Unlike specialist agents
-which use A2AAgentHost, the orchestrator is a full FastAPI app that handles
-auth, chat, marketplace, and admin endpoints.
+这是所有客户端请求的主网关。与使用 A2AAgentHost 的专业智能体不同，
+编排器是一个完整的 FastAPI 应用，处理认证、聊天、市场与管理端点。
 
-Run locally:
+本地运行：
     cd agents && uv run uvicorn orchestrator.main:app --port 8080 --reload
 """
 
@@ -28,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: telemetry + DB pool. Shutdown: close pool."""
+    """启动：遥测 + DB 连接池。关闭：关闭连接池。"""
     setup_telemetry("ecommerce.orchestrator")
     instrument_fastapi(app)
     await init_db_pool()
@@ -58,8 +57,8 @@ app.include_router(router)
 
 @app.exception_handler(ForeignKeyViolationError)
 async def stale_user_handler(request: Request, exc: ForeignKeyViolationError) -> JSONResponse:
-    # JWT carries a user_id that's no longer in the users table — typically
-    # after a DB reseed. Map to 401 so the frontend clears its token.
+    # JWT 携带的 user_id 已不在 users 表中 —— 通常发生在数据库重新播种之后。
+    # 映射为 401，以便前端清除其令牌。
     detail = str(exc)
     if "user_id" in detail:
         logger.warning("stale_jwt.fk_violation path=%s", request.url.path)
@@ -76,5 +75,5 @@ async def stale_user_handler(request: Request, exc: ForeignKeyViolationError) ->
 
 @app.get("/health")
 async def health() -> dict[str, str]:
-    """Health check endpoint."""
+    """健康检查端点。"""
     return {"status": "ok", "service": "orchestrator"}

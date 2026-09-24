@@ -1,4 +1,4 @@
-"""Apply reviewed incremental migrations without clearing existing data."""
+"""应用已审核的增量迁移，且不清除既有数据。"""
 
 import asyncio
 from pathlib import Path
@@ -26,7 +26,7 @@ async def migrate() -> None:
                 await conn.execute(
                     "INSERT INTO schema_migrations (name) VALUES ($1)", path.name
                 )
-                print(f"Applied {path.name}")
+                print(f"已应用 {path.name}")
     finally:
         await conn.close()
 

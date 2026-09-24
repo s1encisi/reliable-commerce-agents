@@ -1,33 +1,11 @@
-"""Redis-backed sliding-window rate limiting for the chat endpoints.
+"""聊天端点的 Redis 滑动窗口限流。
 
-Redis has been provisioned in ``docker-compose.yml`` and ``REDIS_URL``
-declared in ``shared/config.py`` since early in this project, but nothing
-in ``agents/python`` ever actually used it — an agentic chat endpoint with
-no rate limit at all is an open door for cost abuse (each turn can trigger
-several LLM calls) and, since ``POST /api/chat``/``POST /api/chat/stream``
-allow anonymous storefront traffic (``Depends(optional_auth)``), a single
-IP with no account can hit them without limit.
+匿名店铺请求也可能触发多次模型调用，因此按用户或 IP 限制请求量。
+每个键使用有序集合保存时间戳；Lua 脚本原子清理过期项、计数并在
+未超限时记录请求，避免分离读写产生并发穿透。
 
-Algorithm: a sliding-window log per key, implemented with a Redis sorted
-set — each request adds a member scored by its own timestamp, then the
-window is trimmed (``ZREMRANGEBYSCORE``) and counted (``ZCARD``) atomically
-via a Lua script (``EVAL``), so concurrent requests against the same key
-can't race past the limit between separate read/write round trips the way
-a naive GET-check-then-INCR would. This is the same sliding-window-log
-shape a hand-rolled implementation of `redis-py`'s own rate-limiting
-recipes uses; kept in-repo rather than pulled from a library so the
-mechanism is fully visible, matching this repo's self-contained-teaching
-principle.
-
-Usage — a FastAPI dependency, added alongside ``Depends(optional_auth)``
-on a route::
-
-    @router.post("/api/chat")
-    async def chat(
-        body: ChatRequest,
-        user: dict = Depends(optional_auth),
-        _: None = Depends(rate_limit_chat),
-    ) -> ChatResponse: ...
+作为 FastAPI 依赖，与 optional_auth 一同挂到 /api/chat 和
+/api/chat/stream；具体限额由配置提供。
 """
 
 from __future__ import annotations
@@ -43,16 +21,16 @@ from shared.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Lua script for an atomic sliding-window check-and-record:
-#   KEYS[1]  = the rate-limit key (e.g. "ratelimit:chat:user:<id>")
-#   ARGV[1]  = current time in milliseconds
-#   ARGV[2]  = window size in milliseconds
-#   ARGV[3]  = max requests allowed in the window
-#   ARGV[4]  = a unique member id for this request (avoids score collisions
-#              when two requests land in the same millisecond)
-# Trims expired entries, counts what's left, and — only if under the limit
-# — records this request, all in one round trip so no other client can
-# slip a request in between the count and the record.
+# 原子检查并记录滑动窗口的 Lua 脚本。
+# KEYS[1]：限流键，例如 ratelimit:chat:user:<id>。
+# ARGV[1]：当前毫秒时间戳。
+# ARGV[2]：窗口毫秒数。
+# ARGV[3]：窗口最大请求数。
+# ARGV[4]：本请求唯一成员标识，
+# 防止同一毫秒到达的请求相互覆盖。
+# 清理过期项、统计数量，未超限才新增记录。
+# 全部在一次原子操作中完成，
+# 避免其他客户端插入检查与记录之间。
 _SLIDING_WINDOW_SCRIPT = """
 local key = KEYS[1]
 local now_ms = tonumber(ARGV[1])
@@ -76,7 +54,7 @@ _redis_client: redis.Redis | None = None
 
 
 def get_redis_client() -> redis.Redis:
-    """Lazily construct the shared async Redis client (one per process)."""
+    """按需创建每进程共享的异步 Redis 客户端。"""
     global _redis_client
     if _redis_client is None:
         _redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
@@ -84,7 +62,7 @@ def get_redis_client() -> redis.Redis:
 
 
 class RateLimitExceededError(Exception):
-    """Raised by ``check_rate_limit`` — callers translate to an HTTP response."""
+    """限流检查抛出的异常，由调用方转换为 HTTP 响应。"""
 
     def __init__(self, retry_after_s: float) -> None:
         self.retry_after_s = retry_after_s
@@ -98,7 +76,7 @@ async def check_rate_limit(
     max_requests: int,
     window_s: float,
 ) -> None:
-    """Raise ``RateLimitExceededError`` if ``key`` has hit ``max_requests`` in the trailing ``window_s``."""
+    """key 在最近 window_s 内达到 max_requests 时抛出 RateLimitExceededError。"""
     now_ms = time.time() * 1000
     window_ms = window_s * 1000
     member = f"{now_ms}:{uuid.uuid4().hex[:8]}"
@@ -117,12 +95,10 @@ async def check_rate_limit(
 
 
 def _client_ip(request: Request) -> str:
-    """Best-effort client IP — trust X-Forwarded-For only because every
-    deployment of this repo (docker-compose, the local dev stack) puts the
-    orchestrator behind its own reverse proxy or is accessed directly; a
-    production deployment fronted by an untrusted proxy chain would need
-    to validate this against a configured trusted-proxy list instead of
-    taking the header at face value.
+    """尽可能获取客户端 IP。
+
+    当前实现信任 X-Forwarded-For，适用于由可信反向代理提供该头的环境。
+    生产部署必须核对可信代理链；不能把任意客户端可伪造的请求头当作身份。
     """
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
@@ -131,27 +107,21 @@ def _client_ip(request: Request) -> str:
 
 
 async def rate_limit_chat(request: Request) -> None:
-    """FastAPI dependency: rate-limit ``/api/chat*`` by user id, or by IP for anonymous traffic.
+    """FastAPI 聊天限流依赖：登录用户按用户标识，匿名请求按 IP。
 
-    A no-op when ``RATE_LIMIT_ENABLED`` is false. Fails open (logs and lets
-    the request through) if Redis itself is unreachable — an outage of the
-    rate limiter must not take down chat entirely, the same trade-off
-    ``shared/guardrails/`` makes for its own dependencies. This is
-    deliberately NOT the same posture as ``shared/hitl.py``'s approval
-    record write, which fails closed — that gate protects an irreversible
-    money-moving action; this one protects capacity, where refusing
-    legitimate traffic during a Redis blip is worse than letting a burst
-    through until Redis recovers.
+    RATE_LIMIT_ENABLED=False 时不处理。Redis 不可达时记录并放行，
+    避免限流依赖故障导致聊天整体不可用。这与审批记录写入失败时拒绝
+    执行的策略不同：容量保护和敏感写操作承担不同风险。
     """
     if not settings.RATE_LIMIT_ENABLED:
         return
 
-    # Populated by optional_auth/require_auth, which always run before this
-    # dependency in the route's dependency list (FastAPI resolves them in
-    # declaration order) — read the identity straight off the request state
-    # rather than depending on the auth dependency's return value directly,
-    # so this stays a single, reorderable dependency instead of needing to
-    # thread `user` through every route that wants rate limiting.
+    # 身份由前置 optional_auth 或 require_auth 依赖写入请求状态。
+    # 路由声明须让身份依赖先执行，
+    # 本依赖再直接读取请求状态，
+    # 不依赖认证函数返回值的显式传递。
+    # 这样限流保持为一个独立依赖，
+    # 无需在每个路由里额外传入 user。
     from shared.context import current_user_email
 
     user_email = current_user_email.get()

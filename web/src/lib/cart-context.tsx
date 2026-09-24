@@ -37,11 +37,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       const data = await api.getCart();
       setCart(data);
     } catch {
-      // Silently fail — cart is non-critical
+      // 静默失败——购物车并非关键路径
     }
   }, [isAuthenticated]);
 
-  // Load cart when auth changes
+  // 登录状态变化时加载购物车
   useEffect(() => {
     if (isAuthenticated) {
       setIsLoading(true);
@@ -96,7 +96,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 export function useCart(): CartContextValue {
   const ctx = useContext(CartContext);
   if (!ctx) {
-    throw new Error("useCart must be used within a CartProvider");
+    throw new Error("useCart 必须在 CartProvider 内使用");
   }
   return ctx;
 }

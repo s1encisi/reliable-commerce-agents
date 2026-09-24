@@ -1,11 +1,10 @@
 """
-MAF v1 — Chapter 12: Sequential Orchestration (Python)
+MAF v1 — 第 12 章：顺序编排（Python）
 
-SequentialBuilder chains agents: each one sees the full conversation so far
-and adds its turn. Classic 3-step article pipeline: Writer → Reviewer →
-Finalizer.
+SequentialBuilder 把智能体串成链：每个智能体都能看到目前为止的完整对话，
+并在其上追加自己的一轮。经典的三步文章流水线：撰写者 → 评审者 → 定稿者。
 
-Run:
+运行：
     python tutorials/12-sequential-orchestration/python/main.py "quantum computing basics"
 """
 
@@ -47,9 +46,9 @@ def _default_client() -> OpenAIChatClient | OpenAIChatCompletionClient | ReplayC
     return OpenAIChatClient(
         model=os.environ.get("LLM_MODEL", "gpt-4.1"),
         api_key=os.environ["OPENAI_API_KEY"],
-        # Phase 9: any OpenAI-compatible endpoint (GitHub Models, OpenRouter,
-        # vLLM, LM Studio, Ollama) instead of api.openai.com — see
-        # tutorials/00-setup/README.md's "Don't have a paid API key?" section.
+        # 阶段 9：可改用任意 OpenAI 兼容端点（GitHub Models、OpenRouter、
+        # vLLM、LM Studio、Ollama）替代 api.openai.com —— 见
+        # tutorials/00-setup/README.md 的「没有付费 API 密钥？两条路」一节。
         base_url=os.environ.get("LLM_BASE_URL") or None,
     )
 
@@ -89,26 +88,25 @@ def build_workflow():
 
 
 async def _workflow_events(workflow, message: str):
-    """Yield workflow events from a streaming run.
+    """从一次流式运行中产出工作流事件。
 
-    ``workflow.run(..., stream=True)`` drives each participant's turn through
-    MAF's streaming AgentExecutor path, which in turn streams the chat
-    client's response. ``ReplayChatClient`` (see
-    tutorials/_shared/replay_client.py) wires the same finalizer real clients
-    use, so replay mode streams correctly through this same path — no
-    provider-specific branch needed here.
+    ``workflow.run(..., stream=True)`` 会通过 MAF 的流式 AgentExecutor 路径
+    驱动每个参与者的一轮，而该路径又对流式聊天客户端的响应进行流转。
+    ``ReplayChatClient``（见 tutorials/_shared/replay_client.py）接上了真实
+    客户端所用的同一个收尾器，因此回放模式能沿着这条相同路径正确流式输出 ——
+    这里无需针对特定提供方写分支。
     """
     async for event in workflow.run(message, stream=True):
         yield event
 
 
 async def run(topic: str) -> list[str]:
-    """Run the Sequential pipeline and return each agent's response text in order."""
+    """运行顺序执行流水线，按顺序返回每个智能体的响应文本。"""
     workflow = build_workflow()
     per_agent: dict[str, str] = {}
     async for event in _workflow_events(workflow, topic):
-        # Each agent's turn surfaces in an executor_completed event whose
-        # data is a list containing one AgentExecutorResponse.
+        # 每个智能体的一轮会出现在 executor_completed 事件里，其 data
+        # 是一个只含一个 AgentExecutorResponse 的列表。
         if getattr(event, "type", None) != "executor_completed":
             continue
         payload = getattr(event, "data", None)

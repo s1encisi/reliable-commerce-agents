@@ -1,10 +1,9 @@
-"""The default mode: orchestrator LLM calls ``call_specialist_agent`` per turn.
+"""默认模式：编排器 LLM 每轮调用 ``call_specialist_agent``。
 
-Wraps exactly what ``orchestrator/routes/chat.py``'s ``chat()`` did directly
-before this module existed — ``create_orchestrator_agent()`` +
-``_run_agent_native()`` — with no behavior change. The extraction is what
-makes it swappable for ``handoff`` (or, in later steps, a workflow) behind
-the same ``run()`` contract.
+它包装的正是本模块出现之前 ``orchestrator/routes/chat.py`` 的 ``chat()``
+所直接做的事 —— ``create_orchestrator_agent()`` + ``_run_agent_native()``
+—— 行为完全不变。这次抽取正是为了让 ``handoff``（或后续步骤中的工作流）
+能在同一个 ``run()`` 契约下被替换进来。
 """
 
 from __future__ import annotations
@@ -20,14 +19,11 @@ from .base import ModeCapabilities, RunContext
 
 class ToolRouterMode:
     name = "tool"
-    label = "Tool Router"
-    description = (
-        "The orchestrator LLM calls call_specialist_agent to route to a specialist. "
-        "Single-hop: one specialist per turn, decided by the model."
-    )
+    label = "工具路由"
+    description = "编排器 LLM 调用 call_specialist_agent 路由到某个专业智能体。单跳：每轮一个专业智能体，由模型决定。"
     capabilities = ModeCapabilities(
         streams=True,
-        supports_hitl=True,  # via shared/hitl.py's FunctionMiddleware, not in-workflow
+        supports_hitl=True,  # 经由 shared/hitl.py 的 FunctionMiddleware，而非工作流内
         supports_checkpoints=False,
         is_graph=False,
     )

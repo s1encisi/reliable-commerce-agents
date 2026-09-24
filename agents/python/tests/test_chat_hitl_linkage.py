@@ -1,11 +1,7 @@
-"""Phase 1.5 — chat.py links a paused workflow:return-replace run to its
-usage_logs row and a hitl_requests row.
+"""暂停的退货工作流与运行日志、审批及检查点关联测试。
 
-Real Postgres (clean_db). Exercises the real /api/chat handler end to
-end: a high-value return pauses, and afterward the DB has exactly what
-POST /api/orchestration/{run_id}/resume will need — a hitl_requests row
-carrying request_id + checkpoint_id, and workflow_checkpoints.usage_log_id
-pointing back at the run.
+驱动真实 /api/chat 和隔离数据库，确保暂停后保存恢复所需的
+request_id、checkpoint_id 及 usage_log_id。
 """
 
 from __future__ import annotations
@@ -115,9 +111,7 @@ async def test_chat_persists_hitl_request_and_links_checkpoint_on_pause(
 async def test_chat_does_not_create_hitl_request_for_completed_tool_mode_run(
     clean_db, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Sanity check that _link_run_artifacts is a true no-op for the
-    overwhelmingly common case — a plain "tool" mode turn must not leave
-    any hitl_requests/checkpoint linkage behind."""
+    """普通 tool 模式不应创建审批请求或检查点关联。"""
     from agent_framework import (
         Agent,
         BaseChatClient,
@@ -185,20 +179,11 @@ async def test_chat_does_not_create_hitl_request_for_completed_tool_mode_run(
 
 @pytest.mark.asyncio
 async def test_stream_names_the_run_and_flags_a_pause_before_done(clean_db, monkeypatch: pytest.MonkeyPatch) -> None:
-    """``/api/chat/stream`` emits ``event: run`` carrying the run's id.
+    """聊天流必须发送携带真实运行标识的 run 事件。
 
-    Without it the chat thread cannot offer an approval at all: resuming
-    needs ``POST /api/orchestration/{run_id}/resume``, and until this frame
-    existed the only id the client ever learned was ``conversation_id``. The
-    user who caused the pause had to know a separate ``/runs`` page existed
-    and find their run on it — a pause the pauser cannot see is
-    indistinguishable from a hang.
-
-    The frame cannot be folded into ``event: metadata``: the run id *is* the
-    ``usage_logs`` row, which is written during persistence, several frames
-    after ``metadata`` has already gone out. So this asserts ordering as well
-    as content — the frame must land before ``[DONE]``, because ``[DONE]`` is
-    when the client stops reading.
+    恢复路径需要 run_id，仅有 conversation_id 无法在聊天中审批。
+    运行日志在 metadata 之后才持久化，因此单独发送该帧，且必须早于
+    客户端停止读取的 [DONE]。测试同时断言内容与顺序。
     """
     import orchestrator.modes as modes_module
     import order_management.tools as order_tools
@@ -243,9 +228,9 @@ async def test_stream_names_the_run_and_flags_a_pause_before_done(clean_db, monk
     payload = json.loads(raw[run_index:].split("data: ", 1)[1].split("\n\n", 1)[0])
     assert payload["pending_approval"] is True
 
-    # The id must be the one the resume route will look up, not an invented
-    # correlation id — asserting it against the hitl_requests row is what
-    # makes this a contract test rather than a shape test.
+    # 标识必须对应恢复路由可查询的真实记录，
+    # 通过与 hitl_requests 对照，
+    # 验证实际契约而不仅是字段形态。
     hitl_row = await clean_db.fetchrow(
         "SELECT workflow_run_id FROM hitl_requests WHERE user_email = $1", "run-frame@example.com"
     )
@@ -257,11 +242,9 @@ async def test_stream_names_the_run_and_flags_a_pause_before_done(clean_db, monk
 async def test_stream_run_frame_reports_no_pause_for_an_ordinary_turn(
     clean_db, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Every mode emits the frame, but only a real pause sets the flag.
+    """所有模式都发送运行帧，只有真正暂停才设置暂停标志。
 
-    Emitting it only on pause would make its absence ambiguous — a client
-    could not tell "this run did not pause" from "this run's id never
-    arrived", and would have to poll /runs to find out.
+    否则缺少事件无法区分没有暂停和运行标识丢失。
     """
     from agent_framework import (
         Agent,

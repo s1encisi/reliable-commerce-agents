@@ -1,11 +1,11 @@
 """
-MAF v1 — Chapter 11: Agents in Workflows (Python)
+MAF v1 — 第 11 章：工作流中的智能体（Python）
 
-Wrap a ChatClientAgent as an executor inside a workflow. Two agent-
-executors chained: English → French → Spanish. Each agent is a real
-LLM call; the workflow coordinates their inputs/outputs.
+把一个 Agent 包装成工作流里的执行器。两个智能体执行器串联：
+英语 → 法语 → 西班牙语。每个智能体都是一次真实的 LLM 调用；工作流负责
+协调它们的输入与输出。
 
-Run:
+运行：
     python tutorials/11-agents-in-workflows/python/main.py "Hello world"
 """
 
@@ -39,12 +39,11 @@ FIXTURES_DIR = pathlib.Path(__file__).resolve().parent / "tests" / "fixtures" / 
 def _default_client() -> OpenAIChatClient | OpenAIChatCompletionClient | ReplayChatClient:
     provider = os.environ.get("LLM_PROVIDER", "openai").lower()
     if provider == "replay":
-        # ReplayChatClient's streaming branch wires the same finalizer real
-        # clients use (BaseChatClient._build_response_stream), which is what
-        # this chapter's workflow-level streaming (translate() below calls
-        # workflow.run(..., stream=True), driving each AgentExecutor via
-        # agent.run(stream=True)) needs to collapse updates back into a
-        # ChatResponse via get_final_response().
+        # ReplayChatClient 的流式分支接上了真实客户端所用的同一个收尾器
+        # （BaseChatClient._build_response_stream）—— 本章的工作流级流式输出
+        # （下方 translate() 调用 workflow.run(..., stream=True)，进而通过
+        # agent.run(stream=True) 驱动每个 AgentExecutor）正需要它把增量更新
+        # 折叠回一个 ChatResponse，再由 get_final_response() 取出。
         return ReplayChatClient(
             fixtures_dir=FIXTURES_DIR,
             record=os.environ.get("RECORD", "").lower() in ("1", "true", "yes"),
@@ -60,9 +59,9 @@ def _default_client() -> OpenAIChatClient | OpenAIChatCompletionClient | ReplayC
     return OpenAIChatClient(
         model=os.environ.get("LLM_MODEL", "gpt-4.1"),
         api_key=os.environ["OPENAI_API_KEY"],
-        # Phase 9: any OpenAI-compatible endpoint (GitHub Models, OpenRouter,
-        # vLLM, LM Studio, Ollama) instead of api.openai.com — see
-        # tutorials/00-setup/README.md's "Don't have a paid API key?" section.
+        # 阶段 9：可改用任意 OpenAI 兼容端点（GitHub Models、OpenRouter、
+        # vLLM、LM Studio、Ollama）替代 api.openai.com —— 见
+        # tutorials/00-setup/README.md 的「没有付费 API 密钥？两条路」一节。
         base_url=os.environ.get("LLM_BASE_URL") or None,
     )
 
@@ -79,7 +78,7 @@ def translator(target_language: str, name: str) -> Agent:
 
 
 class InputAdapter(Executor):
-    """Converts the workflow input (a plain string) into an AgentExecutorRequest."""
+    """把工作流输入（一个普通字符串）转换成 AgentExecutorRequest。"""
 
     def __init__(self) -> None:
         super().__init__(id="input-adapter")
@@ -95,7 +94,7 @@ class InputAdapter(Executor):
 
 
 class OutputAdapter(Executor):
-    """Unwraps the final AgentExecutorResponse into a plain string output."""
+    """把最终的 AgentExecutorResponse 解包成一个普通字符串输出。"""
 
     def __init__(self) -> None:
         super().__init__(id="output-adapter")

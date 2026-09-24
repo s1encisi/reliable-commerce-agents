@@ -1,4 +1,4 @@
-"""Order Management agent definition."""
+"""订单管理（order management）智能体定义。"""
 
 from agent_framework import Agent
 
@@ -57,7 +57,7 @@ AGENT_TOOLS = [
 
 
 def create_order_management_agent() -> Agent:
-    """Create the Order Management ChatAgent with all tools."""
+    """创建带全部工具的订单管理 ChatAgent。"""
     return Agent(
         client=create_chat_client(),
         name="order-management",

@@ -1,23 +1,13 @@
-"""RFC 9068 JWT access-token generator for the self-hosted OAuth2 AS.
+"""自托管 OAuth2 授权服务器的 RFC 9068 JWT 访问令牌生成器。
 
-Subclasses authlib's own RFC 9068 implementation
-(``authlib.oauth2.rfc9068.JWTBearerTokenGenerator``) rather than hand-rolling
-a token generator — the base class already builds a spec-compliant claim
-set (iss/exp/client_id/iat/jti/scope/sub/aud, ``typ=at+jwt`` header). This
-subclass adds the two things the base class doesn't do:
+继承 authlib.oauth2.rfc9068.JWTBearerTokenGenerator，复用标准声明集合
+iss/exp/client_id/iat/jti/scope/sub/aud 和 typ=at+jwt 头。补充两项能力：
 
-1. Stamps the active signing key's ``kid`` into the JWS header. The base
-   class's ``access_token_generator`` hard-codes ``{"alg": ..., "typ": ...}``
-   with no extension point for ``kid`` — required so a resource server
-   holding multiple JWKS keys (post-rotation) can pick the right one, so
-   this overrides the method wholesale rather than patching one line.
-2. Maps requested scopes to their resource audiences (``mcp:product`` ->
-   ``mcp-product``, etc.) and adds two custom claims for user-issued (ROPC)
-   tokens, read from the ``User`` wrapper in ``grants.py``: ``role`` (RBAC)
-   and ``user_id`` (the `users.id` UUID — ~18 orchestrator routes read this
-   directly off the token payload; without it every one of them 500s on an
-   empty-string UUID query, since the OAuth ``sub`` claim is email, not the
-   DB primary key).
+1. 在 JWS 头中写入当前签名密钥的 kid。基类没有对应扩展点，因此重写
+   生成方法，让资源服务器在密钥轮换后能从 JWKS 中选出正确密钥。
+2. 将范围映射到资源受众，如 mcp:product 对应 mcp-product。用户令牌
+   另从 grants.py 的 User 对象写入 role 与 user_id。编排器路由需要
+   数据库 UUID 作为 user_id；OAuth 的 sub 是邮箱，不能替代主键。
 """
 
 from __future__ import annotations
@@ -32,20 +22,20 @@ from shared.config import settings
 
 
 def _scope_audience_map() -> dict[str, str]:
-    """Scope -> audience, driven by settings so custom overrides are honored."""
+    """根据配置把权限范围映射为受众，尊重自定义覆盖值。"""
     return {
         "api:chat": settings.AUTH_ORCH_AUDIENCE,
         "agent:invoke": settings.AUTH_AGENT_AUDIENCE,
         settings.MCP_PRODUCT_REQUIRED_SCOPE: settings.MCP_PRODUCT_AUDIENCE,
         settings.MCP_INVENTORY_REQUIRED_SCOPE: settings.MCP_INVENTORY_AUDIENCE,
-        # The AS is its own protected resource for the (optional, gated)
-        # dynamic client registration endpoint — see auth_server/register.py.
+        # 授权服务器自身也是可选动态注册端点的受保护资源。
+        # 该入口受开关约束，详见 auth_server/register.py。
         "client:register": settings.AUTH_SERVER_AUDIENCE,
     }
 
 
 class AccessTokenGenerator(JWTBearerTokenGenerator):
-    """RS256 JWT access tokens carrying our ``kid`` header and ``role`` claim."""
+    """带 kid 头和 role 声明的 RS256 JWT 访问令牌。"""
 
     def __init__(self, issuer: str, kid: str, signing_key: RSAKey, refresh_token_generator=None):
         super().__init__(issuer=issuer, alg="RS256", refresh_token_generator=refresh_token_generator)
@@ -72,7 +62,7 @@ class AccessTokenGenerator(JWTBearerTokenGenerator):
         return claims
 
     def access_token_generator(self, client, grant_type, user, scope):
-        """Rebuild the RFC 9068 claim set, adding ``kid`` to the JWS header."""
+        """重建 RFC 9068 声明集合，并在 JWS 头中加入 kid。"""
         now = int(time.time())
         expires_in = now + self._get_expires_in(client, grant_type)
 

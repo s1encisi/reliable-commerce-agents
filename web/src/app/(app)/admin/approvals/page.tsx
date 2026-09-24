@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
-// Types
+// 类型
 // ---------------------------------------------------------------------------
 
 type HitlRequest = {
@@ -38,39 +38,39 @@ type HitlRequest = {
 };
 
 // ---------------------------------------------------------------------------
-// Helpers
+// 辅助函数
 // ---------------------------------------------------------------------------
 
 const TOOL_LABELS: Record<string, string> = {
-  cancel_order: "Cancel Order",
-  process_refund: "Process Refund",
-  initiate_return: "Initiate Return",
-  modify_order: "Modify Order",
-  place_backorder: "Place Backorder",
+  cancel_order: "取消订单",
+  process_refund: "处理退款",
+  initiate_return: "发起退货",
+  modify_order: "修改订单",
+  place_backorder: "下单补货",
 };
 
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   pending: {
-    label: "Pending",
+    label: "待审批",
     className: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-400",
   },
   approved: {
-    label: "Approved",
+    label: "已批准",
     className: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400",
   },
   executed: {
-    label: "Executed",
+    label: "已执行",
     className: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400",
   },
   denied: {
-    label: "Denied",
+    label: "已拒绝",
     className: "border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-400",
   },
 };
 
 function formatTs(iso: string): string {
   try {
-    return new Date(iso).toLocaleString("en-US", {
+    return new Date(iso).toLocaleString("zh-CN", {
       month: "short",
       day: "numeric",
       hour: "2-digit",
@@ -84,21 +84,21 @@ function formatTs(iso: string): string {
 function inputSummary(tool: string, input: Record<string, unknown>): string {
   if (tool === "cancel_order" || tool === "process_refund" || tool === "modify_order") {
     const id = String(input.order_id ?? "").slice(0, 8);
-    const reason = input.reason ? ` — "${input.reason}"` : "";
-    return `Order #${id}${reason}`;
+    const reason = input.reason ? ` —— 「${input.reason}」` : "";
+    return `订单 #${id}${reason}`;
   }
   if (tool === "initiate_return") {
     const id = String(input.order_id ?? "").slice(0, 8);
-    return `Order #${id}`;
+    return `订单 #${id}`;
   }
   if (tool === "place_backorder") {
-    return `Product #${String(input.product_id ?? "").slice(0, 8)}`;
+    return `商品 #${String(input.product_id ?? "").slice(0, 8)}`;
   }
   return JSON.stringify(input).slice(0, 60);
 }
 
 // ---------------------------------------------------------------------------
-// Page
+// 页面
 // ---------------------------------------------------------------------------
 
 export default function AdminApprovalsPage() {
@@ -120,7 +120,7 @@ export default function AdminApprovalsPage() {
       const data = await api.getHitlRequests(filter === "pending" ? "pending" : undefined);
       setRequests(data?.requests ?? []);
     } catch {
-      toast.error("Failed to load approval requests");
+      toast.error("审批请求加载失败");
     } finally {
       setLoading(false);
     }
@@ -136,17 +136,17 @@ export default function AdminApprovalsPage() {
       const result = await api.approveHitlRequest(req.id);
       const execResult = result?.execution_result as Record<string, unknown> | undefined;
       const success = execResult?.success;
-      const msg = String(execResult?.message ?? "Action approved and executed.");
+      const msg = String(execResult?.message ?? "操作已批准并执行。");
       if (success) {
-        toast.success(`Approved: ${TOOL_LABELS[req.tool_name] ?? req.tool_name}`, {
+        toast.success(`已批准：${TOOL_LABELS[req.tool_name] ?? req.tool_name}`, {
           description: msg,
         });
       } else {
-        toast(`Approved — but execution issue`, { description: msg });
+        toast(`已批准 —— 但执行出现问题`, { description: msg });
       }
       await load();
     } catch {
-      toast.error("Failed to approve request");
+      toast.error("批准请求失败");
     } finally {
       setProcessing((p) => {
         const next = new Set(p);
@@ -160,10 +160,10 @@ export default function AdminApprovalsPage() {
     setProcessing((p) => new Set(p).add(req.id));
     try {
       await api.denyHitlRequest(req.id);
-      toast(`Denied: ${TOOL_LABELS[req.tool_name] ?? req.tool_name}`);
+      toast(`已拒绝：${TOOL_LABELS[req.tool_name] ?? req.tool_name}`);
       await load();
     } catch {
-      toast.error("Failed to deny request");
+      toast.error("拒绝请求失败");
     } finally {
       setProcessing((p) => {
         const next = new Set(p);
@@ -182,8 +182,8 @@ export default function AdminApprovalsPage() {
           <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-destructive/10">
             <ShieldAlert className="size-8 text-destructive" />
           </div>
-          <h2 className="mt-4 text-lg font-semibold">Access Denied</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Admin privileges required.</p>
+          <h2 className="mt-4 text-lg font-semibold">无权访问</h2>
+          <p className="mt-1 text-sm text-muted-foreground">需要管理员权限。</p>
         </div>
       </div>
     );
@@ -193,7 +193,7 @@ export default function AdminApprovalsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
+      {/* 页头 */}
       <div className="border-b bg-card">
         <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between gap-4">
@@ -203,15 +203,15 @@ export default function AdminApprovalsPage() {
               </div>
               <div>
                 <h1 className="text-xl font-bold">
-                  Approval Queue
+                  审批队列
                   {pendingCount > 0 && (
                     <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-sm font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-400">
-                      {pendingCount} pending
+                      {pendingCount} 项待处理
                     </span>
                   )}
                 </h1>
                 <p className="text-sm text-muted-foreground">
-                  Human-in-the-loop approval for high-stakes agent actions
+                  高风险智能体操作的人工审批（Human-in-the-loop）
                 </p>
               </div>
             </div>
@@ -222,31 +222,31 @@ export default function AdminApprovalsPage() {
                     key={f}
                     type="button"
                     onClick={() => setFilter(f)}
-                    className={`px-3 py-1.5 text-xs font-medium capitalize transition-colors first:rounded-l-lg last:rounded-r-lg ${
+                    className={`px-3 py-1.5 text-xs font-medium transition-colors first:rounded-l-lg last:rounded-r-lg ${
                       filter === f
                         ? "bg-primary text-primary-foreground"
                         : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    {f}
+                    {f === "pending" ? "待处理" : "全部"}
                   </button>
                 ))}
               </div>
               <Button variant="outline" size="sm" onClick={load} className="gap-1.5">
                 <RefreshCw className="size-3.5" />
-                Refresh
+                刷新
               </Button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Content */}
+      {/* 内容区 */}
       <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
         {loading && (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="size-5 animate-spin text-primary" />
-            <span className="ml-2 text-sm text-muted-foreground">Loading…</span>
+            <span className="ml-2 text-sm text-muted-foreground">加载中…</span>
           </div>
         )}
 
@@ -254,10 +254,10 @@ export default function AdminApprovalsPage() {
           <div className="py-20 text-center">
             <CheckCircle className="mx-auto size-12 text-emerald-500" />
             <p className="mt-3 text-sm font-medium text-foreground">
-              {filter === "pending" ? "No pending approvals" : "No requests yet"}
+              {filter === "pending" ? "暂无待审批项" : "暂无请求"}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              High-stakes agent actions (cancel orders, refunds, returns) will appear here.
+              高风险智能体操作（取消订单、退款、退货）将在此显示。
             </p>
           </div>
         )}
@@ -275,7 +275,7 @@ export default function AdminApprovalsPage() {
                   className="rounded-xl bg-card ring-1 ring-foreground/10"
                 >
                   <div className="flex items-start gap-4 p-4">
-                    {/* Icon */}
+                    {/* 图标 */}
                     <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted">
                       {isPending ? (
                         <Clock className="size-4 text-amber-500" />
@@ -286,7 +286,7 @@ export default function AdminApprovalsPage() {
                       )}
                     </div>
 
-                    {/* Main content */}
+                    {/* 主体内容 */}
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-semibold text-sm">
@@ -297,12 +297,12 @@ export default function AdminApprovalsPage() {
                         </Badge>
                       </div>
 
-                      {/* Summary */}
+                      {/* 摘要 */}
                       <p className="mt-1 text-sm text-muted-foreground">
                         {inputSummary(req.tool_name, req.tool_input)}
                       </p>
 
-                      {/* Meta row */}
+                      {/* 元信息 */}
                       <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <User className="size-3" />
@@ -314,24 +314,24 @@ export default function AdminApprovalsPage() {
                         </span>
                         <span>{formatTs(req.created_at)}</span>
                         {req.resolved_at && (
-                          <span>→ resolved {formatTs(req.resolved_at)}</span>
+                          <span>→ 已于 {formatTs(req.resolved_at)} 处理</span>
                         )}
                         {req.approved_by && (
-                          <span>by {req.approved_by}</span>
+                          <span>由 {req.approved_by} 处理</span>
                         )}
                       </div>
 
-                      {/* Tool input detail */}
+                      {/* 工具输入详情 */}
                       <details className="mt-2">
                         <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
-                          Show input
+                          查看输入参数
                         </summary>
                         <pre className="mt-1.5 max-h-32 overflow-auto rounded bg-muted/60 px-2 py-1.5 text-[10px] leading-relaxed text-foreground/70">
                           {JSON.stringify(req.tool_input, null, 2)}
                         </pre>
                       </details>
 
-                      {/* Execution result */}
+                      {/* 执行结果 */}
                       {req.execution_result && (
                         <div className="mt-2 rounded-md bg-emerald-50 px-3 py-1.5 text-xs text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
                           {String(req.execution_result.message ?? JSON.stringify(req.execution_result))}
@@ -339,7 +339,7 @@ export default function AdminApprovalsPage() {
                       )}
                     </div>
 
-                    {/* Action buttons */}
+                    {/* 操作按钮 */}
                     {isPending && (
                       <div className="flex shrink-0 gap-2">
                         <Button
@@ -354,7 +354,7 @@ export default function AdminApprovalsPage() {
                           ) : (
                             <XCircle className="size-3.5" />
                           )}
-                          Deny
+                          拒绝
                         </Button>
                         <Button
                           size="sm"
@@ -367,7 +367,7 @@ export default function AdminApprovalsPage() {
                           ) : (
                             <CheckCircle className="size-3.5" />
                           )}
-                          Approve
+                          批准
                         </Button>
                       </div>
                     )}

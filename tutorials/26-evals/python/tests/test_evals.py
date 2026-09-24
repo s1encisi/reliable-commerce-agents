@@ -1,10 +1,10 @@
 """
-Chapter 26 — Evals: tests.
+第 26 章 —— 智能体评估：测试。
 
-- Unit tests exercise the catalog tool and the two scorers directly (no LLM).
-- Agent-wiring test checks `search_catalog` is registered on the agent.
-- A replay test plays back committed fixtures for the full eval loop.
-- Integration tests hit the real LLM and assert deterministic scoring behavior.
+- 单元测试直接检验目录工具与两个打分器（不涉及 LLM）。
+- 智能体装配测试检验 `search_catalog` 已注册到智能体上。
+- 回放测试回放已提交的夹具，覆盖完整的评估循环。
+- 集成测试访问真实 LLM，并断言确定性打分的行为。
 """
 
 from __future__ import annotations
@@ -32,11 +32,11 @@ from main import (  # noqa: E402
     search_catalog,
 )
 
-# ─────────────────── Unit tests: catalog tool (no LLM) ──────────────────
+# ─────────────────── 单元测试：目录工具（不涉及 LLM） ──────────────────
 
 
 def test_search_catalog_returns_known_product() -> None:
-    result = search_catalog.func("Wireless Mouse")  # @tool exposes the original via __wrapped__
+    result = search_catalog.func("Wireless Mouse")  # @tool 通过 __wrapped__ 暴露原函数
     assert "24.99" in result and "42" in result and "in stock" in result
 
 
@@ -54,7 +54,7 @@ def test_search_catalog_is_case_insensitive() -> None:
     assert search_catalog.func("wireless mouse") == search_catalog.func("WIRELESS MOUSE")
 
 
-# ─────────────────── Unit tests: deterministic scorer (no LLM) ──────────────────
+# ─────────────────── 单元测试：确定性打分器（不涉及 LLM） ──────────────────
 
 
 def test_score_deterministic_full_match() -> None:
@@ -76,12 +76,12 @@ def test_score_deterministic_no_match() -> None:
 
 
 def test_score_deterministic_no_expected_facts_scores_perfect() -> None:
-    # A case with no checkable facts isn't ungrounded — it's just not asserting anything.
+    # 一个没有可核查事实的案例并非「无据」—— 它只是什么都没断言。
     result = score_deterministic("Hello!", [])
     assert result.score == 1.0
 
 
-# ─────────────────── Unit tests: judge stub (no LLM) ──────────────────
+# ─────────────────── 单元测试：评审桩（不涉及 LLM） ──────────────────
 
 
 def test_judge_response_stub_full_coverage() -> None:
@@ -102,34 +102,34 @@ def test_judge_response_stub_partial_coverage() -> None:
     assert verdict.failure_mode == "partial_coverage"
 
 
-# ─────────────────── Agent wiring ──────────────────
+# ─────────────────── 智能体装配 ──────────────────
 
 
 def test_agent_has_search_catalog_tool_registered() -> None:
-    agent = build_agent(client=object())  # client isn't called; we only inspect structure
+    agent = build_agent(client=object())  # 该 client 不会被调用，这里只看结构
     tool_names = [getattr(t, "name", None) for t in agent.default_options.get("tools") or []]
     assert "search_catalog" in tool_names
 
 
 def test_eval_cases_each_have_checkable_facts() -> None:
-    # A good eval case is a prompt PLUS a checkable fact, not just "does it sound right."
+    # 好的评估案例 = 提示词 + 可核查事实，而不只是「听起来对不对」。
     for case in EVAL_CASES:
         assert case.prompt
         assert len(case.expected_facts) >= 1
 
 
-# ─────────────────── Replay test (no credentials, runs in CI) ────
+# ─────────────────── 回放测试（无需凭据，可在 CI 中运行） ────
 
 
 @pytest.mark.asyncio
 async def test_replay_runs_full_eval_suite(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Plays back tests/fixtures/replay/ — no network, no credentials.
+    """回放 tests/fixtures/replay/ —— 不走网络、不需凭据。
 
-    Recorded once against a real LLM (test_real_llm_scores_all_cases_grounded
-    below, run with RECORD=true) and committed.
+    曾针对真实 LLM 录制过一次（即下方的 test_real_llm_scores_all_cases_grounded，
+    以 RECORD=true 运行），随后提交入库。
     """
     if not any(FIXTURES_DIR.glob("*.json")):
-        pytest.skip(f"no recorded fixtures in {FIXTURES_DIR} — run with RECORD=true first")
+        pytest.skip(f"{FIXTURES_DIR} 中没有已录制的夹具 —— 请先以 RECORD=true 运行")
     monkeypatch.setenv("LLM_PROVIDER", "replay")
     agent = build_agent()
     results = await run_eval_suite(agent)
@@ -138,7 +138,7 @@ async def test_replay_runs_full_eval_suite(monkeypatch: pytest.MonkeyPatch) -> N
         assert 0.0 <= r["det_score"] <= 1.0
 
 
-# ─────────────────── Real-LLM integration tests ────────────────
+# ─────────────────── 真实 LLM 集成测试 ────────────────
 
 
 def _llm_available() -> bool:
@@ -154,20 +154,20 @@ def _llm_available() -> bool:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-@pytest.mark.skipif(not _llm_available(), reason="no LLM credentials in .env")
+@pytest.mark.skipif(not _llm_available(), reason=".env 中没有 LLM 凭据")
 async def test_real_llm_scores_all_cases_grounded() -> None:
-    """The LLM should call search_catalog and surface the exact price/stock facts."""
+    """LLM 应当调用 search_catalog，并透出精确的价格 / 库存事实。"""
     agent = build_agent()
     results = await run_eval_suite(agent)
     failing = [r["case_id"] for r in results if r["det_score"] < 1.0]
-    assert not failing, f"cases missing expected facts: {failing}"
+    assert not failing, f"以下案例缺少期望事实：{failing}"
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-@pytest.mark.skipif(not _llm_available(), reason="no LLM credentials in .env")
+@pytest.mark.skipif(not _llm_available(), reason=".env 中没有 LLM 凭据")
 async def test_real_llm_answers_unrelated_question_without_catalog_data() -> None:
-    """A question with nothing to look up shouldn't leak canned catalog numbers."""
+    """一个没有任何东西可查的问题，不应泄漏预置的目录数字。"""
     agent = build_agent()
     answer = await ask(agent, "What is the capital of France? Answer with only the city name.")
     assert "paris" in answer.lower()

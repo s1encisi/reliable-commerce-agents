@@ -1,26 +1,10 @@
-"""Jev (TypeSafe System One) API client — standard library only.
+"""仅使用标准库的 Jev System One API 客户端。
 
-Wraps the single System One endpoint:
+请求 POST https://api.typesafe.ai/v1/systemone，并使用 Bearer 认证。
+评测在隔离子进程和固定依赖集运行，因此不为一次 HTTP 调用增加依赖。
 
-    POST https://api.typesafe.ai/v1/systemone
-    Authorization: Bearer <TYPESAFE_API_KEY>
-
-Why hand-rolled instead of a dependency: this module is consumed by the eval
-harness, which runs in an isolated subprocess against a pinned dependency set.
-Pulling in ``httpx``/``requests`` for one POST would widen that surface for no
-gain.
-
-Jev returns *typed* decisions rather than prose, which is the whole point for
-this project — the values come back already shaped like the branch the caller
-wants to write:
-
-    choice -> pick one labelled option          (routing, triage)
-    score  -> place the input on an ordered scale (relevance, risk)
-    noul   -> calibrated yes/no probability       (gates, guardrails)
-
-Because the types are fixed there is no parsing, no regex, and no
-response-format drift to defend against — see the guards in
-``JevResponse.choice_of`` / ``score_of`` / ``noul_of``.
+choice 选择标签，score 返回等级，noul 返回是概率；各访问器检查返回
+形态，不依赖自然语言解析。数值校准效果仍需通过实际数据验证。
 """
 
 from __future__ import annotations
@@ -30,47 +14,48 @@ import os
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 DEFAULT_ENDPOINT = "https://api.typesafe.ai/v1/systemone"
-DEFAULT_MODEL = "jev-latest"
+DEFAULT_MODEL = "jev-1.13.0"
 ENV_API_KEY = "TYPESAFE_API_KEY"
 
-# Documented limits: 250k tokens/second, 1200 requests/minute. We stay well
-# under both by default; the harness is sequential on purpose so that latency
-# samples are not contaminated by self-inflicted queueing.
+# 默认调用节奏保守，避免接近服务限额。
+# 评测框架有意顺序执行，
+# 避免自身排队污染延迟样本；实际限额以服务配置为准。
 DEFAULT_TIMEOUT = 30.0
 DEFAULT_MAX_RETRIES = 3
 DEFAULT_BACKOFF = 0.6
 
 
 class JevError(RuntimeError):
-    """Base class for every failure raised by this module."""
+    """本模块异常的基类。"""
 
 
 class JevAuthError(JevError):
-    """Missing or rejected credentials. Never retried — retrying cannot help."""
+    """凭据缺失或被拒绝；不重试，因为重试无法解决身份问题。"""
 
 
 class JevRateLimitError(JevError):
-    """HTTP 429. Retried with backoff."""
+    """HTTP 429，按退避策略重试。"""
 
 
 class JevUnavailableError(JevError):
-    """HTTP 5xx or a transport failure. Retried with backoff."""
+    """HTTP 5xx 或传输失败，按退避策略重试。"""
 
 
 # --------------------------------------------------------------------------
-# Question builders
+# 问题构造器
 #
-# These exist so call sites read like the decision they are asking for, rather
-# than like a JSON payload. They are deliberately thin.
+# 让调用代码表达所需决策，
+# 避免到处手写 JSON；包装保持轻量。
 # --------------------------------------------------------------------------
 
 
 def choice(instructions: str, criteria: Mapping[str, str]) -> dict[str, Any]:
-    """Pick exactly one of ``criteria`` (up to 255 labelled options)."""
+    """从 criteria 中选择一个选项，最多支持 255 个标签。"""
     if not criteria:
         raise ValueError("choice requires at least one criterion")
     return {
@@ -81,7 +66,7 @@ def choice(instructions: str, criteria: Mapping[str, str]) -> dict[str, Any]:
 
 
 def score(instructions: str, criteria: Sequence[str]) -> dict[str, Any]:
-    """Place the input on an ordered scale of 2–10 described levels."""
+    """将输入放到含 2–10 个描述等级的有序量表上。"""
     levels = list(criteria)
     if not 2 <= len(levels) <= 10:
         raise ValueError(f"score requires 2–10 levels, got {len(levels)}")
@@ -93,18 +78,18 @@ def score(instructions: str, criteria: Sequence[str]) -> dict[str, Any]:
 
 
 def noul(instructions: str) -> dict[str, Any]:
-    """A calibrated yes/no, returned as a probability in [0, 1]."""
+    """二元判断，返回 [0, 1] 范围内的是概率。"""
     return {"type": "noul", "instructions": instructions}
 
 
 # --------------------------------------------------------------------------
-# Response
+# 响应对象
 # --------------------------------------------------------------------------
 
 
 @dataclass
 class JevResponse:
-    """One round trip's worth of typed answers, plus what it cost."""
+    """一次往返的类型化答案及用量信息。"""
 
     model: str
     answers: dict[str, dict[str, Any]]
@@ -113,13 +98,13 @@ class JevResponse:
     latency_ms: float
     raw: dict[str, Any] = field(default_factory=dict, repr=False)
 
-    # -- typed accessors ---------------------------------------------------
-    # Each raises rather than silently returning a default: a missing answer
-    # means the request and the code disagree about the question names, which
-    # is a bug worth surfacing immediately.
+    # 类型化访问器
+    # 答案缺失时抛错，不静默返回默认值。
+    # 这通常表示请求和代码对问题名称的理解不同，
+    # 应立即暴露而非继续执行。
 
     def choice_of(self, name: str) -> tuple[str, float]:
-        """Return ``(winning_key, confidence)``."""
+        """返回（选中键，置信度）。"""
         ans = self._answer(name, "choice")
         return ans["choice"], float(ans.get("confidence", 0.0))
 
@@ -128,26 +113,22 @@ class JevResponse:
         return {k: float(v) for k, v in (ans.get("probabilities") or {}).items()}
 
     def score_of(self, name: str) -> tuple[float, float]:
-        """Return ``(score, confidence)`` on the declared scale."""
+        """返回声明量表上的（分数，置信度）。"""
         ans = self._answer(name, "score")
         return float(ans["score"]), float(ans.get("confidence", 0.0))
 
     def noul_of(self, name: str) -> float:
-        """Return the yes-probability in [0, 1]."""
+        """返回 [0, 1] 范围内的是概率。"""
         ans = self._answer(name, "noul")
         return float(ans["noul"])
 
     def _answer(self, name: str, expected_type: str) -> dict[str, Any]:
         if name not in self.answers:
-            raise JevError(
-                f"no answer for {name!r}; got {sorted(self.answers)}"
-            )
+            raise JevError(f"no answer for {name!r}; got {sorted(self.answers)}")
         ans = self.answers[name]
         got = ans.get("type")
         if got != expected_type:
-            raise JevError(
-                f"answer {name!r} is type {got!r}, expected {expected_type!r}"
-            )
+            raise JevError(f"answer {name!r} is type {got!r}, expected {expected_type!r}")
         return ans
 
     @property
@@ -156,16 +137,15 @@ class JevResponse:
 
 
 # --------------------------------------------------------------------------
-# Client
+# 客户端
 # --------------------------------------------------------------------------
 
 
 class JevClient:
-    """Thin, synchronous, retrying wrapper over the System One endpoint.
+    """System One 的轻量同步客户端，带重试。
 
-    The client is intentionally stateless between calls: the eval harness
-    wants each sample to be an independent measurement, so nothing is cached
-    and no connection is pooled across samples.
+    调用之间不保留状态、不缓存结果或跨样本复用连接，
+    便于评测将每个样本视为独立测量。
     """
 
     def __init__(
@@ -179,9 +159,7 @@ class JevClient:
     ) -> None:
         resolved = api_key or os.environ.get(ENV_API_KEY, "")
         if not resolved:
-            raise JevAuthError(
-                f"no API key: pass api_key= or set ${ENV_API_KEY}"
-            )
+            raise JevAuthError(f"no API key: pass api_key= or set ${ENV_API_KEY}")
         self._api_key = resolved
         self._endpoint = endpoint
         self._model = model
@@ -198,11 +176,10 @@ class JevClient:
         state: str | Mapping[str, Any] | Sequence[Any],
         questions: Mapping[str, dict[str, Any]],
     ) -> JevResponse:
-        """Evaluate every question in one round trip.
+        """一次往返评估全部问题。
 
-        Batching matters: questions run in parallel server-side and share the
-        ``state`` cost, so asking three things in one call is cheaper and
-        lower-latency than three calls.
+        问题在服务端批量处理并共享 state；批量与多次独立调用的
+        实际延迟和费用差异应以返回用量及测量结果为准。
         """
         if not questions:
             raise ValueError("at least one question is required")
@@ -228,12 +205,30 @@ class JevClient:
             raw=raw,
         )
 
-    # -- transport ---------------------------------------------------------
+    # 传输实现
 
     def _post_with_retries(self, body: bytes) -> dict[str, Any]:
         last_error: Exception | None = None
 
+        from urllib.parse import urlparse
+
+        from shared.paid_transport import configured_budget, configured_price, current_root_run, usage_counts
+
+        if urlparse(self._endpoint).hostname != "api.typesafe.ai" or not self._endpoint.startswith("https://"):
+            raise JevError("仅允许已授权的官方 Jev 端点")
+        budget, price = configured_budget(), configured_price("jev")
+        ceiling = int(price.cost(len(body) * 2 + 2048, 0) * 1.15) + 1
         for attempt in range(self._max_retries + 1):
+            price.assert_current()
+            receipt = budget.reserve(
+                "jev",
+                self._model,
+                ceiling,
+                currency=price.currency,
+                purpose="evaluation",
+                price_version=price.version,
+                run_id=current_root_run.get(),
+            )
             request = urllib.request.Request(
                 self._endpoint,
                 data=body,
@@ -246,12 +241,19 @@ class JevClient:
             )
             try:
                 with urllib.request.urlopen(request, timeout=self._timeout) as resp:
-                    return json.loads(resp.read().decode("utf-8"))
+                    result = json.loads(resp.read().decode("utf-8"))
+                    counts = usage_counts(result)
+                    usage = {"input_tokens": counts[0], "output_tokens": counts[1]} if counts is not None else None
+                    budget.settle(receipt, price.cost(*counts) if counts is not None else None, usage)
+                    return result
 
             except urllib.error.HTTPError as exc:
-                detail = _read_error_body(exc)
-                # 4xx other than 429 is a bug in the request, not a transient
-                # condition — retrying just burns quota.
+                budget.settle(receipt, None)
+                detail = _read_error_body(exc).replace(self._api_key, "[credential]")
+                if exc.code in {400, 401, 402, 403, 404, 422}:
+                    budget.halt("jev")
+                # 除 429 外的 4xx 通常是请求错误，
+                # 原样重试只会继续消耗配额。
                 if exc.code == 429:
                     last_error = JevRateLimitError(f"429 rate limited: {detail}")
                 elif 500 <= exc.code < 600:
@@ -262,6 +264,7 @@ class JevClient:
                     raise JevError(f"{exc.code}: {detail}")
 
             except (urllib.error.URLError, TimeoutError, OSError) as exc:
+                budget.settle(receipt, None)
                 last_error = JevUnavailableError(f"transport failure: {exc}")
 
             if attempt < self._max_retries:

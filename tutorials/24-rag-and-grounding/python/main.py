@@ -1,24 +1,21 @@
 """
-MAF v1 — Chapter 24: RAG and Grounding (Python)
+MAF v1 — 第 24 章：检索与事实核验（Python）
 
-Two mechanisms, deliberately kept separate:
+两个机制，刻意分开讲：
 
-1. Retrieval — `search_products` is a tool the agent calls to read real data
-   (a tiny in-memory product catalog) instead of relying on whatever the
-   model's training data "remembers" about products. Naive keyword match —
-   the point isn't search quality, it's that retrieval exists at all.
-2. Grounding verification — `verify_claims()` runs *after* the model
-   answers. It extracts product ids/prices the answer claims and checks
-   them against the same catalog. Retrieval only guarantees the model had
-   access to the truth; verification is the separate step that checks the
-   model's prose actually repeated it.
+1. 检索 —— `search_products` 是智能体调用的工具，用来读取真实数据
+   （一个极小的内存商品目录），而不是依赖模型训练数据对商品「记得」的
+   内容。朴素的子串匹配 —— 重点不在于搜索质量，而在于检索这件事本身
+   存在。
+2. 事实核验 —— `verify_claims()` 在模型作答*之后*运行。它抽取答案中声称的
+   商品 id / 价格，并拿它们与同一份目录核对。检索只保证模型有机会接触到
+   事实；核验则是另一步，用来检查模型的文字是否真的复述了事实。
 
-No pgvector, no Postgres — see `agents/python/product_discovery/tools.py`
-(semantic_search) and `agents/python/shared/grounding/verifier.py`
-(verify_claims) for the production versions this chapter mirrors at toy
-scale.
+不涉及 pgvector、Postgres —— 本章在玩具规模上对照的生产版本见
+`agents/python/product_discovery/tools.py`（semantic_search）与
+`agents/python/shared/grounding/verifier.py`（verify_claims）。
 
-Run:
+运行：
     source agents/.venv/bin/activate
     python tutorials/24-rag-and-grounding/python/main.py "Do you have noise-cancelling headphones?"
 """
@@ -54,11 +51,10 @@ DEFAULT_QUESTION = "Do you have any noise-cancelling headphones? What's the pric
 
 FIXTURES_DIR = pathlib.Path(__file__).resolve().parent / "tests" / "fixtures" / "replay"
 
-# ─────────────────────── The "knowledge base" ───────────────────────
-# A handful of Python dicts standing in for a real product table. Production
-# uses Postgres + pgvector (agents/python/product_discovery/tools.py); the
-# mechanics this chapter teaches — a search tool, then a verification step —
-# don't depend on that being a real database.
+# ─────────────────────── 「知识库」 ───────────────────────
+# 几个 Python dict，用来替代真实的商品表。生产环境使用 Postgres + pgvector
+# （agents/python/product_discovery/tools.py）；本章所讲的机制 —— 先一个
+# 检索工具，再一步核验 —— 并不依赖那是一个真实数据库。
 CATALOG: list[dict] = [
     {"id": "P001", "name": "Wireless Noise-Cancelling Headphones", "price": 129.99, "category": "Electronics"},
     {"id": "P002", "name": "Stainless Steel Water Bottle", "price": 24.50, "category": "Home"},
@@ -68,7 +64,7 @@ CATALOG: list[dict] = [
 ]
 
 
-# ─────────────────────────── Retrieval ───────────────────────────
+# ─────────────────────────── 检索 ───────────────────────────
 
 
 @tool(
@@ -80,9 +76,9 @@ def search_products(
         str, Field(description="Keyword(s) to match against product name or category, e.g. 'headphones'.")
     ],
 ) -> list[dict]:
-    # Naive substring match over name + category — no ranking, no embeddings.
-    # Real retrieval quality is not the point of this chapter; having a
-    # search tool at all, instead of the model guessing from memory, is.
+    # 在 name + category 上做朴素子串匹配 —— 不排序、不用向量。
+    # 真实检索质量不是本章的重点；重点是有一个检索工具存在，
+    # 而不是让模型凭记忆猜。
     words = [w for w in query.lower().split() if w]
     matches = []
     for product in CATALOG:
@@ -92,13 +88,11 @@ def search_products(
     return matches
 
 
-# ─────────────────────────── Verification ───────────────────────────
-# Mirrors agents/python/shared/grounding/verifier.py::verify_claims() at toy
-# scale: DB-match (here, catalog-match) + consistency-check. The production
-# version's "ledger" tier (facts already surfaced by this turn's tool calls,
-# checked for free before hitting the database) is skipped here — one
-# in-memory catalog *is* the database, so there's nothing cheaper to check
-# first.
+# ─────────────────────────── 事实核验 ───────────────────────────
+# 在玩具规模上对照 agents/python/shared/grounding/verifier.py::verify_claims()：
+# 数据库比对（这里是目录比对）+ 一致性检查。生产版本的「账本」层
+# （本轮工具调用已经露出的事实，在查数据库之前先免费核对一遍）在此省略 ——
+# 这里唯一的一份内存目录*就是*数据库，所以没有更廉价的东西可以先查。
 
 _ID_RE = re.compile(r"\bP0\d{2}\b")
 _PRICE_RE = re.compile(r"\$(\d+(?:\.\d{1,2})?)")
@@ -114,7 +108,7 @@ class ProductClaim:
 @dataclass(frozen=True)
 class ClaimVerdict:
     identifier: str
-    status: str  # "verified" | "price_mismatch" | "not_found"
+    status: str  # 核验状态：verified、price_mismatch、not_found。
     detail: str | None = None
 
 
@@ -132,12 +126,11 @@ class GroundingReport:
 
 
 def extract_claims(answer: str) -> list[ProductClaim]:
-    """Pull out every product id the answer claims, plus a nearby price if present.
+    """抽取答案中声称的每一个商品 id，以及就近出现的一个价格（若有）。
 
-    Deliberately dumb: a real claim extractor (agents/python/shared/grounding/
-    extractor.py) parses structured card payloads, not free text with a regex.
-    This is enough to demonstrate the *shape* of the problem — the model's
-    prose can drift from what the tool actually returned.
+    刻意写得很笨：真实的断言抽取器（agents/python/shared/grounding/
+    extractor.py）解析的是结构化卡片载荷，而不是用正则处理自由文本。
+    这里足够演示问题的*形状* —— 模型的文字可能与工具实际返回的内容发生偏离。
     """
     claims: list[ProductClaim] = []
     for match in _ID_RE.finditer(answer):
@@ -149,22 +142,21 @@ def extract_claims(answer: str) -> list[ProductClaim]:
 
 
 def verify_claims(claims: list[ProductClaim], catalog: list[dict] | None = None) -> GroundingReport:
-    """Check each claimed id/price against the catalog — the source of truth.
+    """拿每个声称的 id / 价格去目录（事实来源）里核对。
 
-    This is the step retrieval alone does not give you: `search_products`
-    only guarantees the model *saw* real data. Nothing stops the model's
-    final sentence from citing the wrong id or rounding a price. This
-    function catches that gap, after the fact.
+    这正是单靠检索给不了你的一步：`search_products` 只保证模型*看到过*真实
+    数据。没有任何东西能阻止模型在最后一句里引用错误的 id，或把价格四舍五入。
+    本函数在事后把这道缺口补上。
     """
     catalog_by_id = {p["id"]: p for p in (catalog or CATALOG)}
     verdicts: list[ClaimVerdict] = []
     for claim in claims:
         product = catalog_by_id.get(claim.id)
         if product is None:
-            verdicts.append(ClaimVerdict(claim.id, "not_found", "no product with this id in the catalog"))
+            verdicts.append(ClaimVerdict(claim.id, "not_found", "目录中没有这个 id 的商品"))
             continue
         if claim.price is not None and abs(claim.price - product["price"]) >= _PRICE_TOLERANCE:
-            detail = f"catalog price is ${product['price']:.2f}, not ${claim.price:.2f}"
+            detail = f"目录价格为 ${product['price']:.2f}，而非 ${claim.price:.2f}"
             verdicts.append(ClaimVerdict(claim.id, "price_mismatch", detail))
             continue
         verdicts.append(ClaimVerdict(claim.id, "verified"))
@@ -189,9 +181,9 @@ def _default_client() -> OpenAIChatClient | OpenAIChatCompletionClient | ReplayC
     return OpenAIChatClient(
         model=os.environ.get("LLM_MODEL", "gpt-4.1"),
         api_key=os.environ["OPENAI_API_KEY"],
-        # Phase 9: any OpenAI-compatible endpoint (GitHub Models, OpenRouter,
-        # vLLM, LM Studio, Ollama) instead of api.openai.com — see
-        # tutorials/00-setup/README.md's "Don't have a paid API key?" section.
+        # Phase 9：可指向任何兼容 OpenAI 的端点（GitHub Models、OpenRouter、
+        # vLLM、LM Studio、Ollama），而不必是 api.openai.com —— 见
+        # tutorials/00-setup/README.md 的「没有付费 API key？」一节。
         base_url=os.environ.get("LLM_BASE_URL") or None,
     )
 
@@ -214,11 +206,11 @@ async def main() -> None:
     question = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_QUESTION
     agent = build_agent()
     answer = await ask(agent, question)
-    print(f"Q: {question}")
-    print(f"A: {answer}")
+    print(f"问：{question}")
+    print(f"答：{answer}")
 
     report = verify_claims(extract_claims(answer))
-    print(f"Grounding: {report.verified_count}/{report.total_count} claims verified")
+    print(f"事实核验：{report.verified_count}/{report.total_count} 条断言通过")
     for verdict in report.verdicts:
         if verdict.status != "verified":
             print(f"  ! {verdict.identifier}: {verdict.status} ({verdict.detail})")

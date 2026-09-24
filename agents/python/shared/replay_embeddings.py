@@ -1,32 +1,11 @@
-"""Deterministic, offline embeddings for ``LLM_PROVIDER=replay``.
+"""replay 模式使用的确定性离线向量嵌入。
 
-Why this exists (#52). The chat client has a replay path; the *embedding*
-client did not, so ``get_embeddings_client()`` fell through to the OpenAI
-branch and raised ``OPENAI_API_KEY is required when LLM_PROVIDER=openai``.
-MAF catches that and hands the model an error result, so the agent quietly
-answered from ``search_products`` instead — and since CI's eval smoke job runs
-entirely in replay mode, **pgvector semantic search was never exercised by any
-CI run**, while product-discovery still scored 92% with it dead.
+词元经特征哈希映射到带符号的桶，求和后 L2 归一化；共享词元的文本
+具有较近余弦距离。这样可实际执行 pgvector 检索，而无需模型密钥。
 
-The technique is a hashing vectorizer (feature hashing): tokens are hashed into
-buckets and summed, then the vector is L2-normalised. Two texts sharing words
-land close together under cosine distance, so nearest-neighbour search returns
-genuinely related rows rather than noise.
-
-**What this is and is not.** It is a real vector index exercised by real
-pgvector queries, deterministic, free, and offline — which is exactly what the
-deterministic gate needs. It is *not* a semantic model: it has no notion of
-synonymy, so "cans for hearing" will not find "headphones". It tests that the
-retrieval path works, not that retrieval is smart. Recording real vectors as
-fixtures was the alternative and was rejected: 50 products x 1536 dimensions is
-~600KB of committed floats to serve two eval cases, and it would still need
-re-recording whenever the seed data changed.
-
-The critical property is that **both sides use this same function**. Product
-vectors are written by ``scripts/generate_embeddings.py`` and query vectors are
-produced here; if the two schemes ever diverge, similarity becomes meaningless
-without anything failing. That is why the implementation lives in one module
-imported by both, rather than being duplicated.
+它验证检索链路，不具备同义词理解能力，也不代表真实语义模型质量。
+商品写入和查询必须使用同一 embed_text 实现，否则相似度会失去意义。
+集中实现也避免维护大量真实向量夹具及重新录制成本。
 """
 
 from __future__ import annotations
@@ -36,34 +15,24 @@ import math
 import re
 from dataclasses import dataclass
 
-# Matches text-embedding-3-small, so replay vectors drop into the same
-# `vector(1536)` column as real ones with no schema change.
+# 维度与 text-embedding-3-small 一致，
+# 可直接写入已有 vector(1536) 列，无需修改表结构。
 EMBEDDING_DIMENSIONS = 1536
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
 
 
 def _bucket(token: str) -> tuple[int, float]:
-    """Map a token to (index, signed weight).
+    """把词元映射为（桶索引，带符号的权重）。
 
-    The sign comes from a different byte of the same digest than the index, so
-    unrelated tokens colliding in one bucket tend to cancel rather than
-    reinforce — the standard signed-hashing trick that keeps collisions from
-    manufacturing similarity between unrelated texts.
+    索引和符号取自同一摘要的不同字节，让碰撞词元倾向于相互抵消，
+    避免无关文本因哈希冲突获得虚假的相似度。
 
-    ``hashlib`` rather than ``hash()``: Python salts ``hash()`` per process, so
-    vectors written by the seeding script would not match vectors computed in
-    an agent process. That failure would be silent and intermittent — the exact
-    shape of the ``PYTHONHASHSEED`` bug this repo already hit in chapter 14.
+    使用 hashlib 而非每个进程随机加盐的 hash()，确保种子脚本与智能体
+    进程计算出相同向量；第 14 章曾出现过 PYTHONHASHSEED 导致的不一致。
 
-    **SHA-256 specifically, and this matters across stacks.** The .NET stack
-    reads the same ``product_embeddings`` rows this scheme writes, so
-    ``ReplayEmbeddingProvider`` in ``agents/dotnet`` must bucket tokens
-    identically or .NET semantic search returns noise against Python-written
-    vectors — silently, since nothing errors. SHA-256 is in both standard
-    libraries; BLAKE2b, which this used first, is not available in .NET without
-    a third-party package. Changing this function means re-recording any
-    fixture whose trajectory includes a semantic search.
+    固定使用 SHA-256，保证商品向量和查询向量的分桶规则一致。
+    修改该函数后，必须重新录制执行轨迹中包含语义检索的回放夹具。
     """
     digest = hashlib.sha256(token.encode("utf-8")).digest()
     index = int.from_bytes(digest[:4], "big") % EMBEDDING_DIMENSIONS
@@ -72,7 +41,7 @@ def _bucket(token: str) -> tuple[int, float]:
 
 
 def embed_text(text: str) -> list[float]:
-    """A deterministic unit vector for ``text``."""
+    """为 text 生成确定性的单位向量。"""
     vector = [0.0] * EMBEDDING_DIMENSIONS
     for token in _TOKEN_RE.findall(text.lower()):
         index, sign = _bucket(token)
@@ -80,19 +49,19 @@ def embed_text(text: str) -> list[float]:
 
     norm = math.sqrt(sum(v * v for v in vector))
     if norm == 0.0:
-        # Empty or punctuation-only input. A zero vector makes cosine distance
-        # undefined and pgvector returns NaN ordering, so anchor it instead.
+        # 空文本或纯标点不能产生零向量，因其余弦距离无定义，
+        # 会使 pgvector 排序出现 NaN；改用固定锚点。
         vector[0] = 1.0
         return vector
     return [v / norm for v in vector]
 
 
-# ── A minimal stand-in for the shape callers already use ────────────────────
+# 保持调用方现有接口的最小响应结构。
 #
-# Call sites do `client.embeddings.create(model=..., input=[...])` and read
-# `response.data[i].embedding`. Mirroring that shape means nothing at the call
-# site needs to know which provider it got — the same reason ReplayChatClient
-# implements the real chat-client interface rather than being special-cased.
+# 调用方仍使用 embeddings.create(model=..., input=[...])，
+# 并读取 response.data[i].embedding。
+# 保持接口形态，调用点就不必判断提供方，
+# 与 ReplayChatClient 的兼容设计一致。
 
 
 @dataclass(frozen=True)
@@ -117,10 +86,10 @@ class _Embeddings:
 
 
 class ReplayEmbeddingsClient:
-    """Offline embeddings client selected by ``LLM_PROVIDER=replay``."""
+    """LLM_PROVIDER=replay 时使用的离线嵌入客户端。"""
 
     def __init__(self) -> None:
         self.embeddings = _Embeddings()
 
-    async def close(self) -> None:  # parity with the real async clients
+    async def close(self) -> None:  # 与真实异步客户端接口保持一致。
         return None

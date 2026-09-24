@@ -1,53 +1,43 @@
-# ADR 0004 — MAF runs the tool-calling loop, not this repo
+# ADR 0004 —— 工具调用循环由 MAF 运行，而非本仓库
 
-**Status:** Accepted · **Date:** 2026-08-26 (recorded; decided much earlier)
+**状态：** 已接受 · **日期：** 2026 年 8 月 26 日（记录时间；决策时间远早于此）
 
-## Context
+## 背景
 
-`shared/agent_host.py` originally implemented its own OpenAI chat-completions
-tool-calling loop — `_run_agent_with_tools()` and `_run_agent_with_tools_stream()` —
-reading tool calls off the response, dispatching them, and feeding results back.
+`shared/agent_host.py` 最初实现了自己的 OpenAI chat-completions 工具调用循环——
+`_run_agent_with_tools()` 和 `_run_agent_with_tools_stream()`——从响应里读出工具调用、分发
+它们、再把结果喂回去。
 
-That is a well-understood loop, and writing it by hand means owning its edge cases
-forever: parallel tool calls, streaming deltas mid-call, retry, and every provider
-difference.
+那是一个已被充分理解的循环，而手写它意味着永远要负责它的边界情况：并行工具调用、调用中途的
+流式增量、重试，以及每一种提供商差异。
 
-## Decision
+## 决策
 
-The hand-rolled loop was removed. Every request goes through MAF's own `agent.run()` or
-`agent.run(..., stream=True)`. The `Agent` object owns its tools, system prompt and
-context-provider chain; `agent_host.py` only threads the A2A request into the right call
-and forwards chunks over SSE.
+手写的循环被移除。每个请求都走 MAF 自己的 `agent.run()` 或 `agent.run(..., stream=True)`。
+`Agent` 对象持有自己的工具、系统提示词和上下文提供器链；`agent_host.py` 只负责把 A2A 请求接到
+正确的调用上，并通过 SSE 转发数据块。
 
-`CLAUDE.md` puts it in the Do Not list: *write raw OpenAI function-calling loops*.
+`CLAUDE.md` 把它列在「禁止」清单里：*手写原始 OpenAI 函数调用循环*。
 
-## Why
+## 理由
 
-**A framework demo that bypasses the framework demonstrates nothing.** The repo exists
-to show Microsoft Agent Framework; a custom loop would have shown that MAF was not
-trusted with its own core responsibility.
+**一个绕开框架的框架演示什么都展示不了。** 本仓库存在的意义是展示微软智能体框架；自定义循环
+展示出的会是 MAF 连自己的核心职责都不被信任。
 
-**The loop is where provider differences live.** Middleware, context providers, and
-approval-gated tools all hook into MAF's execution. A parallel implementation would have
-had to reimplement each hook or forgo it.
+**循环正是提供商差异所在的地方。** 中间件、上下文提供器和审批门控工具都挂在 MAF 的执行流程上。
+一套并行实现要么得重新实现每个钩子，要么放弃它们。
 
-## Consequences
+## 后果
 
-The framework's behaviour is now load-bearing, including behaviour that is surprising —
-and this has been paid for in real defects:
+框架的行为现在是承重的，包括那些令人意外的行为——而这一点是用真实缺陷换来的：
 
-- Agents wrapped by `AgentWorkflowBuilder` are **lazy**: without a `TurnToken` they cache
-  their input and never call the model. A run missing one completes normally having done
-  nothing.
-- `AIFunctionFactory` serialises tool results, so what a wrapper receives is a
-  `JsonElement`, not the declared `string`.
-- Handoff tools are synthesised with **positional** names (`handoff_to_1`), so an agent's
-  name never reaches the model and only its `description` distinguishes targets.
+- Python 工具返回值经框架包装为 `list[Content]`，其 `text` 承载 JSON；中间件需要显式解包，不能假定收到裸字典。
+- 流式响应需要最终响应终结器，才能支持工作流内部的 `get_final_response()`；仅可迭代并不代表完整兼容。
+- 人工审批暂停后，必须先消费完当前工作流事件流，再根据检查点恢复；提前中止可能保留运行中状态。
 
-None of these are discoverable from a signature. Each was found by running the software.
+这些都无法从签名上看出来。每一个都是通过运行软件发现的。
 
-## What would make this wrong
+## 什么情况下这个决定是错的
 
-If MAF's loop ever blocked a requirement it could not express — a bespoke retry policy,
-say, or a provider it does not support — the answer is a custom `IChatClient` or
-middleware inside the framework, not a loop beside it.
+如果 MAF 的循环曾经挡住某项它无法表达的需求——比如一个定制的重试策略，或一个它不支持的提供商
+——答案是在框架内实现一个自定义的聊天客户端或中间件，而不是在框架旁边再写一个循环。

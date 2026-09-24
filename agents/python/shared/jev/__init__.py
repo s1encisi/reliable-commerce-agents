@@ -1,19 +1,8 @@
-"""Jev (TypeSafe System One) typed-decision integration.
+"""Jev（TypeSafe System One）结构化决策集成。
 
-Jev returns typed, calibrated decisions — ``choice``, ``score`` and ``noul`` —
-rather than prose, which lets the caller branch on the value directly instead
-of parsing it.
-
-    from shared.jev import JevClient, route_specialist, safety_gate
-
-    client = JevClient()                     # reads $TYPESAFE_API_KEY
-    decision = route_specialist(client, "where is my order?")
-    if decision.route == "order-management":
-        ...
-
-See ``README.md`` in this package for the decision-point map, the measured
-comparison against rule-based baselines, and the list of things this does
-*not* claim.
+返回 choice、score、noul 等类型化结果，调用方直接按值分支，无需解析
+自然语言。JevClient 读取 TYPESAFE_API_KEY；route_specialist 与
+safety_gate 封装具体决策。决策点、基线比较和未验证范围见本包 README。
 """
 
 from .client import (
@@ -45,7 +34,7 @@ from .decisions import (
 )
 
 __all__ = [
-    # transport
+    # 传输层
     "JevClient",
     "JevResponse",
     "JevError",
@@ -55,11 +44,11 @@ __all__ = [
     "DEFAULT_ENDPOINT",
     "DEFAULT_MODEL",
     "ENV_API_KEY",
-    # question builders
+    # 问题构造器
     "choice",
     "score",
     "noul",
-    # decisions
+    # 决策接口
     "route_specialist",
     "safety_gate",
     "score_relevance",
@@ -69,4 +58,6 @@ __all__ = [
     "ROUTE_INSTRUCTIONS",
     "RELEVANCE_LEVELS",
     "DEFAULT_GATE_THRESHOLD",
+    "GATE_DETECT_INSTRUCTIONS",
+    "GATE_REFUSE_INSTRUCTIONS",
 ]

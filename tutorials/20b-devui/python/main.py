@@ -1,13 +1,12 @@
-"""MAF v1 — Ch20b: DevUI quickstart.
+"""MAF v1 —— 第 20b 章：DevUI 快速上手。
 
-Registers a single Agent with DevUI's serve() helper and launches the
-browser dashboard on localhost:8090. DevUI is a dev-only, Python-only
-harness that exposes an OpenAI-compatible Responses API plus a live
-tracing panel.
+把一个智能体注册到 DevUI 的 serve() 辅助函数，并在 localhost:8090 启动
+浏览器面板。DevUI 是仅限开发、仅限 Python 的调试台，暴露 OpenAI 兼容的
+Responses API 以及一个实时追踪面板。
 
-Run:
+运行：
     uv run python main.py
-Then open http://localhost:8090
+然后打开 http://localhost:8090
 """
 
 from __future__ import annotations
@@ -30,7 +29,7 @@ from agent_framework.openai import (
 
 
 def _client():
-    """Pick a chat client based on LLM_PROVIDER, matching the series convention."""
+    """依据 LLM_PROVIDER 选择聊天客户端，与本系列的约定保持一致。"""
     if os.environ.get("LLM_PROVIDER", "openai").lower() == "azure":
         return OpenAIChatCompletionClient(
             model=os.environ["AZURE_OPENAI_DEPLOYMENT"],
@@ -41,26 +40,26 @@ def _client():
     return OpenAIChatClient(
         model=os.environ.get("LLM_MODEL", "gpt-4.1"),
         api_key=os.environ["OPENAI_API_KEY"],
-        # Phase 9: any OpenAI-compatible endpoint (GitHub Models, OpenRouter,
-        # vLLM, LM Studio, Ollama) instead of api.openai.com — see
-        # tutorials/00-setup/README.md's "Don't have a paid API key?" section.
+        # 第 9 阶段：可用任意 OpenAI 兼容端点（GitHub Models、OpenRouter、
+        # vLLM、LM Studio、Ollama）替代 api.openai.com——见
+        # tutorials/00-setup/README.md 的「没有付费 API 密钥怎么办？」一节。
         base_url=os.environ.get("LLM_BASE_URL") or None,
     )
 
 
 def build_agent() -> Agent:
-    """Single demo agent — DevUI registers it under the id 'devui-demo'."""
+    """单个演示智能体——DevUI 会以 id 'devui-demo' 注册它。"""
     return Agent(
         _client(),
-        instructions="You are a friendly e-commerce assistant for a demo store.",
+        instructions="你是一个友好的演示商店电商助手。",
         name="devui-demo",
-        description="Demo agent registered with MAF DevUI",
+        description="注册到 MAF DevUI 的演示智能体",
     )
 
 
 if __name__ == "__main__":
-    # DevUI will open the browser at http://localhost:8090 and stream
-    # OpenTelemetry spans into its tracing tab for every run.
+    # DevUI 会在 http://localhost:8090 打开浏览器，并把每次运行的
+    # OpenTelemetry 跨度流入它的追踪标签页。
     serve(
         entities=[build_agent()],
         port=8090,

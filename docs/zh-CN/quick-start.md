@@ -17,7 +17,7 @@ Python 教程要求 Python 3.12+，详见 [tutorials/pyproject.toml](../../tutor
 
     uv sync --project tutorials --extra dev
 
-这一步可能联网下载 Python 包。教程共用一个 uv 项目；第 20b 章另有特殊说明。无需为了第 01、02 章启动 PostgreSQL、Redis、前端或 .NET。
+这一步可能联网下载 Python 包。教程共用一个 uv 项目；第 20b 章另有特殊说明。无需为了第 01、02 章启动 PostgreSQL、Redis 或前端。
 
 ## 3. 离线回放第一个示例
 
@@ -69,7 +69,7 @@ Docker 可用、模型配置明确后：
 |---|---|
 | 网页 | http://localhost:3000 |
 | 协调器 API | http://localhost:8080 |
-| Aspire | http://localhost:18888 |
+| Jaeger 界面（追踪） | http://localhost:16686 |
 
 脚本会准备并填充数据库。-Clean 会删除容器和数据卷，不作为日常排错的默认命令。先保留日志、检查配置和数据，再决定是否需要重建。
 

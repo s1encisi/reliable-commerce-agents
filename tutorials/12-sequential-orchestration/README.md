@@ -1,24 +1,28 @@
-# Chapter 12 — Sequential Orchestration
+# 第 12 章 · 顺序编排
 
-The assembly-line pattern for agents: `SequentialBuilder` (Python) / `AgentWorkflowBuilder.BuildSequential` (.NET) chains a list of agents into a pipeline where each one sees the full conversation so far and appends its own turn — no manual adapters like the ones Chapter 11 wrote by hand.
+[项目首页](../../README.md) · [教程总览](../README.md) · [术语表](../_shared/jargon-glossary.md)
 
-## Why this chapter
+智能体的流水线模式：`SequentialBuilder` 把一串智能体接成管线，每一个都能看到此前的完整对话，并追加自己那一轮 —— 不需要第 11 章那种手写适配器。
 
-Chapter 11 wrapped a single `ChatClientAgent` as a workflow executor and wired the input/output adapters yourself. Sequential generalizes that to a chain of N agents: **Writer → Reviewer → Finalizer** is the canonical example here, but the same shape drives a real production flow in this repo — the return/replace pipeline (eligibility check → return initiation → replacement search → approval gate → discount → finalize) covered under "How this shows up in the capstone" below. The one thing that makes Sequential different from hand-rolled chaining: **the builder forwards the entire shared conversation automatically**, so the Reviewer sees the Writer's draft and the Finalizer sees both, without either agent's code doing anything special to receive it.
+## 本章动机
 
-## Prerequisites
+第 11 章把一个 `Agent` 包装成工作流执行器，并自己接了输入/输出适配器。顺序编排把它推广到 N 个智能体组成的链：**Writer → Reviewer → Finalizer** 是这里的标准例子，但同一形态也驱动着本仓库一条真实的生产流程 —— 「退货 / 换货」管线（资格校验 → 审批闸门 → 发起退货 → 搜索替换商品 → 折扣 → 定稿），详见下文「在完整项目中的落点」。
 
-- Completed [Chapter 11 — Agents in Workflows](../11-agents-in-workflows/)
-- Repo-root `.env` with one LLM provider configured:
+让顺序编排区别于手工串链的那一件事是：**构建器会自动转发整段共享对话**，于是 Reviewer 能看到 Writer 的草稿，Finalizer 能看到两者，而这两个智能体的代码都不必为此做任何特殊处理。
 
-| Provider | Required | Optional |
-|----------|----------|----------|
-| **OpenAI** | `OPENAI_API_KEY` | `LLM_MODEL` (default `gpt-4.1`) |
-| **Azure OpenAI** | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_KEY`, `AZURE_OPENAI_DEPLOYMENT` | `AZURE_OPENAI_API_VERSION` (default `2024-10-21`) |
+## 前置条件
 
-## The concept
+- 已完成 [第 11 章 · 工作流中的智能体](../11-agents-in-workflows/)
+- 仓库根目录的 `.env` 中已配置一个 LLM 提供方：
 
-Hand the builder an ordered list of agents; it returns a `Workflow` where participant 1 runs against the input message, participant 2 runs against the input plus participant 1's response, participant 3 runs against all of that, and so on. Each participant is still a normal MAF agent — same `Agent(...)` / `AsAIAgent(...)` construction as every prior chapter — the builder is what turns the list into a pipeline with shared conversation state.
+| 提供方 | 必填 | 选填 |
+|--------|------|------|
+| **OpenAI** | `OPENAI_API_KEY` | `LLM_MODEL`（默认 `gpt-4.1`） |
+| **Azure OpenAI** | `AZURE_OPENAI_ENDPOINT`、`AZURE_OPENAI_KEY`、`AZURE_OPENAI_DEPLOYMENT` | `AZURE_OPENAI_API_VERSION`（默认 `2024-10-21`） |
+
+## 核心概念
+
+把一个有序的智能体列表交给构建器，它返回一个 `Workflow`：第 1 个参与者针对输入消息运行，第 2 个针对「输入 + 第 1 个的响应」运行，第 3 个针对以上全部运行，依此类推。每个参与者仍然是普通的 MAF 智能体 —— 与前几章相同的 `Agent(...)` 构造方式 —— 构建器负责把这个列表变成一条共享对话状态的管线。
 
 ```mermaid
 %%{init: {'theme':'base', 'themeVariables': {
@@ -30,16 +34,16 @@ flowchart LR
   classDef external fill:#f59e0b,stroke:#b45309,color:#000000
   classDef success  fill:#10b981,stroke:#047857,color:#ffffff
 
-  topic([Topic])
-  writer[Writer agent]
-  reviewer[Reviewer agent]
-  finalizer[Finalizer agent]
+  topic([主题])
+  writer[Writer 智能体]
+  reviewer[Reviewer 智能体]
+  finalizer[Finalizer 智能体]
   llm[(LLM)]
-  answer([Final sentence])
+  answer([最终句子])
 
   topic --> writer
-  writer -- "draft + full history" --> reviewer
-  reviewer -- "draft + review + full history" --> finalizer
+  writer -- "草稿 + 完整历史" --> reviewer
+  reviewer -- "草稿 + 评审 + 完整历史" --> finalizer
   finalizer --> answer
   writer -.-> llm
   reviewer -.-> llm
@@ -52,18 +56,18 @@ flowchart LR
   class answer success
 ```
 
-Three real LLM calls happen per run — the Reviewer's prompt literally contains the Writer's output as prior conversation turns, and the Finalizer's prompt contains both. `SequentialBuilder`/`BuildSequential` is what assembles that forwarding; you never touch a message queue or adapter directly.
+每次运行发生三次真实 LLM 调用 —— Reviewer 的提示词里字面上就含有 Writer 的输出（作为先前的对话轮次），Finalizer 的提示词里两者都有。`SequentialBuilder` 负责组装这种转发；你从不直接碰消息队列或适配器。
 
 ## Python
 
-Source: [`python/main.py`](./python/main.py).
+源码：[`python/main.py`](./python/main.py)。
 
 ```bash
 uv sync --project tutorials
 uv run --project tutorials python tutorials/12-sequential-orchestration/python/main.py
 ```
 
-The three participants and the pipeline itself:
+三个参与者与管线本身：
 
 ```python
 def writer() -> Agent:
@@ -89,7 +93,7 @@ def build_workflow():
     return SequentialBuilder(participants=[writer(), reviewer(), finalizer()]).build()
 ```
 
-Reading the results back out is the fiddly part — each agent's turn arrives inside an `executor_completed` event whose `data` is a list of `AgentExecutorResponse` objects, not a dedicated "data" event type:
+把结果读回来才是麻烦的部分 —— 每个智能体的那一轮抵达时，包在一个 `executor_completed` 事件里，其 `data` 是 `AgentExecutorResponse` 对象的列表，而不是某个专用的「数据」事件类型：
 
 ```python
 async for event in _workflow_events(workflow, topic):
@@ -106,99 +110,30 @@ async for event in _workflow_events(workflow, topic):
             per_agent[eid] = text
 ```
 
-`main.py` also supports `LLM_PROVIDER=replay`, backed by `tutorials/_shared/replay_client.py` — it replays a committed fixture from `python/tests/fixtures/replay/` so the pipeline can be exercised without network access or credentials.
+`main.py` 同样支持 `LLM_PROVIDER=replay`（由 `tutorials/_shared/replay_client.py` 支撑）—— 它回放 `python/tests/fixtures/replay/` 下已提交的 fixture，因此管线无需网络与凭据就能被演练。
 
-## .NET
+## 常见坑
 
-Source: [`dotnet/Program.cs`](./dotnet/Program.cs).
+- **两种运行时都不提供「每智能体专用事件」。** Python 把每一轮放进 `executor_completed` 的 `data` 字段里（`list[AgentExecutorResponse]`），所以按 `event.type == "data"` 过滤什么也找不到。要读终端对话。
+- **指令比以往更重要。** 每个下游智能体都能看到此前的整段对话，因此每份系统提示词都必须明确说出**不要**做什么 —— Reviewer 上的「不要重写草稿」、Finalizer 上的「只输出最终句子」—— 否则管线会跑偏。
+- **顺序编排默认不做检查点。** 对需要持久化的管线，把 `checkpoint_storage=` 传给 `SequentialBuilder(...)` 构造函数（而不是 `.run()`）；本章演示没有配置它。
+- **旧的「MAF v1.0 wheel 附带空 `__init__.py`」打包缺陷已在上游修复** —— 本仓库现已锁定 `agent-framework` 1.14.0，因此它不再生效。`tutorials/_shared/maf_bootstrap.py` 仍防御性地执行它的补丁步骤（每章 `main.py` 都会先调用 `maf_bootstrap.bootstrap()`），但在当前安装下是空操作；完整项目里的对应物 `agents/python/patch_maf.py` 同样是已记录的空操作。
 
-```bash
-cd tutorials/12-sequential-orchestration/dotnet
-dotnet run
-```
+## 测试
 
-```csharp
-public static Workflow BuildWorkflow(IChatClient chatClient)
-{
-    AIAgent writer = chatClient.AsAIAgent(instructions: WriterInstructions, name: "writer");
-    AIAgent reviewer = chatClient.AsAIAgent(instructions: ReviewerInstructions, name: "reviewer");
-    AIAgent finalizer = chatClient.AsAIAgent(instructions: FinalizerInstructions, name: "finalizer");
+`python/tests/test_sequential.py` 偏重集成测试，因为顺序编排的意义就在于串起真实的智能体响应：
 
-    return AgentWorkflowBuilder.BuildSequential(new[] { writer, reviewer, finalizer });
-}
-```
-
-Running it is where this chapter is easy to get wrong, and the wrong version does not fail — it exits 0 having called no model at all. Three things must all be true:
-
-```csharp
-// 1. The input type is List<ChatMessage>, not a topic string.
-var messages = new List<ChatMessage> { new(ChatRole.User, topic) };
-
-await using StreamingRun run = await InProcessExecution.RunStreamingAsync(workflow, messages);
-
-// 2. The wrapped agents are lazy — without a TurnToken they cache their input
-//    and never call the model.
-await run.TrySendMessageAsync(new TurnToken(emitEvents: true));
-
-// 3. BuildSequential emits AgentResponseUpdateEvent, never AgentResponseEvent.
-//    The terminal WorkflowOutputEvent carries the whole conversation with
-//    AuthorName set per agent, which is the reliable place to read turns from.
-await foreach (WorkflowEvent evt in run.WatchStreamAsync())
-{
-    if (evt is WorkflowOutputEvent { Data: List<ChatMessage> conversation })
-    {
-        foreach (ChatMessage m in conversation.Where(m => m.Role == ChatRole.Assistant))
-        {
-            Console.WriteLine($"{m.AuthorName,-9}: {m.Text}");
-        }
-    }
-}
-```
-
-This chapter shipped for a while with all three wrong at once. It built, it ran, it printed the topic and exited 0 — and nothing in CI could see it, because `dotnet build` was the only .NET gate. That is what the test project added in this pass is for.
-
-`Program.cs` loads the repo-root `.env` itself (`LoadDotEnv()` walks up from `AppContext.BaseDirectory`) the same way Chapter 01's example does — no `dotnet user-secrets` needed.
-
-## Side-by-side differences
-
-| Aspect | Python | .NET |
-|--------|--------|------|
-| Builder | `SequentialBuilder(participants=[...]).build()` | `AgentWorkflowBuilder.BuildSequential(new[]{...})` |
-| Run call | `workflow.run(topic, stream=True)` | `InProcessExecution.RunStreamingAsync(workflow, messages)` + `run.TrySendMessageAsync(new TurnToken(...))` |
-| Per-agent output | `executor_completed` event, `data: list[AgentExecutorResponse]` | Terminal `WorkflowOutputEvent` carrying `List<ChatMessage>`, each tagged with `AuthorName`. `AgentResponseEvent` is *not* emitted on this path — matching on it compiles and yields nothing. |
-| Checkpointing | `SequentialBuilder(..., checkpoint_storage=...)` constructor arg | Configure a checkpoint store when building the workflow (see MAF docs) |
-
-## Gotchas
-
-- **Neither runtime gives you a dedicated per-agent event.** Python emits each turn inside `executor_completed`'s `data` field as a `list[AgentExecutorResponse]`, so filtering on `event.type == "data"` finds nothing. .NET emits `AgentResponseUpdateEvent` while streaming and never `AgentResponseEvent`, so matching on the latter compiles, runs and prints nothing. Read the terminal conversation on both sides.
-- **.NET's wrapped agents will not start without a `TurnToken`.** `AgentExecutor` caches its input and waits. A run missing the token completes normally, having made no LLM call — the most expensive kind of silent failure, because it looks like a fast success.
-- **Instructions matter more than ever.** Every downstream agent sees the entire prior conversation, so each system prompt has to say explicitly what NOT to do — "do not rewrite the draft" on the Reviewer, "output ONLY the final sentence" on the Finalizer — or the pipeline drifts.
-- **Sequential isn't checkpointed by default.** Pass `checkpoint_storage=` to the `SequentialBuilder(...)` constructor (not to `.run()`) for durable pipelines; this chapter's demo doesn't configure one.
-- **The old "MAF v1.0 wheel ships an empty `__init__.py`" packaging bug is fixed upstream** — this repo now pins `agent-framework` 1.14.0, so it's no longer active. `tutorials/_shared/maf_bootstrap.py` still runs its patch step defensively (every chapter's `main.py` calls `maf_bootstrap.bootstrap()` first), but it's a no-op on a current install; the capstone app's equivalent, `agents/python/patch_maf.py`, is the same documented no-op.
-
-## Tests
-
-`python/tests/test_sequential.py` is integration-oriented, since Sequential's whole point is chaining real agent responses:
-
-1. A wiring test (`test_workflow_builds_with_three_participants`) — no LLM call, just proves the builder assembles a `Workflow`.
-2. A replay test (`test_replay_runs_all_three_agents`) that plays back a committed fixture via `LLM_PROVIDER=replay` — no network or credentials required.
-3. Three `@pytest.mark.integration` tests that hit a real LLM (skipped automatically when no credentials are in `.env`): all three agents produce output, the Writer/Reviewer content follows the expected shape, and all three outputs differ from each other.
+1. 一个接线测试（`test_workflow_builds_with_three_participants`）—— 不调用 LLM，只证明构建器组装出了一个 `Workflow`。
+2. 一个回放测试（`test_replay_runs_all_three_agents`）—— 通过 `LLM_PROVIDER=replay` 回放已提交的 fixture，无需网络与凭据。
+3. 三个 `@pytest.mark.integration` 测试，访问真实 LLM（`.env` 无凭据时自动跳过）：三个智能体都产出输出、Writer/Reviewer 的内容符合预期形态、三个输出彼此不同。
 
 ```bash
 uv run --project tutorials pytest tutorials/12-sequential-orchestration/python/tests -v
 ```
 
-The .NET side ships [`dotnet/tests/SequentialTests.cs`](./dotnet/tests/SequentialTests.cs) — seven tests, no key, no network, driven by the shared scripted `IChatClient`:
+## 在完整项目中的落点
 
-```bash
-cd tutorials/12-sequential-orchestration/dotnet && dotnet test tests/Sequential.Tests.csproj
-```
-
-Two of them are worth reading, because they assert things the source cannot show you: that each agent's prompt contains its predecessors' output (the actual claim of sequential orchestration, and it happens inside `BuildSequential`), and that the three calls do **not** overlap in time — the same assertion Chapter 13 makes with the opposite expected answer.
-
-## How this shows up in the capstone
-
-Sequential orchestration is live in production as one of the app's five selectable orchestration modes. `ReturnReplaceMode` in `agents/python/orchestrator/modes/workflow_mode.py:184` wraps `workflows/return_replace.py`'s MAF sequential workflow:
+顺序编排作为应用五种可选编排模式之一，已上线运行。`agents/python/orchestrator/modes/workflow_mode.py:184` 的 `ReturnReplaceMode` 包装了 `workflows/return_replace.py` 的 MAF 顺序工作流：
 
 ```python
 class ReturnReplaceMode:
@@ -213,11 +148,11 @@ class ReturnReplaceMode:
     )
 ```
 
-That's a five-step pipeline — eligibility check → return initiation → replacement search → an in-workflow HITL approval gate for high-value returns → loyalty discount → finalize — selectable per request from the web chat UI via `mode-switcher.tsx`, with a checkpoint saved at the HITL gate so a paused run can be resumed later from `POST /api/orchestration/{run_id}/resume` (see `ReturnReplaceMode.resume()` in the same file). It's a considerably richer example of the pattern than this chapter's Writer/Reviewer/Finalizer demo, and it's real, currently-wired code, not a hypothetical refactor target.
+那是一条五步管线 —— 资格校验 → 发起退货 → 搜索替换商品 → 针对高价值退货的工作流内人工审批闸门 → 会员折扣 → 定稿 —— 可在 Web 聊天界面通过 `mode-switcher.tsx` 按请求选择；在人工审批闸门处会保存一个检查点，使暂停的运行之后能从 `POST /api/orchestration/{run_id}/resume` 恢复（见同文件中的 `ReturnReplaceMode.resume()`）。它是这个模式比本章 Writer/Reviewer/Finalizer 演示丰富得多的实例，而且是真实、当前已接线的代码，不是一个假设的重构目标。
 
-## What's next
+## 下一步
 
-- Next chapter: [Chapter 13 — Concurrent Orchestration](../13-concurrent-orchestration/)
-- Full source: [`python/`](./python/) · [`dotnet/`](./dotnet/)
-- Shared: [Mermaid style guide](../_shared/mermaid-style-guide.md) · [Jargon glossary](../_shared/jargon-glossary.md)
-- [MAF docs — Sequential Orchestration](https://learn.microsoft.com/en-us/agent-framework/workflows/orchestrations/sequential/)
+- 下一章：[第 13 章 · 并发编排](../13-concurrent-orchestration/)
+- 完整源码：[`python/`](./python/)
+- 共享材料：[Mermaid 风格指南](../_shared/mermaid-style-guide.md) · [术语表](../_shared/jargon-glossary.md)
+- [MAF 官方文档 —— 顺序编排](https://learn.microsoft.com/en-us/agent-framework/workflows/orchestrations/sequential/)

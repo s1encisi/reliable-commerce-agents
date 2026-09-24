@@ -1,11 +1,11 @@
 """
-MAF v1 — Chapter 07: Observability with OpenTelemetry (Python)
+MAF v1 — 第 07 章：基于 OpenTelemetry 的可观测性（Python）
 
-Wire up OpenTelemetry tracing so every agent run and LLM call emits spans
-with GenAI semantic attributes. In dev, spans print to stdout; in prod,
-swap the console exporter for OTLP to your dashboard of choice.
+接上 OpenTelemetry 追踪，让每一次智能体运行和 LLM 调用都产出带 GenAI
+语义属性的 span。开发时 span 打到 stdout；生产环境把 console exporter 换成
+指向你所选面板的 OTLP 即可。
 
-Run:
+运行：
     python tutorials/07-observability-otel/python/main.py "What is Python?"
 """
 
@@ -36,7 +36,7 @@ FIXTURES_DIR = pathlib.Path(__file__).resolve().parent / "tests" / "fixtures" / 
 
 
 def setup_tracing(service_name: str = "maf-v1-ch07", exporter: object | None = None) -> TracerProvider:
-    """Configure a TracerProvider. Call once per process before agent calls."""
+    """配置一个 TracerProvider。每个进程在调用智能体之前调用一次。"""
     resource = Resource.create({SERVICE_NAME: service_name})
     provider = TracerProvider(resource=resource)
     provider.add_span_processor(BatchSpanProcessor(exporter or ConsoleSpanExporter()))
@@ -63,9 +63,9 @@ def _default_client() -> OpenAIChatClient | OpenAIChatCompletionClient | ReplayC
     return OpenAIChatClient(
         model=os.environ.get("LLM_MODEL", "gpt-4.1"),
         api_key=os.environ["OPENAI_API_KEY"],
-        # Phase 9: any OpenAI-compatible endpoint (GitHub Models, OpenRouter,
-        # vLLM, LM Studio, Ollama) instead of api.openai.com — see
-        # tutorials/00-setup/README.md's "Don't have a paid API key?" section.
+        # Phase 9：可指向任何兼容 OpenAI 的端点（GitHub Models、OpenRouter、
+        # vLLM、LM Studio、Ollama），而不必是 api.openai.com —— 见
+        # tutorials/00-setup/README.md 的「没有付费 API key？」一节。
         base_url=os.environ.get("LLM_BASE_URL") or None,
     )
 
@@ -84,8 +84,8 @@ async def main() -> None:
     agent = build_agent()
     question = sys.argv[1] if len(sys.argv) > 1 else "What is Python in one sentence?"
     answer = await ask(agent, question)
-    print(f"\nQ: {question}")
-    print(f"A: {answer}")
+    print(f"\n问：{question}")
+    print(f"答：{answer}")
 
 
 if __name__ == "__main__":

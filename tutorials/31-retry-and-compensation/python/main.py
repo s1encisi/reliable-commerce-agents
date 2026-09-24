@@ -1,14 +1,12 @@
 """
-MAF v1 — Chapter 31: Retry and Compensation (Saga Pattern) (Python)
+MAF v1 — 第 31 章：重试与补偿（Saga 模式）（Python）
 
-No LLM — the saga pattern is plain orchestration logic, not agent reasoning.
-Three in-memory "services" (stock, payment, shipment) stand in for
-independent API/DB calls that a single database transaction could never
-span. Each step gets an explicit compensating action that undoes it if a
-later step fails, so a partially-completed order unwinds cleanly instead of
-leaving orphaned state.
+不涉及 LLM —— Saga 模式是纯粹的编排逻辑，不是智能体推理。三个内存「服务」
+（库存、支付、发货）代表单个数据库事务永远无法跨越的独立 API / DB 调用。
+每一步都配有明确的补偿动作，在后续步骤失败时撤销它，从而让半途而废的订单
+干净地回滚，而不是留下孤儿状态。
 
-Run:
+运行：
     python tutorials/31-retry-and-compensation/python/main.py
 """
 
@@ -18,34 +16,32 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-# ─────────────── Errors ───────────────
+# ─────────────── 错误类型 ───────────────
 #
-# The distinction below is the whole point of this chapter: a TransientError
-# is worth retrying (a flaky network hop that will probably succeed on the
-# next attempt); everything else is a genuine failure that must trigger
-# compensation immediately instead of hammering a call that will never
-# succeed on its own.
+# 下面的区分正是本章的全部要点：TransientError 值得重试（一次网络抖动，
+# 下一次尝试大概率就成功了）；其他一切都是真实失败，必须立即触发补偿，
+# 而不是反复捶打一个靠自身永远不可能成功的调用。
 
 
 class TransientError(Exception):
-    """A retryable, temporary failure — e.g. a network timeout talking to a service."""
+    """可重试的临时故障 —— 例如与服务通信时网络超时。"""
 
 
 class OutOfStockError(Exception):
-    """A genuine failure. Retrying won't add inventory that doesn't exist."""
+    """真实失败。重试不会凭空变出并不存在的库存。"""
 
 
 class PaymentDeclinedError(Exception):
-    """A genuine failure. Retrying won't turn a declined card into an approved one."""
+    """真实失败。重试不会把被拒的卡变成通过的卡。"""
 
 
-# ─────────────── In-memory backends (stand-ins for real services) ───────────────
+# ─────────────── 内存后端（真实服务的替身） ───────────────
 
 
 class Backends:
-    """Toy in-memory stand-ins for three independent services: inventory,
-    payments, and shipping. A real saga would call three separate APIs or
-    databases here — none of which share a transaction with the others.
+    """三个独立服务（库存、支付、发货）的玩具级内存替身。真实的 saga
+    在这里会调用三个彼此独立的 API 或数据库 —— 它们之间没有任何一个
+    共享事务。
     """
 
     def __init__(self, *, reserve_stock_flaky_calls: int = 0) -> None:
@@ -53,14 +49,14 @@ class Backends:
         self.reservations: dict[str, int] = {}
         self.payments: dict[str, float] = {}
         self.shipments: dict[str, str] = {}
-        # Simulates a flaky network call to the inventory service: the first
-        # `reserve_stock_flaky_calls` calls raise TransientError, then it
-        # behaves normally. Lets the demo show a retry that succeeds.
+        # 模拟一次对库存服务的抖动网络调用：前 `reserve_stock_flaky_calls`
+        # 次调用抛 TransientError，之后恢复正常。用来在演示中展示一次
+        # 最终成功的重试。
         self._reserve_flaky_calls = reserve_stock_flaky_calls
         self._reserve_attempts = 0
 
 
-# ─────────────── Step actions ───────────────
+# ─────────────── 步骤动作 ───────────────
 
 
 def reserve_stock(backends: Backends, product_id: str, qty: int) -> None:
@@ -86,11 +82,10 @@ def create_shipment(backends: Backends, order_id: str, *, should_fail: bool = Fa
     backends.shipments[order_id] = "created"
 
 
-# ─────────────── Compensating actions ───────────────
+# ─────────────── 补偿动作 ───────────────
 #
-# Each compensation is the exact opposite of its matching action — this is
-# the saga contract. There's no database rollback across these three
-# services; this is the only way to undo a partially-completed order.
+# 每个补偿都是其对应动作的严格逆操作 —— 这就是 saga 契约。这三个服务
+# 之间没有数据库回滚；这是撤销一张半途而废的订单的唯一办法。
 
 
 def release_stock(backends: Backends, product_id: str, qty: int) -> None:
@@ -106,7 +101,7 @@ def cancel_shipment(backends: Backends, order_id: str) -> None:
     backends.shipments[order_id] = "cancelled"
 
 
-# ─────────────── Saga engine ───────────────
+# ─────────────── Saga 引擎 ───────────────
 
 
 @dataclass
@@ -127,25 +122,24 @@ class SagaResult:
 
 
 def _compensate(completed: list[SagaStep]) -> list[str]:
-    """Walk backward through already-completed steps, undoing each one in
-    reverse order — the unwind that makes the saga pattern work.
+    """沿已完成步骤反向遍历，按逆序逐个撤销 —— 正是这次回退让 saga
+    模式得以成立。
     """
     compensated: list[str] = []
     for step in reversed(completed):
-        print(f"  [compensate] undoing {step.name}")
+        print(f"  [compensate] 正在撤销 {step.name}")
         step.compensation()
         compensated.append(step.name)
     return compensated
 
 
 def run_saga(order_id: str, steps: list[SagaStep], *, max_attempts: int = 3, base_delay: float = 0.0) -> SagaResult:
-    """Run a sequence of saga steps in order.
+    """按顺序执行一串 saga 步骤。
 
-    A step marked `retryable=True` gets retried with exponential backoff on
-    `TransientError` — up to `max_attempts` — before giving up. Any other
-    exception (a genuine failure, e.g. `PaymentDeclinedError`) triggers
-    compensation immediately: retrying a declined payment just wastes time
-    and could even double-charge the customer if the retry weren't idempotent.
+    标记了 `retryable=True` 的步骤在遇到 `TransientError` 时会以指数退避
+    重试 —— 最多 `max_attempts` 次 —— 之后放弃。任何其他异常（真实失败，
+    例如 `PaymentDeclinedError`）会立即触发补偿：重试一笔被拒的支付只是
+    浪费时间，而且如果重试不是幂等的，甚至可能把客户重复扣款。
     """
     completed: list[SagaStep] = []
     for step in steps:
@@ -157,26 +151,26 @@ def run_saga(order_id: str, steps: list[SagaStep], *, max_attempts: int = 3, bas
             except TransientError as exc:
                 if step.retryable and attempt < max_attempts:
                     delay = base_delay * (2 ** (attempt - 1))
-                    print(f"  [retry] {step.name}: {exc} (attempt {attempt}/{max_attempts}, backing off {delay:.2f}s)")
+                    print(f"  [retry] {step.name}: {exc}（第 {attempt}/{max_attempts} 次尝试，退避 {delay:.2f}s）")
                     if delay:
                         time.sleep(delay)
                     continue
-                print(f"  [failed] {step.name}: {exc} (retries exhausted)")
+                print(f"  [failed] {step.name}: {exc}（重试次数已耗尽）")
                 compensated = _compensate(completed)
                 return SagaResult(order_id, False, [s.name for s in completed], step.name, compensated)
-            except Exception as exc:  # noqa: BLE001 - genuine failure, not transient
-                print(f"  [failed] {step.name}: {exc} (not retryable — compensating immediately)")
+            except Exception as exc:  # noqa: BLE001 - 真实失败，而非瞬时故障
+                print(f"  [failed] {step.name}: {exc}（不可重试 —— 立即补偿）")
                 compensated = _compensate(completed)
                 return SagaResult(order_id, False, [s.name for s in completed], step.name, compensated)
             else:
                 print(f"  [ok] {step.name}")
                 completed.append(step)
                 break
-    print(f"  [done] order {order_id} placed successfully")
+    print(f"  [done] 订单 {order_id} 下单成功")
     return SagaResult(order_id, True, [s.name for s in completed])
 
 
-# ─────────────── The "place an order" saga ───────────────
+# ─────────────── 「下单」saga ───────────────
 
 
 def build_place_order_saga(
@@ -210,19 +204,19 @@ def build_place_order_saga(
 
 
 def main() -> None:
-    print("=== Scenario 1: happy path — all three steps succeed ===")
+    print("=== 场景 1：顺利路径 —— 三步全部成功 ===")
     backends = Backends()
     steps = build_place_order_saga(backends, "order-1", "widget", 2, 49.99)
     result = run_saga("order-1", steps)
     print(result)
 
-    print("\n=== Scenario 2: transient network blip on reserve_stock, retried, then succeeds ===")
+    print("\n=== 场景 2：reserve_stock 上瞬时网络抖动，重试后成功 ===")
     backends = Backends(reserve_stock_flaky_calls=2)
     steps = build_place_order_saga(backends, "order-2", "widget", 1, 19.99)
     result = run_saga("order-2", steps, base_delay=0.01)
     print(result)
 
-    print("\n=== Scenario 3: payment declined — genuine failure, unwind reserved stock ===")
+    print("\n=== 场景 3：支付被拒 —— 真实失败，回滚已预留的库存 ===")
     backends = Backends()
     steps = build_place_order_saga(backends, "order-3", "widget", 3, 99.99, fail_payment=True)
     result = run_saga("order-3", steps)

@@ -1,10 +1,10 @@
 """
-MAF v1 — Chapter 02: Adding Tools (Python)
+MAF v1 — 第 02 章：添加工具（Python）
 
-Extend Chapter 01 with a single canned product-price lookup tool. The LLM
-decides whether to call the tool based on the user's question.
+在第 01 章的基础上扩展出一个预置数据的商品价格查询工具。LLM 会根据用户的
+问题自行决定是否调用该工具。
 
-Run:
+运行：
     source agents/.venv/bin/activate
     python tutorials/02-add-tools/python/main.py "What's the price of SKU-001?"
 """
@@ -37,13 +37,13 @@ DEFAULT_QUESTION = "What's the price of SKU-001?"
 FIXTURES_DIR = pathlib.Path(__file__).resolve().parent / "tests" / "fixtures" / "replay"
 
 
-# The canonical canned-data product-price tool from the MAF docs. Decorated
-# with @tool so MAF exposes it to the LLM with a name + JSON schema + description.
+# MAF 文档里那个经典的预置数据商品价格工具。用 @tool 装饰后，MAF 会把它的
+# 名称 + JSON schema + 描述一并暴露给 LLM。
 @tool(name="get_product_price", description="Look up the current price for a product SKU.")
 def get_product_price(
     sku: Annotated[str, Field(description="The product SKU to look up, e.g. 'SKU-001'.")],
 ) -> str:
-    # Deterministic canned data. No real catalog/pricing API call.
+    # 确定性的预置数据。不调用任何真实的目录 / 定价 API。
     canned = {
         "sku-001": "$79.99 — Wireless Mouse",
         "sku-002": "$129.99 — Mechanical Keyboard",
@@ -71,9 +71,9 @@ def _default_client() -> OpenAIChatClient | OpenAIChatCompletionClient | ReplayC
     return OpenAIChatClient(
         model=os.environ.get("LLM_MODEL", "gpt-4.1"),
         api_key=os.environ["OPENAI_API_KEY"],
-        # Phase 9: any OpenAI-compatible endpoint (GitHub Models, OpenRouter,
-        # vLLM, LM Studio, Ollama) instead of api.openai.com — see
-        # tutorials/00-setup/README.md's "Don't have a paid API key?" section.
+        # Phase 9：可指向任何兼容 OpenAI 的端点（GitHub Models、OpenRouter、
+        # vLLM、LM Studio、Ollama），而不必是 api.openai.com —— 见
+        # tutorials/00-setup/README.md 的「没有付费 API key？」一节。
         base_url=os.environ.get("LLM_BASE_URL") or None,
     )
 
@@ -96,8 +96,8 @@ async def main() -> None:
     question = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_QUESTION
     agent = build_agent()
     answer = await ask(agent, question)
-    print(f"Q: {question}")
-    print(f"A: {answer}")
+    print(f"问：{question}")
+    print(f"答：{answer}")
 
 
 if __name__ == "__main__":

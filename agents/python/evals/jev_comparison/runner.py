@@ -1,24 +1,22 @@
-"""Jev vs rule-based baselines — comparison harness.
+"""Jev 与基于规则的基线——对比运行框架。
 
-Runs two decisions over the labelled sets in ``datasets.py``:
+在 ``datasets.py`` 中带标签的样本集上运行两项决策：
 
-    routing    choice   vs  weighted keyword matching
-    gate       noul     vs  regex denylist
+    routing    choice   vs  加权关键词匹配
+    gate       noul     vs  正则拒绝名单
 
-and writes both a machine-readable JSON and a human-readable Markdown report.
+并同时写出机器可读的 JSON 和人类可读的 Markdown 报告。
 
-Honesty rules this harness enforces on itself:
+本运行框架对自身施加的诚实性规则：
 
-* Every sample is one independent measurement. No caching, no retries counted
-  as fresh samples, sequential execution so latency is not contaminated by
-  self-inflicted queueing.
-* Repository-sourced and synthetic samples are scored separately and both are
-  always reported. A synthetic sample cannot inflate a headline number.
-* Per-sample predictions are written out. Any summary here can be checked
-  against the individual rows.
-* LLM comparisons are marked ``estimated``. No frontier model was called.
+* 每个样本都是一次独立测量。不缓存，不把重试当作新的样本计数，
+  顺序执行，这样延迟不会被自身造成的排队所污染。
+* 仓库来源与合成来源的样本分别打分，且两者始终都会被报告。
+  合成样本无法抬高头条数字。
+* 逐样本的预测结果会被写出来。这里的任何汇总都可以与单行记录相互核对。
+* LLM 对比被标记为 ``estimated``。本次没有调用任何前沿模型。
 
-Run:
+运行：
     TYPESAFE_API_KEY=... python -m evals.jev_comparison.runner
 """
 
@@ -30,8 +28,6 @@ import os
 import statistics
 import sys
 import time
-from collections import Counter
-from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -46,13 +42,12 @@ from .datasets import (
 
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
 
-# Published price band for System One input tokens; output is billed at zero.
-# We use the top of the band so the cost figure is conservative.
+# System One 输入 token 的公布价格区间；输出按零计费。
+# 我们取区间上限，使成本数字偏保守。
 JEV_USD_PER_M_INPUT = 0.42
 
-# For the *estimated* frontier-LLM column only. A frontier model doing the same
-# routing turn sees roughly the same prompt but emits reasoning prose rather
-# than a typed answer, and is metered on both directions.
+# 仅用于*估算*的前沿 LLM 那一列。前沿模型在同样的路由轮次中看到的提示词
+# 大致相同，但它输出的是推理散文而非带类型的答案，且输入输出双向都计费。
 LLM_EST_USD_PER_M_INPUT = 3.00
 LLM_EST_USD_PER_M_OUTPUT = 15.00
 LLM_EST_OUTPUT_TOKENS_PER_DECISION = 60
@@ -60,12 +55,12 @@ LLM_EST_LATENCY_MS = 1500.0
 
 
 # --------------------------------------------------------------------------
-# Metrics
+# 指标
 # --------------------------------------------------------------------------
 
 
 def percentile(values: list[float], pct: float) -> float:
-    """Nearest-rank percentile. Explicit so the number is reproducible."""
+    """最近秩百分位数。显式写出，以便该数字可复现。"""
     if not values:
         return 0.0
     ordered = sorted(values)
@@ -94,7 +89,7 @@ def latency_block(values: list[float]) -> dict[str, float]:
 
 
 # --------------------------------------------------------------------------
-# Routing experiment
+# 路由实验
 # --------------------------------------------------------------------------
 
 
@@ -107,12 +102,12 @@ def run_routing(jev_client, samples: list[RouteSample]) -> dict:
     jev_input_tokens = 0
 
     for i, sample in enumerate(samples, 1):
-        # -- baseline ------------------------------------------------------
+        # -- 基线 ----------------------------------------------------------
         t0 = time.perf_counter()
         base = route_by_keywords(sample.text)
         base_latencies.append((time.perf_counter() - t0) * 1000.0)
 
-        # -- Jev -----------------------------------------------------------
+        # Jev 对照实现
         decision = route_specialist(jev_client, sample.text)
         jev_latencies.append(decision.latency_ms)
         jev_input_tokens += decision.input_tokens
@@ -128,9 +123,7 @@ def run_routing(jev_client, samples: list[RouteSample]) -> dict:
                 "jev_route": decision.route,
                 "jev_correct": decision.route == sample.expected_route,
                 "jev_confidence": round(decision.confidence, 4),
-                "jev_probabilities": {
-                    k: round(v, 4) for k, v in decision.probabilities.items()
-                },
+                "jev_probabilities": {k: round(v, 4) for k, v in decision.probabilities.items()},
                 "jev_latency_ms": round(decision.latency_ms, 2),
                 "jev_input_tokens": decision.input_tokens,
             }
@@ -146,7 +139,7 @@ def run_routing(jev_client, samples: list[RouteSample]) -> dict:
     base_correct = sum(r["baseline_correct"] for r in rows)
     jev_correct = sum(r["jev_correct"] for r in rows)
 
-    # Per-class F1 for both paths, over the labels actually present.
+    # 两条路径各自按类别的 F1，范围限于实际出现过的标签。
     labels = sorted({r["expected_route"] for r in rows})
     per_class = {}
     for label in labels:
@@ -197,12 +190,12 @@ def run_routing(jev_client, samples: list[RouteSample]) -> dict:
 
 
 # --------------------------------------------------------------------------
-# Safety-gate experiment
+# 安全闸门实验
 # --------------------------------------------------------------------------
 
 
 def _gate_metrics(rows: list[dict], key: str) -> dict:
-    """Positive class = should_refuse."""
+    """正类 = should_refuse。"""
     tp = sum(1 for r in rows if r["should_refuse"] and r[key])
     fp = sum(1 for r in rows if not r["should_refuse"] and r[key])
     fn = sum(1 for r in rows if r["should_refuse"] and not r[key])
@@ -217,18 +210,16 @@ DEFAULT_SWEEP = (0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9)
 
 
 def sweep_thresholds(rows: list[dict], thresholds: tuple[float, ...] = DEFAULT_SWEEP) -> dict:
-    """Re-threshold the *same* measured probabilities.
+    """对*同一批*已测得的概率重新取阈值。
 
-    Jev returns calibrated probabilities, so a threshold sweep is pure
-    post-processing: no extra API calls, and every point on the curve comes
-    from identical measurements.
+    Jev 返回的是校准过的概率，因此阈值扫描是纯后处理：没有额外的 API 调用，
+    曲线上的每个点都来自完全相同的测量。
 
-    This matters because the two error types in a safety gate are not
-    symmetric — leaking an attack and refusing a customer do not cost the
-    same — so 0.5 is a default, not a decision. Two curves are produced:
-    ``refuse`` (scored against ``should_refuse``) and ``injection`` (scored
-    against ``contains_injection``). They are separate questions with separate
-    ground truth, which is the whole point of splitting them.
+    这一点很重要，因为安全闸门中的两类错误并不对称——漏放一次攻击与误拒
+    一位客户，代价并不相同——所以 0.5 只是默认值，而不是一个决策。这里产出
+    两条曲线：``refuse``（以 ``should_refuse`` 为真值）与 ``injection``
+    （以 ``contains_injection`` 为真值）。它们是两个不同的问题、各有各的
+    真值，而把它们拆开正是全部意义所在。
     """
     out: dict[str, dict] = {}
 
@@ -352,21 +343,13 @@ def run_gate(jev_client, samples: list[GateSample], threshold: float) -> dict:
             "max": round(max(inj_probs), 4) if inj_probs else 0.0,
             "mean": round(statistics.fmean(inj_probs), 4) if inj_probs else 0.0,
         },
-        # Does splitting detection from disposition actually separate them?
-        # `detected_not_refused` is the cell v1 could not express at all.
+        # 把检测与处置拆开，是否真的把它们分开了？
+        # `detected_not_refused` 正是 v1 完全无法表达的那个格子。
         "detection_vs_disposition": {
-            "detected_and_refused": sum(
-                1 for r in rows if r["jev_injection_detected"] and r["jev_refuse"]
-            ),
-            "detected_not_refused": sum(
-                1 for r in rows if r["jev_injection_detected"] and not r["jev_refuse"]
-            ),
-            "not_detected_but_refused": sum(
-                1 for r in rows if not r["jev_injection_detected"] and r["jev_refuse"]
-            ),
-            "neither": sum(
-                1 for r in rows if not r["jev_injection_detected"] and not r["jev_refuse"]
-            ),
+            "detected_and_refused": sum(1 for r in rows if r["jev_injection_detected"] and r["jev_refuse"]),
+            "detected_not_refused": sum(1 for r in rows if r["jev_injection_detected"] and not r["jev_refuse"]),
+            "not_detected_but_refused": sum(1 for r in rows if not r["jev_injection_detected"] and r["jev_refuse"]),
+            "neither": sum(1 for r in rows if not r["jev_injection_detected"] and not r["jev_refuse"]),
         },
         "threshold_sweep": sweep_thresholds(rows),
         "rows": rows,
@@ -374,27 +357,21 @@ def run_gate(jev_client, samples: list[GateSample], threshold: float) -> dict:
 
 
 # --------------------------------------------------------------------------
-# Report
+# 报告
 # --------------------------------------------------------------------------
 
 
 def estimate_frontier_llm(routing: dict, gate: dict) -> dict:
-    """Rough cost/latency a frontier LLM would incur on the same decisions.
+    """前沿 LLM 在同样的决策上会产生的粗略成本 / 延迟。
 
-    Marked ``estimated`` throughout. Nothing here was measured — the point is
-    only to size the gap, and the input-token counts are Jev's own, which
-    understates an LLM prompt (a frontier model needs the same instructions
-    plus tool schemas and few-shot examples).
+    全程标记为 ``estimated``。这里没有任何东西是被测量出来的——目的只是
+    量出差距的规模，而输入 token 数取自 Jev 自身，这会低估一个 LLM 提示词
+    （前沿模型需要同样的指令，外加工具 schema 和少样本示例）。
     """
     total_decisions = routing["n_samples"] + gate["n_samples"]
-    input_tokens = (
-        routing["cost"]["jev_input_tokens_total"] + gate["cost"]["jev_input_tokens_total"]
-    )
+    input_tokens = routing["cost"]["jev_input_tokens_total"] + gate["cost"]["jev_input_tokens_total"]
     output_tokens = total_decisions * LLM_EST_OUTPUT_TOKENS_PER_DECISION
-    cost = (
-        input_tokens / 1_000_000 * LLM_EST_USD_PER_M_INPUT
-        + output_tokens / 1_000_000 * LLM_EST_USD_PER_M_OUTPUT
-    )
+    cost = input_tokens / 1_000_000 * LLM_EST_USD_PER_M_INPUT + output_tokens / 1_000_000 * LLM_EST_USD_PER_M_OUTPUT
     return {
         "estimated": True,
         "basis": (
@@ -457,7 +434,9 @@ def render_markdown(payload: dict) -> str:
 
     add("## 二、安全闸门（noul）")
     add("")
-    add(f"对照基线：{gate['baseline']}　阈值：{gate['threshold']}　样本：{gate['n_samples']}　来源：{gate['by_origin']}")
+    add(
+        f"对照基线：{gate['baseline']}　阈值：{gate['threshold']}　样本：{gate['n_samples']}　来源：{gate['by_origin']}"
+    )
     add("")
     add("正类 = 应当拒绝。")
     add("")
@@ -483,17 +462,17 @@ def render_markdown(payload: dict) -> str:
     x = gate["detection_vs_disposition"]
     add("### 检测与处置是否真的分开了")
     add("")
-    add("`contains_injection`（是否含操纵性文本）与 `should_refuse`（请求整体是否该被拒绝）是两个独立问题，同一次调用返回。")
+    add(
+        "`contains_injection`（是否含操纵性文本）与 `should_refuse`（请求整体是否该被拒绝）"
+        "是两个独立问题，同一次调用返回。"
+    )
     add("")
     add("| | 判定拒绝 | 判定不拒绝 |")
     add("|---|---|---|")
     add(f"| **检测到注入** | {x['detected_and_refused']} | {x['detected_not_refused']} |")
     add(f"| **未检测到注入** | {x['not_detected_but_refused']} | {x['neither']} |")
     add("")
-    add(
-        f"右上角 {x['detected_not_refused']} 条 =「检测到注入、但判定不拒绝」——"
-        "这正是拆分之前无法表达的那一类。"
-    )
+    add(f"右上角 {x['detected_not_refused']} 条 =「检测到注入、但判定不拒绝」——这正是拆分之前无法表达的那一类。")
     add("")
 
     add("### 阈值敏感性")
@@ -519,11 +498,9 @@ def render_markdown(payload: dict) -> str:
     add("")
     add("| 方案 | 每千次决策成本 | 延迟 |")
     add("|---|---|---|")
-    add(f"| 规则基线 | $0（本地 CPU） | 亚毫秒 |")
+    add("| 规则基线 | $0（本地 CPU） | 亚毫秒 |")
     add(f"| Jev（实测） | ${jc / jd * 1000:.4f} | p50 {routing['latency']['jev']['p50_ms']:.0f} ms |")
-    add(
-        f"| 前沿 LLM（**估算**） | ${est['usd_per_1k_decisions']:.2f} | ~{est['latency_ms_assumed']:.0f} ms |"
-    )
+    add(f"| 前沿 LLM（**估算**） | ${est['usd_per_1k_decisions']:.2f} | ~{est['latency_ms_assumed']:.0f} ms |")
     add("")
     add(f"> 估算依据：{est['basis']}")
     add("")
@@ -543,7 +520,7 @@ def render_markdown(payload: dict) -> str:
 
 
 # --------------------------------------------------------------------------
-# Entry point
+# 入口点
 # --------------------------------------------------------------------------
 
 
@@ -552,9 +529,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--threshold", type=float, default=0.5, help="noul refusal threshold")
     parser.add_argument("--model", default=None, help="override the Jev model id")
     parser.add_argument("--out-dir", default=str(RESULTS_DIR))
-    parser.add_argument(
-        "--limit", type=int, default=None, help="smoke test: cap samples per set"
-    )
+    parser.add_argument("--limit", type=int, default=None, help="smoke test: cap samples per set")
     args = parser.parse_args(argv)
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -580,7 +555,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"\n=== safety gate: {len(gate_samples)} samples ===")
     gate = run_gate(client, gate_samples, args.threshold)
 
-    # -- conclusions, derived from the numbers rather than asserted ---------
+    # -- 结论由数字推导得出，而不是凭空断言 --------------------------------
     conclusions: list[str] = []
     d_acc = routing["accuracy"]["jev"] - routing["accuracy"]["baseline"]
     conclusions.append(
@@ -596,13 +571,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     repo = gate["repository_only"]
     conclusions.append(
-        f"仅在仓库原生样本上（n={repo['n']}）：基线 F1 {repo['baseline']['f1']:.3f} vs "
-        f"Jev F1 {repo['jev']['f1']:.3f}。"
+        f"仅在仓库原生样本上（n={repo['n']}）：基线 F1 {repo['baseline']['f1']:.3f} vs Jev F1 {repo['jev']['f1']:.3f}。"
     )
     conclusions.append(
         f"实测延迟 p50 {routing['latency']['jev']['p50_ms']:.0f} ms（路由）/ "
         f"{gate['latency']['jev']['p50_ms']:.0f} ms（闸门），"
-        f"每千次决策 ${(routing['cost']['jev_usd_total'] + gate['cost']['jev_usd_total']) / (routing['n_samples'] + gate['n_samples']) * 1000:.4f}。"
+        f"每千次决策 ${
+            (routing['cost']['jev_usd_total'] + gate['cost']['jev_usd_total'])
+            / (routing['n_samples'] + gate['n_samples'])
+            * 1000:.4f}。"
     )
     conclusions.append(
         "规则基线的成本是 0 且延迟亚毫秒——Jev 的优势在判断质量，不在资源占用。"

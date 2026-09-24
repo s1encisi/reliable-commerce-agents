@@ -1,54 +1,53 @@
-# ADR 0005 — Two backends, one frontend, gated by a real test run
+# ADR 0005 —— 只保留 Python 单栈，避免能力重复实现
 
-**Status:** Accepted · **Date:** 2026-08-26 (recorded; decided much earlier)
+**状态：** 已接受 · **日期：** 2026 年 8 月 26 日（记录时间；决策时间远早于此）
 
-## Context
+## 背景
 
-Microsoft Agent Framework ships a Python SDK and a .NET SDK. Most samples pick one. This
-repo implements the same domain twice — `agents/python/` and `agents/dotnet/` — behind a
-single Next.js frontend that switches with `NEXT_PUBLIC_BACKEND_STACK`.
+微软智能体框架提供多套语言 SDK，大多数示例只选其中一套。本项目一度把同一个领域实现了两遍——
+一套 Python 实现，外加另一套基于其他 SDK 的实现——放在同一个 Next.js 前端之后，靠一个环境变量
+在两者之间切换。
 
-Two implementations of one domain is the most expensive shape this project could have
-chosen, so the reason has to be worth it.
+同一个领域的两套实现，是这个项目可能选到的最昂贵形态，所以理由必须撑得起这份成本。
 
-## Decision
+## 决策
 
-Both stacks are maintained. Python is the reference implementation and lands features
-first; .NET follows on a prioritised backlog rather than in lockstep. Parity is defined
-by **`web/e2e/orchestration-parity.spec.ts` passing against both**, not by a matrix row.
+只保留 Python 栈。`agents/python/` 是唯一实现，前端直接面向它。另一套实现，以及它配套的 compose
+文件、教程目录和前端切换逻辑，全部移除。
 
-## Why
+## 理由
 
-**It is the differentiator.** Nobody else has the same domain, the same frontend and the
-same protocol implemented in both SDKs, with the differences written down.
+**聚焦胜过覆盖面。** 这个项目要把「多智能体编排在生产形态下应该长什么样」讲透，而不是展示同一
+件事能写两遍。多一套实现，就多一套要跟着提示词契约、协议变更和依赖升级一起维护的东西——维护
+成本是线性叠加的，而读者从中获得的理解增量几乎为零。
 
-**A shared protocol is what makes it possible.** Because specialists speak A2A over HTTP
-([ADR 0001](0001-a2a-over-direct-calls.md)) and prompts live in one YAML corpus
-([ADR 0003](0003-yaml-prompt-composition.md)), the two stacks share a contract rather
-than a codebase.
+**避免同一能力被重复实现。** 六个智能体、四十六个工具、五种编排模式、事实核验、护栏、人工
+参与、评测——这些能力一旦写两遍，任何一次行为修正都得在两边各做一次，而且两边很容易悄悄分岔成
+两种不同的行为。单栈意味着只有一处真相。
 
-**It surfaces framework differences honestly.** `docs/parity-matrix.md` lists what still
-differs and why, including decisions not to port — the .NET stack deliberately reuses the
-Python seeder and auth-server, because a second seeder would have to produce
-byte-identical rows or the two stacks would diverge in catalogue content.
+**协议边界依然完整保留。** 专业智能体之间仍然通过 A2A HTTP 通信（[ADR 0001](0001-a2a-over-direct-calls.md)），
+提示词仍然来自同一份 YAML 语料（[ADR 0003](0003-yaml-prompt-composition.md)）。移除的是重复的
+实现，不是可替换的接口：如果将来确实需要换语言或换框架实现某一部分，A2A 与 YAML 这两份契约
+仍然允许在不改动其他部分的前提下把它换掉。
 
-## Consequences
+## 后果
 
-**Parity claims are worthless without a run.** The repo's 109-test e2e suite passed green
-against a .NET backend missing four whole features, because it never exercised them. That
-is why `parity-gaps.ts` exists and why every assertion in the parity spec checks for
-*presence*: a test that only confirms "no error appeared" goes green against a blank page.
+**评测与浏览器端到端测试成为唯一的验收依据。** 过去可以拿两套实现互相对照，现在不行了。行为
+是否正确，只能靠真实跑一遍来判断——这也是为什么 `web/e2e/` 下的浏览器套件和评测运行框架必须走
+真实生产代码路径，而不是替身（见 [`docs/concepts/12-evaluation.md`](../concepts/12-evaluation.md)）。
 
-**The gate is not in CI.** `tests.yml` says so explicitly — it needs a full stack and a
-real API key, which is impractical per push. The cost is not theoretical: the .NET
-orchestrator could not answer a single question for an extended period, and unit tests,
-container health checks and image builds were all green throughout. It was found by
-running the browser suite by hand.
+**单栈意味着单点依赖。** 框架的行为现在是承重的（见 [ADR 0004](0004-maf-native-execution.md)），
+而栈本身只有一种。如果某个需求只有另一套 SDK 能表达，代价会比同时维护两套实现时更高——缓解方式是承认它
+并记录它，而不是悄悄再引一套实现进来。
 
-That is the standing weakness of this decision, and it is recorded rather than resolved.
+**门禁不在 CI 里。** `tests.yml` 明确写了这一点——浏览器套件需要完整栈和真实 API key，每次
+推送都跑不现实。代价不是理论上的：曾有很长一段时间编排器无法回答任何一个问题，而单元测试、
+容器健康检查和镜像构建全程是绿的。它是靠手工运行浏览器套件才被发现的。
 
-## What would make this wrong
+这是这个决定长期存在的弱点，它被记录下来，而不是被解决掉。
 
-If the .NET backlog stopped moving, this would become one working stack and one
-half-finished one — worse than having picked a single SDK, because the parity matrix
-would be advertising a promise nobody was keeping.
+## 什么情况下这个决定是错的
+
+如果 Python SDK 在某个必需能力上长期落后，或者框架层面出现只有另一套实现才支持的硬性要求，
+那么单栈的聚焦收益就会被能力缺口吃掉，那时应当重新评估——但重新评估的结果应该是替换栈，而不是
+同时维护两套。

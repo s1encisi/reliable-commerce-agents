@@ -1,10 +1,9 @@
 """
-Chapter 23 — A2A Protocol: tests.
+第 23 章 —— A2A 协议：测试。
 
-- Unit tests exercise the order-lookup function and the A2A transport
-  (agent-card, /message:send, /message:stream) directly — no LLM involved,
-  since the transport is the concept this chapter teaches.
-- Integration tests hit the real LLM and assert it calls the specialist tool.
+- 单元测试直接演练订单查询函数与 A2A 传输（agent-card、/message:send、
+  /message:stream）—— 不涉及 LLM，因为传输才是本章讲授的概念。
+- 集成测试访问真实 LLM，并断言它会调用专业智能体工具。
 """
 
 from __future__ import annotations
@@ -32,7 +31,7 @@ from main import (  # noqa: E402
     demo_stream_call,
 )
 
-# ─────────────────── Order-lookup unit tests (no LLM, no HTTP) ─────
+# ─────────────────── 订单查询单元测试（无 LLM、无 HTTP） ─────
 
 
 def test_lookup_order_returns_known_status() -> None:
@@ -54,9 +53,9 @@ def test_lookup_order_is_case_insensitive() -> None:
     assert _lookup_order("ord-1001") == _lookup_order("ORD-1001")
 
 
-# ─────────────────── A2A transport unit tests (no LLM) ──────────────
-# These exercise the real Starlette app through httpx's ASGITransport —
-# real routing/JSON/SSE, no LLM, no network socket. See the README for why.
+# ─────────────────── A2A 传输单元测试（无 LLM） ──────────────
+# 这些测试经由 httpx 的 ASGITransport 演练真实的 Starlette 应用 ——
+# 真实的路由/JSON/SSE，无 LLM，无网络套接字。原因见 README。
 
 
 @pytest.mark.asyncio
@@ -68,8 +67,8 @@ async def test_agent_card_endpoint_returns_identity() -> None:
 
 @pytest.mark.asyncio
 async def test_call_order_specialist_tool_hits_message_send() -> None:
-    # @tool exposes the original coroutine function via .func — same
-    # unwrap pattern as Chapter 02's get_product_price.func(...).
+    # @tool 通过 .func 暴露原始协程函数 —— 与第 02 章
+    # get_product_price.func(...) 相同的解包方式。
     result = await call_order_specialist.func("What's the status of ORD-1002?")
     assert "Processing" in result
 
@@ -87,28 +86,27 @@ async def test_message_stream_raises_on_error_sentinel() -> None:
         await demo_stream_call("")
 
 
-# ─────────────────── Agent wiring ────────────────────────────────
+# ─────────────────── 智能体接线 ────────────────────────────────
 
 
 def test_agent_has_specialist_tool_registered() -> None:
-    agent = build_agent(client=object())  # client isn't called; we only inspect structure
+    agent = build_agent(client=object())  # client 不会被调用；我们只检查结构
     tool_names = [getattr(t, "name", None) for t in agent.default_options.get("tools") or []]
     assert "call_order_specialist" in tool_names
 
 
-# ─────────────────── Replay test (no credentials, runs in CI) ────
+# ─────────────────── 回放测试（无需凭据，可在 CI 中运行） ────
 
 
 @pytest.mark.asyncio
 async def test_replay_calls_order_specialist(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Plays back tests/fixtures/replay/ — no network to a real LLM, no credentials.
+    """播放 tests/fixtures/replay/ —— 不访问真实 LLM，也不需要凭据。
 
-    (The in-process A2A call to the local Starlette specialist still happens —
-    that's not the LLM, it's the same local transport the unit tests above
-    exercise directly.)
+    （对本地 Starlette 专业智能体的进程内 A2A 调用仍然会发生 ——
+    那不是 LLM，而是上面那些单元测试直接演练的同一个本地传输。）
 
-    Recorded once against a real LLM (test_real_llm_calls_order_specialist
-    below, run with RECORD=true) and committed.
+    针对真实 LLM 录制过一次（即下面以 RECORD=true 运行的
+    test_real_llm_calls_order_specialist），然后提交进仓库。
     """
     if not any(FIXTURES_DIR.glob("*.json")):
         pytest.skip(f"no recorded fixtures in {FIXTURES_DIR} — run with RECORD=true first")
@@ -119,7 +117,7 @@ async def test_replay_calls_order_specialist(monkeypatch: pytest.MonkeyPatch) ->
     assert "shipped" in lowered or "2026-08-22" in lowered, f"expected order-status data in the answer, got: {answer!r}"
 
 
-# ─────────────────── Real-LLM integration tests ────────────────
+# ─────────────────── 真实 LLM 集成测试 ────────────────
 
 
 def _llm_available() -> bool:
@@ -137,7 +135,7 @@ def _llm_available() -> bool:
 @pytest.mark.asyncio
 @pytest.mark.skipif(not _llm_available(), reason="no LLM credentials in .env")
 async def test_real_llm_calls_order_specialist() -> None:
-    """The LLM should see the tool and use it when asked about an order."""
+    """LLM 应当看到该工具，并在被问及订单时使用它。"""
     agent = build_agent()
     answer = await ask(agent, "What's the status of order ORD-1001?")
     lowered = answer.lower()
@@ -148,9 +146,9 @@ async def test_real_llm_calls_order_specialist() -> None:
 @pytest.mark.asyncio
 @pytest.mark.skipif(not _llm_available(), reason="no LLM credentials in .env")
 async def test_real_llm_skips_tool_for_unrelated_question() -> None:
-    """For an unrelated question the order-lookup tool must NOT appear in the answer."""
+    """对于无关问题，订单查询工具绝不应出现在回答中。"""
     agent = build_agent()
     answer = await ask(agent, "What is the capital of France? Answer with only the city name.")
     assert "paris" in answer.lower()
-    # Canned-order strings must not bleed into a non-order answer.
+    # 预置的订单字符串绝不能渗进一个与订单无关的回答里。
     assert "shipped" not in answer.lower()

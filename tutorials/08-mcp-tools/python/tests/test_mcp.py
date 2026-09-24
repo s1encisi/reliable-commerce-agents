@@ -1,9 +1,9 @@
 """
-Chapter 08 — MCP Tools: tests.
+第 08 章 —— MCP 工具：测试。
 
-- Unit test: the weather MCP server returns canned data when exercised directly.
-- Integration: end-to-end agent run calls the tool via MCP and includes the
-  canned forecast in the final answer.
+- 单元测试：直接调用天气 MCP 服务器，验证它返回预置数据。
+- 集成测试：端到端的智能体运行会通过 MCP 调用该工具，并把预置的天气预报
+  写进最终回答。
 """
 
 from __future__ import annotations
@@ -23,27 +23,27 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from main import FIXTURES_DIR, build_mcp_tool, run  # noqa: E402
 from weather_mcp_server import get_weather  # noqa: E402
 
-# ─────────────────── Replay test (no credentials, runs in CI) ────
+# ─────────────────── 回放测试（无需凭据，可在 CI 中运行） ────
 
 
 @pytest.mark.asyncio
 async def test_replay_calls_mcp_weather_tool(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Plays back tests/fixtures/replay/ — no network LLM calls, no credentials.
+    """回放 tests/fixtures/replay/ —— 不发起网络 LLM 调用、不需凭据。
 
-    The MCP server subprocess still runs for real (it's local and free); only
-    the LLM call is replayed. Recorded once against a real LLM (with
-    RECORD=true) and committed. Mirrors test_real_llm_calls_mcp_weather_tool.
+    MCP 服务器子进程仍然真实运行（它是本地的、不花钱）；只有 LLM 调用被回放。
+    曾针对真实 LLM 录制过一次（以 RECORD=true 运行），随后提交入库。
+    对应 test_real_llm_calls_mcp_weather_tool。
     """
     if not any(FIXTURES_DIR.glob("*.json")):
-        pytest.skip(f"no recorded fixtures in {FIXTURES_DIR} — run with RECORD=true first")
+        pytest.skip(f"{FIXTURES_DIR} 中没有已录制的夹具 —— 请先以 RECORD=true 运行")
     monkeypatch.setenv("LLM_PROVIDER", "replay")
     answer = await run("What's the weather in Paris?")
     lowered = answer.lower()
-    assert "sunny" in lowered or "18" in lowered, f"expected MCP tool data in answer, got: {answer!r}"
+    assert "sunny" in lowered or "18" in lowered, f"期望答案中出现 MCP 工具的数据，实际为：{answer!r}"
 
 
 def test_weather_tool_returns_canned_data() -> None:
-    # FastMCP wraps the function; access the original via .fn
+    # FastMCP 包装了该函数；通过 .fn 拿到原函数
     fn = getattr(get_weather, "fn", get_weather)
     assert "Sunny" in fn("Paris")
     assert "No weather data" in fn("Atlantis")
@@ -72,18 +72,18 @@ def _llm_available() -> bool:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-@pytest.mark.skipif(not _llm_available(), reason="no LLM credentials in .env")
+@pytest.mark.skipif(not _llm_available(), reason=".env 中没有 LLM 凭据")
 async def test_real_llm_calls_mcp_weather_tool() -> None:
     answer = await run("What's the weather in Paris?")
     lowered = answer.lower()
-    assert "sunny" in lowered or "18" in lowered, f"expected MCP tool data in answer, got: {answer!r}"
+    assert "sunny" in lowered or "18" in lowered, f"期望答案中出现 MCP 工具的数据，实际为：{answer!r}"
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-@pytest.mark.skipif(not _llm_available(), reason="no LLM credentials in .env")
+@pytest.mark.skipif(not _llm_available(), reason=".env 中没有 LLM 凭据")
 async def test_real_llm_skips_mcp_tool_for_unrelated_question() -> None:
     answer = await run("What is the capital of France? Answer with only the city.")
     assert "paris" in answer.lower()
-    # Canned weather strings should not appear in non-weather answers.
+    # 预置的天气字符串不应出现在与天气无关的回答里。
     assert "sunny, 18" not in answer.lower()

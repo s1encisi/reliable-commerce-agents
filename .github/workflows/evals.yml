@@ -1,25 +1,21 @@
-name: Evals
+name: 评测
 
-# Two jobs, split by cost:
+# 两个 job，按成本划分：
 #
-# - `smoke` runs on every PR: every dataset (including orchestrator_routing.json
-#   and red_team.json), all against LLM_PROVIDER=replay with deterministic
-#   scorers only, compared against evals/baselines/. Zero cost, zero
-#   credentials — see agents/python/evals/fixtures/README.md for how the
-#   cassettes were recorded and why the five specialist services still need
-#   to be booted (in replay mode, no key) before the orchestrator/safety
-#   suites run: call_specialist_agent makes a real HTTP call independent of
-#   LLM_PROVIDER, so those two suites need the services *up*, just not
-#   making any real LLM calls.
-# - `full` runs on workflow_dispatch ONLY: every suite again with a real key
-#   and --use-llm-judge, so completeness is judged rather than keyword-matched.
-#   This is the one that spends real OpenAI budget.
+# - `smoke` 在每个 PR 上运行：全部数据集（包括 orchestrator_routing.json
+#   与 red_team.json），一律在 LLM_PROVIDER=replay 下、只用确定性评分器，
+#   并与 evals/baselines/ 比较。零成本、零凭据 —— 录制带是如何录制的、
+#   以及为什么在跑编排器/安全套件之前仍需要启动五个专业智能体服务
+#   （回放模式下不需要 key），见 agents/python/evals/fixtures/README.md：
+#   call_specialist_agent 会发起一次与 LLM_PROVIDER 无关的真实 HTTP 调用，
+#   所以这两个套件需要服务**起来**，只是不做任何真实 LLM 调用。
+# - `full` 仅在 workflow_dispatch 下运行：用真实 key 与 --use-llm-judge 重跑每个
+#   套件，让完整性由评判而非关键词匹配来判定。这是唯一会花掉真实 OpenAI 预算的那个。
 #
-#   It used to also run on a weekly cron. Nothing in this repo may spend a live
-#   LLM key on an automatic trigger — a scheduled job bills you on a timer, for
-#   a result nobody asked for and (as the 2026-08-24 run showed) nobody reads
-#   when it fails. Anything that costs money is started by a human who wants the
-#   answer. Keep it that way when adding jobs here.
+#   它过去还会按每周 cron 运行。本仓库中不允许任何东西在自动触发器上花费真实 LLM key
+#   —— 定时任务会按时间表向你计费，为一个没人要的结果付费，而且（正如 2026-08-24 那次
+#   运行所示）它失败时也没人看。任何花钱的东西都由想要答案的人手动启动。
+#   在此处新增 job 时请保持这一点。
 
 on:
   pull_request:
@@ -39,7 +35,7 @@ on:
   workflow_dispatch:
     inputs:
       pass_threshold:
-        description: "Minimum overall score for the quality suites"
+        description: "质量套件的最低总分"
         default: "0.7"
 
 permissions:
@@ -48,7 +44,7 @@ permissions:
 env:
   DATABASE_URL: postgresql://ecommerce:ecommerce_secret@localhost:5432/ecommerce_agents
   REDIS_URL: redis://localhost:6379
-  # 'test' keeps the settings validator in warn-mode for placeholder secrets.
+  # 'test' 让 settings 校验器对占位密钥保持警告模式。
   ENVIRONMENT: test
   JWT_SECRET: ci-eval-jwt-secret-please-rotate-32bytes
   AGENT_SHARED_SECRET: ci-eval-agent-secret-please-rotate-32b
@@ -57,16 +53,15 @@ env:
     "pricing-promotions":"http://localhost:8083","review-sentiment":"http://localhost:8084",
     "inventory-fulfillment":"http://localhost:8085"}
   THRESH: ${{ github.event.inputs.pass_threshold || '0.7' }}
-  # The smoke job replays frozen model output, so its absolute score is a
-  # property of the recording session, not of the pull request under test.
-  # What a PR *can* change is measured by --baseline/--max-regression (and by
-  # the missing-fixture check, which always fails the run). The 0.7 quality
-  # floor is asserted by the `full` job, which drives real models.
+  # smoke job 回放的是冻结的模型输出，因此它的绝对分数是那次录制会话的属性，
+  # 而不是被测 pull request 的属性。一个 PR **能**改变的东西由
+  # --baseline/--max-regression 衡量（以及那个总会让运行失败的缺失 fixture 检查）。
+  # 0.7 的质量下限由 `full` job 断言，它驱动真实模型。
   SMOKE_THRESH: ${{ github.event.inputs.pass_threshold || '0' }}
 
 jobs:
   smoke:
-    name: Smoke (replay, deterministic, free)
+    name: 冒烟评测（确定性回放）
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -92,34 +87,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install uv
+      - name: 安装 uv
         uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
           cache-dependency-glob: agents/python/uv.lock
 
-      - name: Install Python 3.12
+      - name: 安装 Python 3.12
         run: uv python install 3.12
 
-      - name: Sync dependencies
+      - name: 同步依赖
         working-directory: agents/python
         run: uv sync --extra dev
 
-      - name: Load database schema
+      - name: 载入数据库 schema
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f docker/postgres/init.sql
 
-      # scripts.seed / scripts.generate_embeddings live at the repo root, not
-      # inside agents/python/ — docker-compose's seeder service resolves this
-      # via a volume mount (./scripts:/app/scripts:ro) that isn't available
-      # here, so these two steps run from the repo root and point uv at the
-      # agents/python project explicitly instead.
-      - name: Seed deterministic demo data
+      # scripts.seed / scripts.generate_embeddings 位于仓库根目录，而不是
+      # agents/python/ 内 —— docker-compose 的 seeder 服务通过卷挂载
+      # (./scripts:/app/scripts:ro) 解析它，而这里没有该挂载，因此这两个步骤
+      # 从仓库根目录运行，并显式把 uv 指向 agents/python 项目。
+      - name: 写入确定性演示数据
         run: uv run --project agents/python python -m scripts.seed
 
-      - name: Generate embeddings
+      - name: 生成向量嵌入
         run: uv run --project agents/python python -m scripts.generate_embeddings
 
-      - name: Start specialist services (replay mode — no key, no cost)
+      - name: 启动专业智能体服务（回放模式 —— 无 key、零成本）
         working-directory: agents/python
         run: |
           for svc in product_discovery:8081 order_management:8082 pricing_promotions:8083 review_sentiment:8084 inventory_fulfillment:8085; do
@@ -134,13 +128,13 @@ jobs:
               sleep 1
             done
             curl -sf "http://localhost:$port/health" > /dev/null || {
-              echo "::error::specialist on port $port never became healthy"
+              echo "::error::端口 $port 上的专业智能体始终未变为健康"
               cat /tmp/*.log
               exit 1
             }
           done
 
-      - name: Run every suite against replay fixtures + committed baselines
+      - name: 对回放 fixture 与已提交基线运行全部套件
         working-directory: agents/python
         run: |
           fail=0
@@ -165,19 +159,18 @@ jobs:
           echo "::endgroup::"
           exit $fail
 
-      # The specialists are started with `nohup ... &` and would otherwise
-      # still be running when the job's post steps execute. `setup-uv`'s
-      # cache-prune step then hangs on the uv cache those processes hold open
-      # and is killed at its 300s timeout, failing the job after all the real
-      # work has already succeeded. A job should stop what it starts.
-      - name: Stop specialist services
+      # 专业智能体是以 `nohup ... &` 启动的，否则当 job 的后置步骤执行时它们仍在运行。
+      # 那时 `setup-uv` 的缓存清理步骤会在这些进程持有的 uv 缓存上挂住，
+      # 并在其 300 秒超时处被杀死，让 job 在所有真实工作都已成功之后才失败。
+      # 一个 job 应该停掉自己启动的东西。
+      - name: 停止专业智能体服务
         if: always()
         run: |
           pkill -f "uvicorn .*\.main:app" || true
           sleep 2
           pkill -9 -f "uvicorn .*\.main:app" || true
 
-      - name: Upload eval results
+      - name: 上传评测结果
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -186,7 +179,7 @@ jobs:
           retention-days: 30
 
   full:
-    name: Full (real LLM + judge, scheduled)
+    name: 完整评测（真实模型与评判，仅手动）
     runs-on: ubuntu-latest
     timeout-minutes: 30
     if: github.event_name == 'workflow_dispatch'
@@ -214,41 +207,40 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Require OPENAI_API_KEY
+      - name: 要求提供 OPENAI_API_KEY
         run: |
           if [ -z "${OPENAI_API_KEY}" ]; then
-            echo "::error::OPENAI_API_KEY secret is not set — add it in repo settings to run the full eval suite."
+            echo "::error::OPENAI_API_KEY secret 未设置 —— 请在仓库设置中添加它，才能运行完整评测套件。"
             exit 1
           fi
 
-      - name: Install uv
+      - name: 安装 uv
         uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
           cache-dependency-glob: agents/python/uv.lock
 
-      - name: Install Python 3.12
+      - name: 安装 Python 3.12
         run: uv python install 3.12
 
-      - name: Sync dependencies
+      - name: 同步依赖
         working-directory: agents/python
         run: uv sync --extra dev
 
-      - name: Load database schema
+      - name: 载入数据库 schema
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f docker/postgres/init.sql
 
-      # scripts.seed / scripts.generate_embeddings live at the repo root, not
-      # inside agents/python/ — docker-compose's seeder service resolves this
-      # via a volume mount (./scripts:/app/scripts:ro) that isn't available
-      # here, so these two steps run from the repo root and point uv at the
-      # agents/python project explicitly instead.
-      - name: Seed deterministic demo data
+      # scripts.seed / scripts.generate_embeddings 位于仓库根目录，而不是
+      # agents/python/ 内 —— docker-compose 的 seeder 服务通过卷挂载
+      # (./scripts:/app/scripts:ro) 解析它，而这里没有该挂载，因此这两个步骤
+      # 从仓库根目录运行，并显式把 uv 指向 agents/python 项目。
+      - name: 写入确定性演示数据
         run: uv run --project agents/python python -m scripts.seed
 
-      - name: Generate embeddings
+      - name: 生成向量嵌入
         run: uv run --project agents/python python -m scripts.generate_embeddings
 
-      - name: Start specialist services (real key)
+      - name: 启动专业智能体服务（真实 key）
         working-directory: agents/python
         run: |
           for svc in product_discovery:8081 order_management:8082 pricing_promotions:8083 review_sentiment:8084 inventory_fulfillment:8085; do
@@ -263,13 +255,13 @@ jobs:
               sleep 1
             done
             curl -sf "http://localhost:$port/health" > /dev/null || {
-              echo "::error::specialist on port $port never became healthy"
+              echo "::error::端口 $port 上的专业智能体始终未变为健康"
               cat /tmp/*.log
               exit 1
             }
           done
 
-      - name: Run quality + safety evals (real judge, real key)
+      - name: 运行质量 + 安全评测（真实评判、真实 key）
         working-directory: agents/python
         run: |
           fail=0
@@ -296,19 +288,18 @@ jobs:
           echo "::endgroup::"
           exit $fail
 
-      # The specialists are started with `nohup ... &` and would otherwise
-      # still be running when the job's post steps execute. `setup-uv`'s
-      # cache-prune step then hangs on the uv cache those processes hold open
-      # and is killed at its 300s timeout, failing the job after all the real
-      # work has already succeeded. A job should stop what it starts.
-      - name: Stop specialist services
+      # 专业智能体是以 `nohup ... &` 启动的，否则当 job 的后置步骤执行时它们仍在运行。
+      # 那时 `setup-uv` 的缓存清理步骤会在这些进程持有的 uv 缓存上挂住，
+      # 并在其 300 秒超时处被杀死，让 job 在所有真实工作都已成功之后才失败。
+      # 一个 job 应该停掉自己启动的东西。
+      - name: 停止专业智能体服务
         if: always()
         run: |
           pkill -f "uvicorn .*\.main:app" || true
           sleep 2
           pkill -9 -f "uvicorn .*\.main:app" || true
 
-      - name: Upload eval results
+      - name: 上传评测结果
         if: always()
         uses: actions/upload-artifact@v4
         with:

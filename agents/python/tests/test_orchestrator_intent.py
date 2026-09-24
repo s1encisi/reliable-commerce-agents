@@ -1,9 +1,4 @@
-"""Track D4 — orchestrator header construction and identity propagation.
-
-Verifies that call_specialist_agent forwards the correct HTTP headers
-(x-agent-secret, x-user-email, x-user-role, x-session-id) when calling a
-specialist agent via A2A. No live LLM, no DB, no real HTTP.
-"""
+"""编排器 A2A 请求头和身份传播测试，覆盖共享密钥、用户、角色与会话，无外部调用。"""
 
 from __future__ import annotations
 
@@ -26,7 +21,7 @@ def _noop_span(*args, **kwargs):
 
 
 def _capture_client():
-    """Build a mock AsyncClient that records the post() call args."""
+    """构造记录 post 参数的 AsyncClient 替身。"""
     mock_resp = MagicMock()
     mock_resp.json.return_value = {"response": "ok"}
     mock_resp.raise_for_status = MagicMock()

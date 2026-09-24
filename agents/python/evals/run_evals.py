@@ -1,21 +1,21 @@
-"""CLI entry point for running agent evaluations.
+"""运行智能体评测的 CLI 入口点。
 
-Usage:
-    # Quality suite (golden datasets) — fast/free by default (keyword completeness)
+用法:
+    # 质量套件（黄金数据集）——默认快速/免费（关键词完整性）
     python -m evals.run_evals --agent product-discovery --dataset evals/datasets/product_discovery.json
     python -m evals.run_evals --agent orchestrator --dataset evals/datasets/orchestrator_routing.json
 
-    # Full suite: real LLM-judge completeness scoring
+    # 完整套件：使用真实的 LLM 评判器做完整性打分
     python -m evals.run_evals --agent product-discovery --dataset evals/datasets/product_discovery.json --use-llm-judge
 
-    # Safety / red-team suite (defaults to evals/datasets/red_team.json)
+    # 安全 / 红队套件（默认使用 evals/datasets/red_team.json）
     python -m evals.run_evals --suite safety --pass-threshold 0.8 --verbose
 
-    # Compare against a stored baseline; fail if any suite regresses more than --max-regression
+    # 与存储的基线对比；若任何套件的分数回退超过 --max-regression 则失败
     python -m evals.run_evals --agent product-discovery --dataset evals/datasets/product_discovery.json \\
         --baseline evals/baselines/product_discovery.json --max-regression 0.05
 
-    # Update the stored baseline after a deliberate, reviewed change
+    # 在一次经过审慎评审的变更之后更新存储的基线
     python -m evals.run_evals --agent product-discovery --dataset evals/datasets/product_discovery.json \\
         --update-baseline evals/baselines/product_discovery.json
 """
@@ -37,14 +37,14 @@ logger = logging.getLogger(__name__)
 
 
 async def _init_infrastructure() -> None:
-    """Initialize database pool and other shared infrastructure."""
+    """初始化数据库连接池及其他共享基础设施。"""
     from shared.db import init_db_pool
 
     await init_db_pool()
 
 
 async def _cleanup_infrastructure() -> None:
-    """Clean up database connections."""
+    """清理数据库连接。"""
     from shared.db import close_db_pool
 
     await close_db_pool()
@@ -61,7 +61,7 @@ async def run_evaluation(
     max_regression: float = 0.05,
     update_baseline_path: str | None = None,
 ) -> int:
-    """Run a quality evaluation and return an exit code (0 = passed)."""
+    """运行一次质量评测并返回退出码（0 = 通过）。"""
     dataset = Path(dataset_path)
     if not dataset.exists():
         print(f"Dataset not found: {dataset_path}", file=sys.stderr)
@@ -110,8 +110,8 @@ async def run_evaluation(
 
         exit_code = 0 if met_threshold else 1
 
-        # A missing fixture always fails the run, whatever the threshold is —
-        # the agent never ran, so a passing score would be meaningless.
+        # 夹具缺失无论如何都会让本次运行失败，不管阈值是多少——
+        # 智能体根本没有运行，因此一个通过的分数毫无意义。
         if summary.missing_fixtures:
             print(
                 f"Evaluation FAILED — {summary.missing_fixtures} case(s) had no replay fixture.",
@@ -144,7 +144,7 @@ async def run_safety(
     verbose: bool = False,
     output_json: str | None = None,
 ) -> int:
-    """Run the safety / red-team suite and return an exit code (0 = passed)."""
+    """运行安全 / 红队套件并返回退出码（0 = 通过）。"""
     from evals.safety_evaluator import SafetyEvaluator, format_safety_report
 
     dataset = Path(dataset_path)

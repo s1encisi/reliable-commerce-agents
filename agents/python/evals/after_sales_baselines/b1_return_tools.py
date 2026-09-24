@@ -1,4 +1,4 @@
-"""Shared return tools — eligibility checks, returns, refunds."""
+"""共享退货工具——资格校验、退货、退款。"""
 
 from __future__ import annotations
 
@@ -69,8 +69,8 @@ async def process_refund(
 
     pool = get_pool()
     async with pool.acquire() as conn:
-        # Lock the return row before re-checking status. Without this a
-        # double-click on "issue refund" can fund the customer twice.
+        # 在重新检查状态之前先锁住退货行。没有这一步，
+        # 对"发放退款"的一次双击就可能给客户重复打款。
         async with conn.transaction():
             ret = await conn.fetchrow(
                 """SELECT r.id, r.order_id, r.status, r.refund_method, r.refund_amount
@@ -118,7 +118,7 @@ async def get_return_status(
 
     pool = get_pool()
     async with pool.acquire() as conn:
-        # Verify order ownership
+        # 校验订单归属
         order_check = await conn.fetchrow(
             """SELECT o.id FROM orders o
                JOIN users u ON o.user_id = u.id

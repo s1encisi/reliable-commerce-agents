@@ -1,54 +1,45 @@
-# ADR 0003 — Prompts compose from YAML, never hardcoded strings
+# ADR 0003 —— 提示词由 YAML 组合而成，绝不硬编码字符串
 
-**Status:** Accepted · **Date:** 2026-08-26 (recorded; decided much earlier)
+**状态：** 已接受 · **日期：** 2026 年 8 月 26 日（记录时间；决策时间远早于此）
 
-## Context
+## 背景
 
-Six agents need system prompts. Several share the same grounding rules, the same schema
-context, and the same tool examples. Written as Python string literals, those shared
-parts get copy-pasted and then drift.
+六个智能体需要系统提示词。其中几个共享同样的事实核验规则、同样的模式上下文、同样的工具示例。
+写成 Python 字符串字面量，那些共享部分就会被复制粘贴，然后逐渐漂移。
 
-## Decision
+## 决策
 
-Prompts live in `agents/python/config/prompts/{agent}.yaml` and are **composed** at
-agent-construction time by `shared/prompt_loader.py`: base prompt + shared grounding
-rules + role-specific instructions + schema context + tool examples. Shared fragments
-live in `config/prompts/_shared/`.
+提示词存放在 `agents/python/config/prompts/{agent}.yaml`，并在智能体构造时由
+`shared/prompt_loader.py` **组合**而成：基础提示词 + 共享事实核验规则 + 角色专属指令 + 模式
+上下文 + 工具示例。共享片段放在 `config/prompts/_shared/`。
 
-`CLAUDE.md` states the rule directly: *do not hardcode prompts in Python*.
+`CLAUDE.md` 直接写明了这条规则：*不要在 Python 里硬编码提示词*。
 
-## Why
+## 理由
 
-**One corpus, two stacks.** The .NET Dockerfiles copy `agents/python/config` verbatim,
-and .NET's `PromptLoader` reads the same files. A prompt fix reaches both backends at
-once, and neither can drift from the other.
+**一份语料，所有消费方共用。** 六个智能体都从同一份 YAML 语料加载提示词，任何一处修复同时作用
+于全部智能体，不会出现某一端与另一端漂移。
 
-**Role-awareness has to be per-request.** `get_system_prompt(current_user_role.get())`
-runs when the agent is built, and agents are rebuilt per request — so an admin genuinely
-sees different instructions from a customer. An earlier revision built the prompt once at
-*import* time with a hardcoded default role, which silently defeated every role-specific
-block in the YAML. That bug is the strongest argument for this decision.
+**角色感知必须按请求生效。** `get_system_prompt(current_user_role.get())` 在构建智能体时运行，
+而智能体按请求重建——因此管理员确实会看到与客户不同的指令。更早的一版在*导入*时用硬编码的
+默认角色构建提示词，悄无声息地废掉了 YAML 里每一个角色专属块。那个 bug 是这个决定最有力的论据。
 
-## Consequences
+## 后果
 
-The corpus is a **cross-stack API**, not documentation — and that is easy to forget.
+这份语料是一份**对外契约**，不是文档——而这很容易被忘掉。
 
-It has already bitten twice, both times in the .NET stack:
+它已经咬过人两次：
 
-- Prompts name tools the way Python declares them (`call_specialist_agent`,
-  `get_order_details`). .NET registered the C# spellings, so the model was told one name
-  and offered another on every turn. Thirty-nine of forty-six tools were affected; the
-  orchestrator's was fatal.
-- `handoff` mode reused `orchestrator.yaml`, which instructs the model to route via
-  `call_specialist_agent` — the *tool router's* mechanism. In a handoff mesh that meant
-  the agent never handed off, and autonomous mode looped it into a 23,000-character
-  monologue.
+- 提示词按 Python 声明工具的方式来称呼它们（`call_specialist_agent`、`get_order_details`），而
+  工具实际注册的是另一套拼写，于是模型每一轮被告知一个名字、却被提供另一个名字。四十六个工具
+  里有三十九个受影响；编排器那个是致命的。
+- `handoff` 模式复用了 `orchestrator.yaml`，而后者指示模型通过 `call_specialist_agent` 路由
+  ——那是*工具路由*的机制。在处理权交接的网状图里，这意味着智能体从不交接，而自主模式让它循环
+  成了一段 23,000 字符的独白。
 
-Both were prompt/contract mismatches, not code bugs, and neither could fail a build.
+两起都是提示词与契约不匹配，不是代码 bug，而且都不会让构建失败。
 
-## What would make this wrong
+## 什么情况下这个决定是错的
 
-Nothing about the composition; the coupling is the point. But if the two stacks ever
-diverged enough to need genuinely different prompts, per-stack overrides would be needed —
-and the shared-corpus guarantee would have to be replaced by something that still fails
-loudly when they disagree.
+组合方式本身没有问题；耦合正是要点。但如果各消费方将来分化到需要真正不同的提示词，就需要按
+消费方覆盖——而共享语料的保证必须换成另一种仍能在彼此不一致时响亮失败的东西。

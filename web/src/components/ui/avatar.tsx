@@ -1,3 +1,5 @@
+// 头像基础原语：基于 base-ui Avatar，用于展示用户头像与兜底内容。
+
 "use client"
 
 import * as React from "react"

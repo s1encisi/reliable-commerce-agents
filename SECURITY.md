@@ -1,52 +1,49 @@
-# Security Policy
+# 安全策略
 
-## Supported versions
+## 受支持的版本
 
-| Version | Supported |
+| 版本 | 是否支持 |
 |---------|-----------|
-| 1.1.x   | Yes |
-| 1.0.x   | Security fixes only |
-| < 1.0   | No |
+| 1.1.x   | 是 |
+| 1.0.x   | 仅安全修复 |
+| < 1.0   | 否 |
 
-## Reporting a vulnerability
+## 报告漏洞
 
-**Please do not open a public issue for a security problem.**
+**请不要为安全问题开公开 issue。**
 
-Use GitHub's private vulnerability reporting:
-[Report a vulnerability](https://github.com/nitin27may/e-commerce-agents/security/advisories/new).
-It is private between you and the maintainer until a fix is published.
+请使用 GitHub 的私密漏洞报告通道：
+[报告漏洞](https://github.com/s1encisi/reliable-commerce-agents/security/advisories/new)。
+在修复发布之前，该报告只在您与维护者之间可见。
 
-Useful things to include: which stack (Python or .NET), which auth mode
-(`AUTH_MODE=local` or `oauth`), whether MCP was enabled, and the smallest
-reproduction you have.
+有帮助的信息包括：鉴权模式（`AUTH_MODE=local` 还是 `oauth`）、是否启用了 MCP，
+以及您能给出的最小复现步骤。
 
-Expect an acknowledgement within a few days. This is a personal open-source
-project, not a funded product — there is no paid triage rota and no bounty.
+预计会在几天内给出确认。这是一个个人开源项目，不是有资金支持的产品 ——
+没有付费的分诊轮值，也没有赏金。
 
-## Scope
+## 范围
 
-This is a **demonstration and teaching repository**. It is built to show how a
-multi-agent system is structured, and it is not hardened for production use as
-shipped. Some deliberate choices would be wrong in production and are not
-vulnerabilities here:
+这是一个**演示与教学仓库**。它的目的是展示多智能体系统如何组织，按发布状态而言
+并未做生产加固。以下一些刻意的取舍在生产中会是错的，但在这里不算漏洞：
 
-- `.env.example` and `.env.minimal` ship placeholder secrets. `shared/config.py`
-  rejects them whenever `ENVIRONMENT` is not `development`.
-- The default `AUTH_MODE=local` issues its own JWTs with a shared secret between
-  agents. `AUTH_MODE=oauth` is the realistic path.
-- Guardrails default to observe-and-log (`GUARDRAILS_FAIL_OPEN=true`) rather than
-  blocking, because false-positive rates have not been measured across
-  environments. `GUARDRAILS_BLOCK_ON_INJECTION=true` turns blocking on.
-- `docker-compose.yml` binds Postgres and Redis to localhost with well-known
-  development credentials.
+- `.env.example` 与 `.env.minimal` 附带占位密钥。只要 `ENVIRONMENT` 不是
+  `development`，`shared/config.py` 就会拒绝它们。
+- 默认的 `AUTH_MODE=local` 用智能体之间共享的密钥自行签发 JWT。
+  `AUTH_MODE=oauth` 才是更贴近真实场景的路径。
+- 护栏默认是「观察并记录」（`GUARDRAILS_FAIL_OPEN=true`）而非拦截，
+  因为误报率尚未在多种环境下测量过。`GUARDRAILS_BLOCK_ON_INJECTION=true`
+  可开启拦截。
+- `docker-compose.yml` 把 Postgres 与 Redis 绑定到 localhost，并使用众所周知
+  的开发凭据。
 
-What **is** in scope: anything that breaks an invariant the code claims to hold.
-Tenant or user isolation being bypassed, prompt injection defeating a control
-that is switched on, an approval gate being skippable, an idempotency key not
-preventing a double refund, or a `user_email` scoping check that can be evaded.
+**属于**本范围的是：任何破坏代码所声明不变量的行为。例如租户或用户隔离被绕过、
+提示词注入击穿了一个已开启的控制、审批门可被跳过、幂等键未能阻止重复退款，
+或 `user_email` 作用域校验可被规避。
 
-## Handling
+## 处理方式
 
-Confirmed issues get a fix on `main`, a patch release, and a note in
-[CHANGELOG.md](CHANGELOG.md). Credit is given unless you would rather not be
-named.
+确认的问题会在 `main` 上修复、发布补丁版本，并在
+[CHANGELOG.md](CHANGELOG.md) 中记录。除非您希望匿名，否则会注明贡献者。
+
+维护者：aria（GitHub: [@s1encisi](https://github.com/s1encisi)）。

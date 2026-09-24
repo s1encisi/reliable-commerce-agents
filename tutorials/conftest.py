@@ -1,31 +1,29 @@
 """
-Root conftest for all tutorial chapter tests.
+所有教程章节测试的根 conftest。
 
-Registers custom markers used across chapters so pytest doesn't warn about them.
+注册各章共用的自定义标记，避免 pytest 对它们发出警告。
 """
 
 import sys
 
-# Every chapter's tests/test_*.py inserts its own `<chapter>/python` directory
-# at the front of sys.path and then does `from main import ...` (some chapters
-# also import a same-named helper, e.g. chapter 08's `weather_mcp_server`).
-# That's correct when each chapter runs in its own process, but collecting the
-# whole `tutorials/` tree in one pytest session means the *second* chapter
-# collected would otherwise reuse the *first* chapter's cached `main` module
-# from `sys.modules`, since module names — not paths — are the cache key.
-# Evict these transient, chapter-local module names before each test module is
-# collected so every chapter re-imports its own `main.py` off its own
-# sys.path entry.
+# 每个章节的 tests/test_*.py 都会把自己的 `<chapter>/python` 目录插到
+# sys.path 最前面，然后执行 `from main import ...`（部分章节还会导入同名的
+# 辅助模块，例如第 08 章的 `weather_mcp_server`）。
+# 当每个章节在各自进程中运行时这是正确的；但在同一个 pytest 会话中收集
+# 整个 `tutorials/` 目录树时，被收集的*第二个*章节会复用*第一个*章节缓存在
+# `sys.modules` 中的 `main` 模块，因为缓存键是模块名而非路径。
+# 因此在每个测试模块被收集之前，先清掉这些临时的、章节局部的模块名，
+# 让每个章节都从自己的 sys.path 条目重新导入自己的 `main.py`。
 _TRANSIENT_MODULES = ("main", "weather_mcp_server")
 
 
-def pytest_configure(config):  # noqa: ANN001 - pytest hook signature
+def pytest_configure(config):  # noqa: ANN001 - pytest 钩子签名
     config.addinivalue_line(
         "markers",
-        "integration: test hits a real LLM; skipped when credentials are missing",
+        "integration: 该测试会访问真实 LLM；缺少凭据时跳过",
     )
 
 
-def pytest_collectstart(collector):  # noqa: ANN001 - pytest hook signature
+def pytest_collectstart(collector):  # noqa: ANN001 - pytest 钩子签名
     for name in _TRANSIENT_MODULES:
         sys.modules.pop(name, None)

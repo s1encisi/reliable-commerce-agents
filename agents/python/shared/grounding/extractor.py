@@ -1,19 +1,11 @@
-"""Pull verifiable claims out of an agent's final composed text.
+"""从最终回答提取可核验声明。
 
-Two tiers of claim, deliberately handled differently:
+卡片声明来自 product、products、order 围栏块，属于界面交互数据，
+enforce 模式可移除或修正。正文声明包含 UUID、$NNN.NN 金额和 TRK
+物流号；先移除卡片块再提取，避免重复计数。
 
-- **Card claims** — the fenced ```product/```products/```order blocks documented
-  in ``config/prompts/_shared/grounding-rules.yaml``. These are what the UI
-  actually renders as interactive cards, so they are the claims worth
-  verifying (and, in ``enforce`` mode, worth stripping/correcting).
-- **Prose claims** — bare UUIDs, ``$NNN.NN`` amounts, and ``TRK...`` tracking
-  numbers mentioned outside any card. These are extracted from the text with
-  the card blocks removed first, so a card's own id/price is never
-  double-counted as a separate prose claim.
-
-Malformed JSON inside a fence is skipped, not raised — a model that emits a
-broken card has already failed the UI contract; that's a rendering bug for
-``rich-message.tsx`` to no-op on, not a reason to crash grounding.
+非法 JSON 卡片会被跳过，不使核验过程崩溃；其渲染由 rich-message.tsx
+处理。现有金额格式按实现保留，不能仅修改说明就声称支持人民币解析。
 """
 
 from __future__ import annotations
@@ -148,18 +140,11 @@ def rewrite_cards(
     decide_product: Callable[[dict[str, Any]], dict[str, Any] | None],
     decide_order: Callable[[dict[str, Any]], dict[str, Any] | None],
 ) -> str:
-    """Rewrite fenced ```product```/```products```/```order``` blocks in place.
+    """原地改写 product、products、order 围栏块。
 
-    ``decide_product``/``decide_order`` receive the parsed entry dict and return
-    a (possibly corrected) dict to keep, or ``None`` to drop it — this is
-    ``enforce`` mode's stripping/correction mechanism. For a ```products```
-    block entries are filtered individually; if every entry is dropped the
-    whole fence is removed. A fence with malformed JSON is left untouched
-    (nothing to correct if it can't be parsed). A fence left fully unchanged
-    (every entry decided identically to its input) is returned byte-for-byte
-    as originally written, rather than round-tripped through ``json.dumps``
-    — so a verified card's formatting is never disturbed, only a corrected
-    or stripped one.
+    回调接收解析后的字典，返回保留或修正后的字典，返回 None 则移除。
+    products 逐项过滤，全部移除时删除整个围栏。非法 JSON 保持原样。
+    完全未改动的块按原字节返回，避免无谓 JSON 往返序列化改变格式。
     """
 
     def _replace(match: re.Match[str]) -> str:

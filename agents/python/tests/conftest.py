@@ -1,15 +1,8 @@
-"""
-Shared pytest fixtures for every agents/ test module.
+"""后端测试共用夹具。
 
-Policy:
-- Never mock the database. Tests that touch DB use the `postgres_pool` fixture
-  which provisions a real Postgres container via testcontainers.
-- Never mock Redis either, for the same reason — tests that touch it use the
-  `redis_client` fixture (a real container via testcontainers).
-- Never call a real LLM. Tests use the `fake_chat_client` fixture.
-- Session-scoped containers so the test suite is fast; per-test clean slate
-  via the `clean_db`/`redis_client` fixtures (truncate/flush between tests,
-  keep the container itself running for the whole session).
+数据库与 Redis 测试通过 testcontainers 使用真实隔离容器；会话级
+复用容器，每例清空业务状态。模型调用默认使用预设响应，禁止普通
+测试意外访问真实模型。
 """
 
 from __future__ import annotations
@@ -31,18 +24,11 @@ INIT_SQL = REPO_ROOT / "docker" / "postgres" / "init.sql"
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    """Fail fast with a clear message if agent_framework's __init__.py got wiped.
+    """框架 __init__.py 被清空时立即给出明确错误。
 
-    A plain `uv sync` re-resolution has been observed to leave this file
-    empty. Root cause: uv hardlinks installed site-packages files back into
-    its shared cache on Linux, so any in-place write to the file — e.g. an
-    older version of patch_maf.py's write_text() — truncates the cache's
-    copy too, corrupting every future `uv sync` (in this or any other
-    project) that resolves to the same cache entry. Once the cache itself is
-    corrupted, `uv sync --reinstall-package` alone just re-links the same
-    broken archive — the cache entry has to be purged first. Without this
-    check, the failure mode is a confusing ImportError deep inside an
-    unrelated test. See issue #5.
+    Linux 下 uv 的安装文件可能与缓存硬链接；旧补丁原地写入会同时破坏
+    缓存，单纯重装也可能继续链接坏文件。该检查避免在无关测试中才出现
+    难以定位的 ImportError。
     """
     import agent_framework
 
@@ -63,7 +49,7 @@ def pytest_configure(config: pytest.Config) -> None:
 
 @pytest.fixture(scope="session")
 def postgres_container() -> Generator[PostgresContainer, None, None]:
-    """One Postgres container per test session — fast and isolated."""
+    """每个测试会话复用一个隔离 PostgreSQL 容器。"""
     container = PostgresContainer("pgvector/pgvector:pg16", dbname="ecommerce_test")
     container.start()
     try:
@@ -75,13 +61,13 @@ def postgres_container() -> Generator[PostgresContainer, None, None]:
 @pytest.fixture(scope="session")
 def database_url(postgres_container: PostgresContainer) -> str:
     url = postgres_container.get_connection_url()
-    # testcontainers returns a psycopg driver URL; asyncpg wants plain postgresql://
+    # testcontainers 返回 psycopg URL，asyncpg 需要普通 postgresql://。
     return url.replace("postgresql+psycopg2://", "postgresql://")
 
 
 @pytest_asyncio.fixture(scope="session")
 async def _schema_applied(database_url: str) -> None:
-    """Apply the production schema from docker/postgres/init.sql once per session."""
+    """每个会话应用一次 docker/postgres/init.sql 的实际表结构。"""
     sql = INIT_SQL.read_text()
     conn = await asyncpg.connect(database_url)
     try:
@@ -95,7 +81,7 @@ async def postgres_pool(
     database_url: str,
     _schema_applied: None,
 ) -> AsyncGenerator[asyncpg.Pool, None]:
-    """Asyncpg pool against the shared test container."""
+    """连接共享测试容器的 asyncpg 池。"""
     pool = await asyncpg.create_pool(database_url, min_size=1, max_size=5)
     try:
         yield pool
@@ -105,7 +91,7 @@ async def postgres_pool(
 
 @pytest_asyncio.fixture
 async def clean_db(postgres_pool: asyncpg.Pool) -> AsyncGenerator[asyncpg.Pool, None]:
-    """Truncate all data tables before the test; schema stays. Use when the test mutates DB."""
+    """测试前清空数据表但保留结构，供修改数据库的用例使用。"""
     async with postgres_pool.acquire() as conn:
         tables = await conn.fetch(
             """
@@ -125,7 +111,7 @@ async def clean_db(postgres_pool: asyncpg.Pool) -> AsyncGenerator[asyncpg.Pool, 
 
 @pytest.fixture(scope="session")
 def redis_container() -> Generator[RedisContainer, None, None]:
-    """One Redis container per test session, mirroring postgres_container."""
+    """每个测试会话复用一个 Redis 容器，与数据库夹具一致。"""
     container = RedisContainer("redis:7-alpine")
     container.start()
     try:
@@ -136,11 +122,10 @@ def redis_container() -> Generator[RedisContainer, None, None]:
 
 @pytest_asyncio.fixture
 async def redis_client(redis_container: RedisContainer) -> AsyncGenerator[redis_asyncio.Redis, None]:
-    """Real async Redis client against the shared test container, flushed before each test.
+    """连接真实测试 Redis 的异步客户端，每例开始前清空。
 
-    RedisContainer.get_client() returns the sync `redis.Redis` — build the
-    async client ourselves from the same host/port so it matches what
-    shared/rate_limit.py actually uses at runtime (redis.asyncio.Redis).
+    RedisContainer 默认返回同步客户端，这里按相同主机端口创建
+    redis.asyncio.Redis，与实际限流实现保持一致。
     """
     client = redis_asyncio.Redis(
         host=redis_container.get_container_host_ip(),
@@ -158,10 +143,7 @@ async def redis_client(redis_container: RedisContainer) -> AsyncGenerator[redis_
 
 
 class FakeChatClient:
-    """
-    Deterministic stand-in for the MAF ChatClient. Queue canned responses and
-    assert on observed inputs. No real LLM traffic.
-    """
+    """确定性的 MAF 客户端替身；排队预设响应并记录输入，不访问真实模型。"""
 
     def __init__(self) -> None:
         self._responses: list[str] = []
@@ -190,9 +172,9 @@ def fake_chat_client() -> FakeChatClient:
 
 @pytest.fixture
 def sample_env(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
-    """
-    A minimal set of env vars every service needs. Use monkeypatch to set more per test.
-    Keeps tests from accidentally reading the developer's real .env.
+    """服务必需的最小环境变量集，各测试可用 monkeypatch 补充。
+
+    避免测试意外读取开发者的真实 .env。
     """
     env = {
         "LLM_PROVIDER": "openai",

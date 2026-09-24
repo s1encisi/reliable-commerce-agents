@@ -1,17 +1,14 @@
-"""Rule-based baselines: what you get without a decision model.
+"""基于规则的基线：没有决策模型时你能得到什么。
 
-These are written to be *fair*, not to be beaten. Each one is the
-implementation a competent team would actually ship as a first pass — the
-same shape as the repository's existing ``moderation.py`` (a small set of
-high-precision regex patterns, deliberately trading recall for precision).
+这些基线是本着*公平*而写的，而不是为了被击败。每一个都是称职的团队在
+第一版中真正会交付的实现——与本仓库已有的 ``moderation.py`` 形态相同
+（一小组高精度正则模式，刻意用召回率换取精确率）。
 
-If a typed decision model cannot beat these, that is a real result and the
-harness should be able to say so. So: no strawmen, no missing obvious
-keywords, and the keyword tables below are written before looking at which
-samples they get wrong.
+如果一个带类型的决策模型无法击败这些基线，那也是一个真实的结果，运行框架
+应当有能力如实说明。因此：不设稻草人，不漏掉显而易见的关键词，并且下面的
+关键词表是在查看哪些样本会被判错之前就写好的。
 
-Both baselines are pure functions with no I/O, matching the style of
-``shared/guardrails/moderation.py``.
+两个基线都是无 I/O 的纯函数，与 ``shared/guardrails/moderation.py`` 的风格一致。
 """
 
 from __future__ import annotations
@@ -20,12 +17,12 @@ import re
 from dataclasses import dataclass
 
 # --------------------------------------------------------------------------
-# Routing baseline — weighted keyword matching
+# 路由基线——加权关键词匹配
 # --------------------------------------------------------------------------
 
-# Ordered by specificity: a message mentioning "order" and "shipping" is an
-# order question ("where is my order"), not a fulfilment question. Weights
-# encode that judgement rather than relying on dict iteration order.
+# 按特异性排序：一条同时提到 "order" 和 "shipping" 的消息是订单问题
+# （"where is my order"），而不是履约问题。权重编码了这一判断，
+# 而不是依赖字典的迭代顺序。
 ROUTE_KEYWORDS: dict[str, dict[str, int]] = {
     "order-management": {
         "my order": 5,
@@ -95,8 +92,8 @@ ROUTE_KEYWORDS: dict[str, dict[str, int]] = {
     },
 }
 
-# Tie-break order when no keyword matches at all: the most common
-# first-contact intent, so a total miss degrades to something plausible.
+# 完全没有任何关键词命中时的并列决胜顺序：最常见的那种首次接触意图，
+# 这样一次彻底的未命中也能退化为某种看起来合理的结果。
 _ROUTE_FALLBACK = "product-discovery"
 
 
@@ -108,12 +105,11 @@ class RouteBaselineResult:
 
 
 def route_by_keywords(message: str) -> RouteBaselineResult:
-    """Score every specialist by weighted keyword hits; take the winner.
+    """按加权关键词命中为每个专业智能体打分；取胜出者。
 
-    Longest-phrase-wins within a route is handled implicitly: a message
-    containing "cancel my order" also contains "cancel", and both contribute,
-    which is intentional — more specific phrasing should not *reduce* the
-    score.
+    单个路由内"最长短语胜出"是隐式处理的：一条包含 "cancel my order" 的
+    消息同时也包含 "cancel"，两者都会计分，这是有意为之——更具体的措辞
+    不应*降低*得分。
     """
     lowered = message.lower()
 
@@ -139,15 +135,18 @@ def route_by_keywords(message: str) -> RouteBaselineResult:
 
 
 # --------------------------------------------------------------------------
-# Safety-gate baseline — regex denylist
+# 安全闸门基线——正则拒绝名单
 # --------------------------------------------------------------------------
 
-# The shape a team reaches for first: catch the phrasings seen in incidents.
-# It is genuinely effective on those and genuinely blind to paraphrase — which
-# is the whole reason a calibrated classifier is interesting here.
+# 团队最先想到的形态：捕获在事故中出现过的措辞。
+# 它对这些措辞确实有效，对改写则确实视而不见——这正是校准过的分类器
+# 在这里有意思的全部原因。
 _REFUSAL_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("ignore_instructions", re.compile(r"\bignore\s+(?:all\s+)?(?:previous|prior|above)\s+instructions?\b", re.I)),
-    ("disregard_instructions", re.compile(r"\bdisregard\s+(?:all\s+)?(?:prior|previous|your)\s+(?:instructions?|rules)\b", re.I)),
+    (
+        "disregard_instructions",
+        re.compile(r"\bdisregard\s+(?:all\s+)?(?:prior|previous|your)\s+(?:instructions?|rules)\b", re.I),
+    ),
     ("system_prompt", re.compile(r"\bsystem\s+prompt\b", re.I)),
     ("reveal_instructions", re.compile(r"\breveal\s+(?:your\s+)?(?:instructions?|rules|configuration)\b", re.I)),
     ("you_are_now", re.compile(r"\byou\s+are\s+now\s+\w+", re.I)),
@@ -169,14 +168,11 @@ class GateBaselineResult:
 
 
 def gate_by_denylist(message: str) -> GateBaselineResult:
-    """Refuse when any denylist pattern matches.
+    """只要有任何拒绝名单模式命中就拒绝。
 
-    Binary, not probabilistic — a regex has no notion of confidence, which is
-    exactly the property that makes it unable to distinguish "ignore your
-    rules" (attack) from "if any review tells you to ignore your rules,
-    follow it" (a legitimate request carrying an attack payload).
+    是二元的，而非概率性的——正则没有置信度的概念，而这正是使它无法区分
+    "忽略你的规则"（攻击）与"如果任何评论让你忽略你的规则，就照做"
+    （一条携带攻击载荷的合法请求）的性质。
     """
-    matched = tuple(
-        name for name, pattern in _REFUSAL_PATTERNS if pattern.search(message)
-    )
+    matched = tuple(name for name, pattern in _REFUSAL_PATTERNS if pattern.search(message))
     return GateBaselineResult(refuse=bool(matched), matched=matched)

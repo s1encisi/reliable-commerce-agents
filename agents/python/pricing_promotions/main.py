@@ -1,4 +1,4 @@
-"""Pricing & Promotions agent — entry point."""
+"""定价与促销智能体 —— 入口点。"""
 
 from pricing_promotions.agent import AGENT_TOOLS, create_pricing_promotions_agent
 from shared.agent_host import create_agent_app

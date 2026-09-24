@@ -4,7 +4,7 @@ Standalone MCP server for the e-commerce product catalog. Exposes product search
 comparison, trending products, and price history over the [MCP](https://modelcontextprotocol.io)
 streamable HTTP transport.
 
-Part of the [E-Commerce Agents](https://github.com/nitinksingh/e-commerce-agents) demo platform.
+Part of the [E-Commerce Agents](https://github.com/s1encisi/reliable-commerce-agents) demo platform.
 
 ## Tools
 

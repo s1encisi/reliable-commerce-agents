@@ -19,17 +19,24 @@ import { cn } from "@/lib/utils";
 
 type CheckpointData = Awaited<ReturnType<typeof api.getRunCheckpoints>>;
 
+const HITL_STATUS_LABELS: Record<string, string> = {
+  pending: "待审批",
+  approved: "已批准",
+  rejected: "已拒绝",
+  denied: "已拒绝",
+  expired: "已过期",
+};
+
 export default function RunsPage() {
   const [entries, setEntries] = useState<RunEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
-  // Keyed by run id. Fetched eagerly for every visible row, not lazily on
-  // expand — a lazy fetch means the "Needs approval" badge below can't
-  // show until a row has already been opened once, defeating its purpose
-  // as something to scan the list for. Each request is a single indexed
-  // lookup; this page is a low-traffic admin surface, not a hot path.
+  // 以 run id 为键。对每个可见行都提前拉取，而不是展开时才懒加载 ——
+  // 懒加载意味着下方的「待审批」徽章在行被打开过一次之前都无法显示，
+  // 而它本来的用途正是让列表可被快速扫视。每次请求都是一次带索引的
+  // 单点查询；本页是低频的管理界面，不是热点路径。
   const [checkpoints, setCheckpoints] = useState<Record<string, CheckpointData>>({});
   const limit = 20;
 
@@ -53,7 +60,7 @@ export default function RunsPage() {
         });
       })
       .catch(() => {
-        setError("Failed to load runs");
+        setError("运行记录加载失败");
         setLoading(false);
       });
   }, [page]);
@@ -69,14 +76,14 @@ export default function RunsPage() {
     <div className="mx-auto max-w-4xl space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Agent Runs</h1>
+          <h1 className="text-2xl font-bold text-foreground">智能体运行记录</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Recent orchestrator → specialist → tool execution traces
+            近期「编排器 → 专业智能体 → 工具」执行链路
           </p>
         </div>
         {total > 0 && (
           <Badge variant="outline" className="text-xs">
-            {total} total
+            共 {total} 条
           </Badge>
         )}
       </div>
@@ -101,9 +108,9 @@ export default function RunsPage() {
         <Card>
           <CardContent className="py-16 text-center">
             <Activity className="mx-auto mb-3 size-8 text-muted-foreground/40" />
-            <p className="font-medium text-foreground">No runs yet</p>
+            <p className="font-medium text-foreground">暂无运行记录</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Send a message in Chat to see agent execution traces here.
+              在对话中发送消息，即可在此查看智能体执行链路。
             </p>
           </CardContent>
         </Card>
@@ -130,10 +137,10 @@ export default function RunsPage() {
             disabled={page === 0}
             onClick={() => setPage((p) => p - 1)}
           >
-            Previous
+            上一页
           </Button>
           <span className="text-xs text-muted-foreground">
-            Page {page + 1} of {Math.ceil(total / limit)}
+            第 {page + 1} / {Math.ceil(total / limit)} 页
           </span>
           <Button
             variant="outline"
@@ -141,7 +148,7 @@ export default function RunsPage() {
             disabled={(page + 1) * limit >= total}
             onClick={() => setPage((p) => p + 1)}
           >
-            Next
+            下一页
           </Button>
         </div>
       )}
@@ -161,13 +168,11 @@ function RunRow({
   const [open, setOpen] = useState(false);
   const hasSteps = entry.steps.length > 0;
 
-  // Workflow modes (workflow:pre-purchase, workflow:return-replace,
-  // group-chat) don't produce agent_execution_steps rows — only "tool"
-  // mode's log_execution_step() calls do — so hasSteps alone would hide
-  // the expand affordance for exactly the runs most likely to have a
-  // pending approval. checkpointData comes from the parent (fetched
-  // eagerly for every visible row, not lazily on expand — see
-  // RunsPage's comment on why).
+  // 工作流模式（workflow:pre-purchase、workflow:return-replace、group-chat）
+  // 不会写入 agent_execution_steps 行 —— 只有 "tool" 模式调用
+  // log_execution_step() 才会 —— 因此单看 hasSteps 会恰好对最可能
+  // 存在待审批的运行记录隐藏展开入口。checkpointData 由父组件传入
+  // （对每个可见行提前拉取，而非展开时懒加载 —— 原因见 RunsPage 注释）。
   const [resuming, setResuming] = useState<"approve" | "reject" | null>(null);
   const [resumeError, setResumeError] = useState<string | null>(null);
 
@@ -182,7 +187,7 @@ function RunRow({
       await api.resumeRun(entry.id, approved);
       onResumed();
     } catch (err) {
-      setResumeError(err instanceof Error ? err.message : "Resume failed.");
+      setResumeError(err instanceof Error ? err.message : "恢复执行失败。");
     } finally {
       setResuming(null);
     }
@@ -218,11 +223,11 @@ function RunRow({
             {entry.duration_ms > 0 && (
               <span className="flex items-center gap-1">
                 <Zap className="size-3" />
-                {entry.duration_ms}ms
+                {entry.duration_ms} ms
               </span>
             )}
             {entry.tokens_in + entry.tokens_out > 0 && (
-              <span>{entry.tokens_in + entry.tokens_out} tokens</span>
+              <span>{entry.tokens_in + entry.tokens_out} Token</span>
             )}
             {agentsInvolved.length > 0 && (
               <span className="text-muted-foreground/60">
@@ -231,13 +236,13 @@ function RunRow({
             )}
             {entry.trace_id && (
               <a
-                href={`http://localhost:18888`}
+                href={`http://localhost:16686`}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
                 className="flex items-center gap-0.5 text-primary hover:underline"
               >
-                Aspire <ExternalLink className="size-2.5" />
+                Jaeger <ExternalLink className="size-2.5" />
               </a>
             )}
           </div>
@@ -245,11 +250,11 @@ function RunRow({
 
         <div className="flex shrink-0 items-center gap-2">
           {pendingApproval && (
-            <Badge className="bg-amber-500 text-white text-xs">Needs approval</Badge>
+            <Badge className="bg-amber-500 text-white text-xs">待审批</Badge>
           )}
           {hasSteps && (
             <Badge variant="outline" className="text-xs">
-              {entry.steps.length} step{entry.steps.length !== 1 ? "s" : ""}
+              {entry.steps.length} 步
             </Badge>
           )}
           <ChevronDown
@@ -272,14 +277,14 @@ function RunRow({
           )}
 
           {checkpointData === undefined && (
-            <p className="px-4 py-3 text-xs text-muted-foreground">Loading checkpoints…</p>
+            <p className="px-4 py-3 text-xs text-muted-foreground">正在加载检查点…</p>
           )}
 
           {hitl && (
             <div className="space-y-2 border-t px-4 py-3 text-xs">
               <p className="font-medium text-foreground">
-                Return approval — {hitl.status}
-                {hitl.payload?.order_id ? ` (order ${hitl.payload.order_id})` : ""}
+                退货审批 —— {HITL_STATUS_LABELS[hitl.status] ?? hitl.status}
+                {hitl.payload?.order_id ? `（订单 ${hitl.payload.order_id}）` : ""}
               </p>
               {pendingApproval ? (
                 <>
@@ -290,7 +295,7 @@ function RunRow({
                       onClick={() => handleResume(true)}
                     >
                       {resuming === "approve" && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
-                      Approve
+                      批准
                     </Button>
                     <Button
                       size="sm"
@@ -299,21 +304,21 @@ function RunRow({
                       onClick={() => handleResume(false)}
                     >
                       {resuming === "reject" && <Loader2 className="mr-1.5 size-3.5 animate-spin" />}
-                      Reject
+                      拒绝
                     </Button>
                   </div>
                   {resumeError && <p className="text-destructive">{resumeError}</p>}
                 </>
               ) : (
                 <p className="text-muted-foreground">
-                  Resolved {hitl.responded_at ? new Date(hitl.responded_at).toLocaleString() : ""}
+                  已于 {hitl.responded_at ? new Date(hitl.responded_at).toLocaleString() : ""} 处理
                 </p>
               )}
             </div>
           )}
 
           {!hasSteps && checkpointData !== undefined && !hitl && (
-            <p className="px-4 py-3 text-xs text-muted-foreground">No further detail for this run.</p>
+            <p className="px-4 py-3 text-xs text-muted-foreground">该运行记录没有更多详情。</p>
           )}
         </div>
       )}
@@ -325,7 +330,7 @@ function StepDetailRow({ step }: { step: RunEntry["steps"][number] }) {
   const [expanded, setExpanded] = useState(false);
   const hasDetail = step.tool_input || step.tool_output;
 
-  // tool_name stored as "agent:tool" in DB (e.g. "product-discovery:search_products")
+  // 数据库中 tool_name 以 "agent:tool" 形式存储（例如 "product-discovery:search_products"）
   const colonIdx = step.tool_name.indexOf(":");
   const agentLabel = colonIdx > 0 ? step.tool_name.slice(0, colonIdx) : "orchestrator";
   const toolLabel = colonIdx > 0 ? step.tool_name.slice(colonIdx + 1) : step.tool_name;
@@ -361,16 +366,16 @@ function StepDetailRow({ step }: { step: RunEntry["steps"][number] }) {
         ) : (
           <Check className="size-3 shrink-0 text-emerald-500" />
         )}
-        <span className="ml-auto shrink-0 text-muted-foreground">{step.duration_ms}ms</span>
+        <span className="ml-auto shrink-0 text-muted-foreground">{step.duration_ms} ms</span>
       </button>
 
       {expanded && hasDetail && (
         <div className="space-y-2 border-t bg-muted/20 px-4 py-2">
           {step.tool_input && (
-            <JsonBlock label="Input" value={step.tool_input} />
+            <JsonBlock label="输入" value={step.tool_input} />
           )}
           {step.tool_output && (
-            <JsonBlock label="Output" value={step.tool_output} />
+            <JsonBlock label="输出" value={step.tool_output} />
           )}
         </div>
       )}

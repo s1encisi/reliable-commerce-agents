@@ -1,1 +1,1 @@
-"""Shared utilities for MAF v1 tutorial chapters."""
+"""MAF 教程共用辅助工具。"""

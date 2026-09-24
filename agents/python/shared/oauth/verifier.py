@@ -1,10 +1,7 @@
-"""RS256 access-token verification against the self-hosted auth-server's JWKS.
+"""使用自托管授权服务器的 JWKS 校验 RS256 访问令牌。
 
-Used everywhere a service needs to validate a Bearer token in ``AUTH_MODE=oauth``
-— the orchestrator's user-facing routes and every specialist's
-``AgentAuthMiddleware``. The local-mode HS256 path (``shared.jwt_utils.decode_token``)
-is untouched; this is the parallel RS256 path selected via
-``shared.factory.get_token_verifier()``.
+用于 oauth 模式下编排器用户路由和专业智能体认证，由工厂选择；
+local 模式的 HS256 路径保持独立。
 """
 
 from __future__ import annotations
@@ -16,7 +13,7 @@ from shared.config import settings
 
 
 class RS256Verifier:
-    """Validates RS256 access tokens against the auth-server's published JWKS."""
+    """根据授权服务器公布的 JWKS 校验 RS256 访问令牌。"""
 
     def __init__(self) -> None:
         self._jwks_client = PyJWKClient(
@@ -26,11 +23,9 @@ class RS256Verifier:
         )
 
     def decode(self, token: str, *, audience: str, required_scope: str | None = None) -> dict:
-        """Validate signature, issuer, audience, and expiry.
+        """校验签名、签发者、受众和过期时间。
 
-        Raises a ``jwt.PyJWTError`` subclass (``ExpiredSignatureError``,
-        ``InvalidTokenError``, etc.) on any failure — callers already handle
-        those exception types for the local HS256 path.
+        失败时抛出 PyJWTError 子类，与调用方已有 HS256 异常处理兼容。
         """
         signing_key = self._jwks_client.get_signing_key_from_jwt(token)
         payload = jwt.decode(

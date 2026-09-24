@@ -1,8 +1,4 @@
-"""
-Chapter 20 — Workflow Visualization: tests.
-
-No LLM — pure graph rendering.
-"""
+"""第 20 章可视化测试，只渲染图，不调用模型。"""
 
 import pathlib
 import sys
@@ -35,13 +31,13 @@ def test_mermaid_includes_all_three_executors() -> None:
 
 def test_mermaid_includes_both_edges() -> None:
     mermaid = render_mermaid()
-    # Edges are formatted "source --> target"
+    # 边采用 source --> target 格式。
     assert "uppercase --> validate" in mermaid
     assert "validate --> log" in mermaid
 
 
 def test_mermaid_is_deterministic() -> None:
-    """Same workflow structure → same Mermaid output byte-for-byte."""
+    """相同工作流结构应产生逐字节相同的 Mermaid。"""
     assert render_mermaid() == render_mermaid()
 
 

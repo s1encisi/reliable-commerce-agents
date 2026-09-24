@@ -1,4 +1,4 @@
-"""Shared pricing tools used by Product Discovery and Pricing & Promotions agents."""
+"""商品发现与定价促销智能体共用的价格工具。"""
 
 from __future__ import annotations
 
@@ -53,7 +53,7 @@ async def get_price_history(
         min_price = min(prices)
         max_price = max(prices)
 
-        # Determine trend
+        # 判断价格趋势。
         if len(prices) >= 7:
             recent_avg = sum(prices[-7:]) / 7
             older_avg = sum(prices[:7]) / 7

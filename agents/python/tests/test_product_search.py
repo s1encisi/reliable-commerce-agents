@@ -1,21 +1,7 @@
-"""Full-text and hybrid (RRF) product search — real Postgres, no LLM.
+"""商品全文检索与 RRF 混合检索测试，使用真实 PostgreSQL。
 
-Guards the regression that motivated the FTS work. `search_products` used to
-AND a `%word%` ILIKE per query word, which failed two ways:
-
-- **No stemming.** "noise cancellation" never substring-matches a product
-  described as "noise cancelling", so the query returned nothing. Postgres
-  stems both to the lexeme `cancel`.
-- **All terms required.** One query word absent from the whole catalog
-  ("bluetooth") zeroed out the entire result set.
-
-On top of that, results were ordered by rating alone, so match quality never
-influenced the ranking. Every FTS test below returns zero rows or the wrong
-order against the old implementation.
-
-The embedding half of `semantic_search` is exercised by writing vectors
-directly into `product_embeddings` and stubbing the embedding client — the
-policy in conftest.py is a real database but never a real model call.
+覆盖英文词干变化、部分词匹配以及按相关性而非仅评分排序。
+向量直接写入测试表，嵌入客户端返回固定值，不调用真实模型。
 """
 
 from __future__ import annotations
@@ -31,17 +17,17 @@ from product_discovery import tools as pd_tools
 pytestmark = pytest.mark.asyncio
 
 
-# Catalog designed so lexical and semantic evidence disagree in known ways, and
-# so the query terms differ *morphologically* from the catalog text — the whole
-# point of the regression. No product anywhere contains the literal substring
-# "cancellation" or "bluetooth".
+# 测试商品让文本证据与向量证据产生可控差异，
+# 并让查询词形与商品正文不同。
+# 商品中不直接出现 cancellation，
+# 也不出现 bluetooth，以验证词干与部分召回。
 ANC = uuid.UUID("11111111-1111-4111-8111-111111111111")
 EXACT = uuid.UUID("22222222-2222-4222-8222-222222222222")
 DECOY = uuid.UUID("33333333-3333-4333-8333-333333333333")
 KETTLE = uuid.UUID("44444444-4444-4444-8444-444444444444")
 
 CATALOG = [
-    # (id, name, description, category, brand, price, rating, review_count)
+    # 字段：标识、名称、描述、分类、品牌、价格、评分、评论数。
     (
         ANC,
         "Wireless Headphones with ANC",
@@ -63,8 +49,8 @@ CATALOG = [
         50,
     ),
     (
-        # Same category, mentions headphones once, but rated far higher than
-        # both real matches — this is what used to win under the old ordering.
+        # 同类商品只偶然提到耳机，但评分更高，
+        # 用于验证旧的纯评分排序问题。
         DECOY,
         "Phone Case",
         "Slim protective case. Works fine with headphones plugged in.",
@@ -115,8 +101,7 @@ async def _seed_embedding(pool: Any, product_id: uuid.UUID, vector: list[float])
 
 
 def _unit_vector(index: int) -> list[float]:
-    """A 1536-dim one-hot vector — cosine distance between any two is maximal,
-    so tests can control the vector ranking exactly."""
+    """构造 1536 维独热向量，不同维度彼此正交，便于精确控制向量排序。"""
     vec = [0.0] * 1536
     vec[index] = 1.0
     return vec
@@ -132,9 +117,7 @@ def _pool(monkeypatch: pytest.MonkeyPatch, clean_db: Any) -> Any:
 
 
 async def test_stemmed_term_matches(_pool: Any) -> None:
-    """The regression, in the exact shape that prompted commit 16bfe37: the
-    catalog says "noise cancelling", the shopper types "noise cancellation".
-    ILIKE found no substring; the English stemmer reduces both to `cancel`."""
+    """商品写 cancelling、用户搜 cancellation，英文词干化应统一到 cancel。"""
     await _seed_catalog(_pool)
 
     results = await pd_tools.search_products(query="noise cancellation headphones")
@@ -145,8 +128,7 @@ async def test_stemmed_term_matches(_pool: Any) -> None:
 
 
 async def test_absent_term_does_not_zero_the_result_set(_pool: Any) -> None:
-    """No product mentions bluetooth. Under ANDed ILIKE that emptied the whole
-    result set; OR semantics keep the products that match the other terms."""
+    """未出现的 bluetooth 不能让整个查询无结果，OR 应保留其他词的匹配。"""
     await _seed_catalog(_pool)
 
     results = await pd_tools.search_products(query="wireless bluetooth headphones")
@@ -155,8 +137,7 @@ async def test_absent_term_does_not_zero_the_result_set(_pool: Any) -> None:
 
 
 async def test_relevance_beats_rating(_pool: Any) -> None:
-    """Ordering used to be rating-only, so the 5.0-rated Phone Case — which
-    merely mentions headphones in passing — outranked both genuine matches."""
+    """仅偶然提到耳机的高评分手机壳，不能压过真正相关商品。"""
     await _seed_catalog(_pool)
 
     results = await pd_tools.search_products(query="noise cancellation headphones")
@@ -168,8 +149,7 @@ async def test_relevance_beats_rating(_pool: Any) -> None:
 
 
 async def test_name_weight_outranks_description_weight(_pool: Any) -> None:
-    """search_vector weights name=A above description=C, so the product whose
-    *name* carries the terms ranks above the one that only describes them."""
+    """名称权重 A 高于描述权重 C，名称匹配应获得更高排名。"""
     await _seed_catalog(_pool)
 
     results = await pd_tools.search_products(query="noise cancellation headphones")
@@ -185,8 +165,8 @@ async def test_filters_compose_with_query(_pool: Any) -> None:
 
     ids = [r["id"] for r in results]
     assert str(ANC) in ids
-    assert str(EXACT) not in ids  # 349.99 is over the cap
-    assert str(KETTLE) not in ids  # wrong category
+    assert str(EXACT) not in ids  # 349.99 超过价格上限。
+    assert str(KETTLE) not in ids  # 分类不匹配。
 
 
 async def test_explicit_sort_overrides_relevance(_pool: Any) -> None:
@@ -199,8 +179,7 @@ async def test_explicit_sort_overrides_relevance(_pool: Any) -> None:
 
 
 async def test_stopword_only_query_falls_back_to_filters(_pool: Any) -> None:
-    """`plainto_tsquery('the ???')` is an empty tsquery, which matches no rows.
-    That must not turn a filtered browse into zero results."""
+    """停用词和标点产生空 tsquery 时，不应让带筛选的浏览结果全部消失。"""
     await _seed_catalog(_pool)
 
     results = await pd_tools.search_products(query="the ???", category="Home")
@@ -233,11 +212,8 @@ async def test_inactive_products_are_excluded(_pool: Any) -> None:
 
 @pytest.fixture
 def _stub_embeddings(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Return a fixed query vector so the vector arm's ranking is deterministic.
-
-    The query vector is the one-hot at index 0, which we also store for KETTLE —
-    so the vector arm ranks KETTLE first while the text arm ranks headphones
-    first. That disagreement is what makes the fusion assertions meaningful.
+    """返回固定查询向量，使向量分支优先水壶、文本分支优先耳机，
+    从而能有效验证融合行为。
     """
 
     class _FakeEmbeddings:
@@ -258,8 +234,7 @@ def _stub_embeddings(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 async def test_hybrid_returns_text_only_match(_pool: Any, _stub_embeddings: None) -> None:
-    """A product with no embedding row at all must still surface via the text
-    arm — a pure-vector search would drop it entirely."""
+    """没有嵌入的商品仍应通过文本分支召回。"""
     await _seed_catalog(_pool)
     await _seed_embedding(_pool, KETTLE, _unit_vector(0))
 
@@ -267,13 +242,12 @@ async def test_hybrid_returns_text_only_match(_pool: Any, _stub_embeddings: None
 
     by_id = {r["id"]: r for r in results}
     assert str(ANC) in by_id
-    assert by_id[str(ANC)]["similarity"] is None  # text arm only
+    assert by_id[str(ANC)]["similarity"] is None  # 仅来自文本分支。
     assert by_id[str(ANC)]["score"] > 0
 
 
 async def test_hybrid_returns_vector_only_match(_pool: Any, _stub_embeddings: None) -> None:
-    """KETTLE shares no lexemes with the query but is the nearest vector, so
-    the vector arm must still carry it into the results."""
+    """无词元重合但向量最近的水壶，仍应进入混合结果。"""
     await _seed_catalog(_pool)
     await _seed_embedding(_pool, KETTLE, _unit_vector(0))
 
@@ -285,10 +259,9 @@ async def test_hybrid_returns_vector_only_match(_pool: Any, _stub_embeddings: No
 
 
 async def test_both_arms_outrank_single_arm(_pool: Any, _stub_embeddings: None) -> None:
-    """The point of RRF: a product both arms surface scores above one that only
-    tops a single arm."""
+    """两路共同命中的商品应优于只在单路居首的商品。"""
     await _seed_catalog(_pool)
-    # ANC is the nearest vector *and* a strong text match; KETTLE is vector-only.
+    # ANC 同时是近向量和强文本匹配；水壶仅向量命中。
     await _seed_embedding(_pool, ANC, _unit_vector(0))
     await _seed_embedding(_pool, KETTLE, _unit_vector(1))
 

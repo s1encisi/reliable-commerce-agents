@@ -1,85 +1,85 @@
-# Telemetry & Observability
+# 遥测与可观测性
 
-E-Commerce Agents uses OpenTelemetry to export traces, metrics, and logs to the .NET Aspire Dashboard. Every agent calls `setup_telemetry(service_name)` during its lifespan startup, which configures providers, exporters, and auto-instrumentation in a single call.
+可靠电商多智能体平台使用 OpenTelemetry，把分布式追踪导出到 Jaeger。代码还配置了指标与日志导出器，但这两类信号需要额外支持它们的 OTLP 接收端。每个智能体都在其 lifespan 启动时调用 `setup_telemetry(service_name)`，一次调用即完成提供器、导出器与自动埋点的配置。
 
-## Telemetry Pipeline
+## 遥测流水线
 
 ```mermaid
 graph LR
-    subgraph Agents
+    subgraph Agents["智能体"]
         style Agents fill:#0ea5e9,stroke:#0284c7,color:#fff
-        O[Orchestrator<br/>port 8080]
-        PD[Product Discovery<br/>port 8081]
-        OM[Order Management<br/>port 8082]
-        PP[Pricing & Promotions<br/>port 8083]
-        RS[Review & Sentiment<br/>port 8084]
-        IF[Inventory & Fulfillment<br/>port 8085]
+        O[编排器<br/>端口 8080]
+        PD[商品发现<br/>端口 8081]
+        OM[订单管理<br/>端口 8082]
+        PP[定价与促销<br/>端口 8083]
+        RS[评论情感<br/>端口 8084]
+        IF[库存与履约<br/>端口 8085]
     end
 
-    subgraph Export
+    subgraph Export["导出"]
         style Export fill:#f59e0b,stroke:#d97706,color:#fff
-        OTLP[OTLP HTTP<br/>port 18889]
+        OTLP[OTLP<br/>gRPC 4317 / HTTP 4318]
     end
 
-    subgraph Dashboard
-        style Dashboard fill:#0d9488,stroke:#115e59,color:#fff
-        ASPIRE[Aspire Dashboard<br/>port 18888]
+    subgraph Backend["Jaeger"]
+        style Backend fill:#0d9488,stroke:#115e59,color:#fff
+        JAEGER[Jaeger 界面<br/>端口 16686]
     end
 
-    O -->|traces, metrics, logs| OTLP
-    PD -->|traces, metrics, logs| OTLP
-    OM -->|traces, metrics, logs| OTLP
-    PP -->|traces, metrics, logs| OTLP
-    RS -->|traces, metrics, logs| OTLP
-    IF -->|traces, metrics, logs| OTLP
+    O -->|追踪| OTLP
+    PD -->|追踪| OTLP
+    OM -->|追踪| OTLP
+    PP -->|追踪| OTLP
+    RS -->|追踪| OTLP
+    IF -->|追踪| OTLP
 
-    OTLP --> ASPIRE
+    OTLP --> JAEGER
 ```
 
-All telemetry is exported via OTLP/HTTP (not gRPC) to the Aspire Dashboard's receiver endpoint. The dashboard provides a unified UI for traces, structured logs, and metrics without requiring Jaeger, Prometheus, or Grafana.
+Jaeger 接收并查询追踪，不存储独立的 OTLP 指标或日志。当前 Compose 未提供这两类信号的存储后端；将同一端点指向 Jaeger 不代表三类导出都成功。完整采集需要配置支持对应信号的 OpenTelemetry Collector 与存储后端。参见 [Jaeger 官方 API 说明](https://www.jaegertracing.io/docs/1.76/architecture/apis/)。
 
 ---
 
-## Auto-Instrumentation
+## 自动埋点
 
-The following libraries are auto-instrumented with zero code changes in agent logic. Each instrumentor is loaded in `_do_setup()` after the providers are configured.
+以下库无需改动任何智能体逻辑即可获得自动埋点。每个 instrumentor 都在提供器配置完成之后，于 `_do_setup()` 中加载。
 
-| Library | Instrumentor | What It Captures |
+| 库 | Instrumentor | 采集内容 |
 |---------|-------------|------------------|
-| **httpx** | `HTTPXClientInstrumentor` | All outbound HTTP calls: OpenAI/Azure OpenAI API requests, inter-agent A2A calls. Captures URL, method, status code, duration. |
-| **asyncpg** | `AsyncPGInstrumentor` | All PostgreSQL queries. Captures SQL text, database name, duration. Parameterized queries show `$1, $2` placeholders (no sensitive data leakage). |
-| **FastAPI** | `FastAPIInstrumentor` | Orchestrator HTTP request/response spans. Captures route, method, status code, request duration. Applied via `instrument_fastapi(app)`. |
-| **Starlette** | `StarletteInstrumentor` | Specialist agent HTTP spans (A2AAgentHost runs on Starlette). Applied via `instrument_starlette(app)`. |
-| **Python logging** | `LoggingInstrumentor` | Bridges Python log records into OTel log pipeline with trace/span ID correlation. `set_logging_format=False` preserves existing log format. |
+| **httpx** | `HTTPXClientInstrumentor` | 所有出站 HTTP 调用：OpenAI/Azure OpenAI 的 API 请求、智能体之间的 A2A 调用。采集 URL、方法、状态码、耗时。 |
+| **asyncpg** | `AsyncPGInstrumentor` | 所有 PostgreSQL 查询。采集 SQL 文本、数据库名、耗时。参数化查询显示为 `$1, $2` 占位符（不泄漏敏感数据）。 |
+| **FastAPI** | `FastAPIInstrumentor` | 编排器的 HTTP 请求/响应跨度。采集路由、方法、状态码、请求耗时。通过 `instrument_fastapi(app)` 应用。 |
+| **Starlette** | `StarletteInstrumentor` | 专业智能体的 HTTP 跨度（`A2AAgentHost` 运行在 Starlette 上）。通过 `instrument_starlette(app)` 应用。 |
+| **Python logging** | `LoggingInstrumentor` | 把 Python 日志记录桥接进 OTel 日志流水线，并关联 trace/span ID。`set_logging_format=False` 保留既有的日志格式。 |
 
 ---
 
-## Span Hierarchy
+## 跨度层级
 
-### Single Agent Request (Direct Tool Call)
+### 单智能体请求（直接调用工具）
 
-When the orchestrator handles a request using its own tools without delegating to specialists:
+当编排器使用自己的工具处理请求、不委派给专业智能体时：
 
 ```mermaid
 graph TD
-    subgraph HTTP["HTTP Span (auto)"]
+    subgraph HTTP["HTTP 跨度（自动）"]
         style HTTP fill:#0ea5e9,stroke:#0284c7,color:#fff
-        A["POST /api/chat<br/><i>FastAPI auto-span</i>"]
+        A["POST /api/chat<br/><i>FastAPI 自动跨度</i>"]
     end
 
-    subgraph LLM["LLM Call (auto)"]
+    subgraph LLM["LLM 调用（自动）"]
         style LLM fill:#f59e0b,stroke:#d97706,color:#fff
-        B["POST https://api.openai.com/v1/chat/completions<br/><i>httpx auto-span</i>"]
+        B["POST https://api.openai.com/v1/chat/completions<br/><i>httpx 自动跨度</i>"]
     end
 
-    subgraph Tool["Tool Execution"]
+    subgraph Tool["工具执行"]
         style Tool fill:#0ea5e9,stroke:#0284c7,color:#fff
-        C["agent.tool_call<br/><i>traced_tool decorator</i><br/>tool.name = search_products"]
+        C["agent.tool_call<br/><i>traced_tool 装饰器</i><br/>tool.name = search_products"]
     end
 
-    subgraph DB["Database Query (auto)"]
+    subgraph DB["数据库查询（自动）"]
         style DB fill:#0d9488,stroke:#115e59,color:#fff
-        D["SELECT ... FROM products<br/><i>asyncpg auto-span</i>"]
+        D["SELECT ... FROM products<br/><i>asyncpg 自动跨度</i>"]
     end
 
     A --> B
@@ -87,45 +87,45 @@ graph TD
     C --> D
 ```
 
-### Multi-Agent Request (Orchestrator to Specialist)
+### 多智能体请求（编排器委派给专业智能体）
 
-When the orchestrator delegates to a specialist agent via A2A protocol:
+当编排器通过 A2A 协议委派给专业智能体时：
 
 ```mermaid
 graph TD
-    subgraph HTTP["HTTP Span (auto)"]
+    subgraph HTTP["HTTP 跨度（自动）"]
         style HTTP fill:#0ea5e9,stroke:#0284c7,color:#fff
-        A["POST /api/chat<br/><i>FastAPI auto-span</i>"]
+        A["POST /api/chat<br/><i>FastAPI 自动跨度</i>"]
     end
 
-    subgraph LLM1["Orchestrator LLM (auto)"]
+    subgraph LLM1["编排器 LLM（自动）"]
         style LLM1 fill:#f59e0b,stroke:#d97706,color:#fff
-        B["POST openai.com/v1/chat/completions<br/><i>httpx auto-span</i>"]
+        B["POST openai.com/v1/chat/completions<br/><i>httpx 自动跨度</i>"]
     end
 
-    subgraph A2A["A2A Call (custom)"]
+    subgraph A2A["A2A 调用（自定义）"]
         style A2A fill:#0ea5e9,stroke:#0284c7,color:#fff
         C["agent.a2a_call<br/>source=orchestrator<br/>target=product-discovery"]
     end
 
-    subgraph A2AHTTP["A2A HTTP (auto)"]
+    subgraph A2AHTTP["A2A HTTP（自动）"]
         style A2AHTTP fill:#f59e0b,stroke:#d97706,color:#fff
-        D["POST http://product-discovery:8081/a2a<br/><i>httpx auto-span</i>"]
+        D["POST http://product-discovery:8081/a2a<br/><i>httpx 自动跨度</i>"]
     end
 
-    subgraph Specialist["Specialist Processing"]
+    subgraph Specialist["专业智能体处理"]
         style Specialist fill:#0ea5e9,stroke:#0284c7,color:#fff
-        E["Starlette request span<br/><i>auto-span on specialist</i>"]
+        E["Starlette 请求跨度<br/><i>专业智能体上的自动跨度</i>"]
     end
 
-    subgraph LLM2["Specialist LLM (auto)"]
+    subgraph LLM2["专业智能体 LLM（自动）"]
         style LLM2 fill:#f59e0b,stroke:#d97706,color:#fff
-        F["POST openai.com/v1/chat/completions<br/><i>httpx auto-span</i>"]
+        F["POST openai.com/v1/chat/completions<br/><i>httpx 自动跨度</i>"]
     end
 
-    subgraph Tool["Tool + DB"]
+    subgraph Tool["工具 + 数据库"]
         style Tool fill:#0d9488,stroke:#115e59,color:#fff
-        G["agent.tool_call + asyncpg query"]
+        G["agent.tool_call + asyncpg 查询"]
     end
 
     A --> B
@@ -136,36 +136,36 @@ graph TD
     F --> G
 ```
 
-The `agent.a2a_call` custom span wraps the entire A2A interaction, so Aspire shows the orchestrator-to-specialist delegation as a single logical operation containing the HTTP call, specialist processing, and nested LLM + DB calls.
+自定义跨度 `agent.a2a_call` 包裹了整个 A2A 交互，因此在 Jaeger 中，「编排器 → 专业智能体」的这次委派呈现为一个逻辑操作，其中包含 HTTP 调用、专业智能体处理，以及嵌套的 LLM 调用与数据库查询。
 
 ---
 
-## Custom Spans
+## 自定义跨度
 
-Two custom span types are manually instrumented beyond what auto-instrumentation provides.
+除自动埋点之外，还手工埋点了两种自定义跨度。
 
 ### `agent.a2a_call`
 
-Created by the `a2a_call_span()` context manager in the orchestrator when calling a specialist agent.
+由编排器中的 `a2a_call_span()` 上下文管理器在调用专业智能体时创建。
 
 ```python
 with a2a_call_span("orchestrator", "product-discovery", "http://product-discovery:8081/a2a"):
     result = await a2a_client.send(task)
 ```
 
-**Attributes:**
+**属性：**
 
-| Attribute | Example |
+| 属性 | 示例 |
 |-----------|---------|
 | `agent.source` | `orchestrator` |
 | `agent.target` | `product-discovery` |
 | `agent.target_url` | `http://product-discovery:8081/a2a` |
 
-On exception, the span records the exception and sets `StatusCode.ERROR`.
+发生异常时，该跨度会记录异常并设置 `StatusCode.ERROR`。
 
 ### `agent.tool_call`
 
-Created by the `@traced_tool` decorator, applied after the MAF `@tool` decorator on tool functions.
+由 `@traced_tool` 装饰器创建，作用于工具函数上、位于 MAF 的 `@tool` 装饰器之后。
 
 ```python
 @tool(name="search_products", description="...")
@@ -173,224 +173,213 @@ Created by the `@traced_tool` decorator, applied after the MAF `@tool` decorator
 async def search_products(...) -> ...:
 ```
 
-**Attributes:**
+**属性：**
 
-| Attribute | Example |
+| 属性 | 示例 |
 |-----------|---------|
 | `tool.name` | `search_products` |
 | `tool.success` | `True` / `False` |
 
-On exception, the span records the exception, sets `StatusCode.ERROR`, and sets `tool.success = False`.
+发生异常时，该跨度会记录异常、设置 `StatusCode.ERROR`，并把 `tool.success` 置为 `False`。
 
 ---
 
-## Service Names
+## 服务名
 
-Each agent reports with a distinct `OTEL_SERVICE_NAME` so traces and metrics can be filtered per service in the Aspire Dashboard.
+每个智能体都用各自独立的 `OTEL_SERVICE_NAME` 上报，因此可以在 Jaeger 中按服务筛选追踪。
 
-| Agent | Service Name | Port |
+| 智能体 | 服务名 | 端口 |
 |-------|-------------|------|
-| Orchestrator (Customer Support) | `ecommerce-orchestrator` | 8080 |
-| Product Discovery | `ecommerce-product-discovery` | 8081 |
-| Order Management | `ecommerce-order-management` | 8082 |
-| Pricing & Promotions | `ecommerce-pricing-promotions` | 8083 |
-| Review & Sentiment | `ecommerce-review-sentiment` | 8084 |
-| Inventory & Fulfillment | `ecommerce-inventory-fulfillment` | 8085 |
+| 编排器（客户支持） | `ecommerce-orchestrator` | 8080 |
+| 商品发现 | `ecommerce-product-discovery` | 8081 |
+| 订单管理 | `ecommerce-order-management` | 8082 |
+| 定价与促销 | `ecommerce-pricing-promotions` | 8083 |
+| 评论情感 | `ecommerce-review-sentiment` | 8084 |
+| 库存与履约 | `ecommerce-inventory-fulfillment` | 8085 |
 
-The service name is passed to `setup_telemetry()` in each agent's lifespan function and becomes the `service.name` resource attribute on all telemetry.
-
----
-
-## Log Correlation
-
-Python log records are automatically enriched with `trace_id` and `span_id` from the active OTel context. This is achieved through two mechanisms:
-
-1. **LoggingInstrumentor** -- Injects `otelTraceID` and `otelSpanID` into Python `LogRecord` attributes. This allows log statements made during a traced request to be correlated back to the specific trace.
-
-2. **OTel LoggerProvider + LoggingHandler** -- A `LoggingHandler` is attached to the Python root logger, which bridges all log records into the OTel log pipeline. These are exported via `OTLPLogExporter` to Aspire using `BatchLogRecordProcessor`.
-
-The `trace_id` is also extracted and stored in the `usage_logs` table via `get_current_trace_id()`, creating a link between the application's audit log and the distributed trace:
-
-```
-usage_logs.trace_id  -->  Aspire Dashboard trace view
-```
-
-This means you can go from the admin audit log (`GET /api/admin/audit`) directly to the corresponding trace in Aspire by searching for the `trace_id` value.
+服务名在各智能体的 lifespan 函数中传给 `setup_telemetry()`，并成为所有遥测上的 `service.name` 资源属性。
 
 ---
 
-## Aspire Dashboard
+## 日志关联
 
-The Aspire Dashboard runs as a Docker container and provides the observability UI.
+Python 日志记录会自动从当前 OTel 上下文补全 `trace_id` 与 `span_id`。这通过两种机制实现：
 
-**Access:** [http://localhost:18888](http://localhost:18888)
+1. **LoggingInstrumentor** —— 把 `otelTraceID` 与 `otelSpanID` 注入 Python 的 `LogRecord` 属性。这样，在被追踪的请求期间产生的日志语句就能被关联回具体的某条追踪。
 
-Auth mode is set to `Unsecured` for local development (`DASHBOARD__FRONTEND__AUTHMODE: Unsecured`).
+2. **OTel LoggerProvider + LoggingHandler** —— 给 Python 根 logger 挂上一个 `LoggingHandler`，把所有日志记录桥接进 OTel 日志流水线。这些记录通过 `OTLPLogExporter` 经 `BatchLogRecordProcessor` 尝试导出；接收端必须支持 OTLP 日志，Jaeger 本身不提供该能力。
 
-### What to Look For
+`trace_id` 还会被提取出来、经 `get_current_trace_id()` 存入 `usage_logs` 表，从而在应用的审计日志与分布式追踪之间建立关联：
 
-| View | Use Case |
+```
+usage_logs.trace_id  -->  Jaeger 追踪详情页
+```
+
+这意味着你可以从管理员审计日志（`GET /api/admin/audit`）出发，用 `trace_id` 的值直接检索到 Jaeger 中对应的那条追踪。
+
+---
+
+## Jaeger 界面
+
+Jaeger 以 Docker 容器方式运行，提供可观测性界面。
+
+**访问地址：** [http://localhost:16686](http://localhost:16686)
+
+Jaeger 的查询界面围绕三个视图组织：**搜索（Search）**、**追踪详情（Trace）** 与 **服务列表（Services）**。按服务名与操作名筛选是最常用的入口。
+
+### 值得关注的内容
+
+| 视图 / 操作 | 用途 |
 |------|----------|
-| **Traces** | See the full request lifecycle from HTTP entry through LLM calls, A2A delegation, tool execution, and DB queries. Filter by service name to isolate a specific agent. |
-| **Structured Logs** | View correlated logs for a trace. Click any trace to see all log statements emitted during that request across all agents. |
-| **Metrics** | Request counts, latencies, and error rates per service. Metrics are exported every 5 seconds (`export_interval_millis=5000`). |
-| **Resources** | See all registered services with their `service.name`, `service.version`, and `deployment.environment` attributes. |
+| **按服务筛选** | 从 HTTP 入口一路看到 LLM 调用、A2A 委派、工具执行与数据库查询的完整请求生命周期。按服务名筛选即可隔离出某个智能体。 |
+| **按操作名筛选** | 智能体调用的操作名统一为 `invoke_agent <智能体名>`，因此可以直接按操作名检索出所有智能体运行记录（见下文「跨度命名是承重的」）。 |
+| **追踪详情** | 展开任意一条追踪即可看到每个跨度的耗时、状态与属性，并定位到最慢的子跨度。 |
+| **日志关联** | 跨度上的 `trace_id` 与审计日志中的 `trace_id` 一一对应，可从应用侧日志跳转到对应追踪。 |
+| **指标边界** | 代码每 5 秒尝试导出指标，但默认 Jaeger 不接收这些指标。请求数、错误率等聚合监测需另行配置指标后端。 |
+| **资源属性** | 查看所有已注册服务的 `service.name`、`service.version` 与 `deployment.environment` 属性。 |
 
-### Typical Investigation Flow
+### 典型排查流程
 
-1. User reports slow response -- go to **Traces**, filter by service `ecommerce-orchestrator`, sort by duration.
-2. Find the slow trace -- expand to see which child span took the longest (LLM call? DB query? A2A call to a specialist?).
-3. If the bottleneck is an A2A call -- click into the specialist's trace to see its internal spans.
-4. Cross-reference with **Structured Logs** to see any warnings or errors logged during that trace.
-5. Check the `trace_id` against `GET /api/admin/audit` for the application-level audit record.
+1. 用户反馈响应变慢 —— 进入**搜索**，按服务 `ecommerce-orchestrator` 筛选，再按耗时排序。
+2. 找到那条慢追踪 —— 展开，看是哪个子跨度耗时最长（LLM 调用？数据库查询？还是发给专业智能体的 A2A 调用？）。
+3. 若瓶颈是 A2A 调用 —— 进入专业智能体自己的那条追踪，查看其内部跨度。
+4. 结合该追踪期间记录的日志，确认是否有警告或错误。
+5. 用 `trace_id` 对照 `GET /api/admin/audit`，核对应用层的审计记录。
 
 ---
 
-## Configuration
+## 配置
 
-All telemetry settings are managed via environment variables, loaded through Pydantic Settings (`shared/config.py`).
+所有遥测设置都通过环境变量管理，经 Pydantic Settings（`shared/config.py`）加载。
 
-| Variable | Default | Description |
+| 变量 | 默认值 | 说明 |
 |----------|---------|-------------|
-| `OTEL_ENABLED` | `false` | Master toggle. When `false`, `setup_telemetry()` returns immediately and no instrumentation is loaded. |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:18889` | Base URL for the OTLP HTTP receiver. The code appends `/v1/traces`, `/v1/metrics`, and `/v1/logs` automatically. |
-| `OTEL_SERVICE_NAME` | `ecommerce` | Fallback service name. Overridden by each agent's `setup_telemetry(service_name)` call. |
-| `ENVIRONMENT` | `development` | Mapped to `deployment.environment` resource attribute. |
+| `OTEL_ENABLED` | `false` | 总开关。为 `false` 时 `setup_telemetry()` 立即返回，不加载任何埋点。 |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4317` | OTLP 接收端的基地址。使用 HTTP 传输时，代码会自动追加 `/v1/traces`、`/v1/metrics` 与 `/v1/logs`。 |
+| `OTEL_SERVICE_NAME` | `ecommerce` | 兜底服务名。会被各智能体的 `setup_telemetry(service_name)` 调用覆盖。 |
+| `ENVIRONMENT` | `development` | 映射为 `deployment.environment` 资源属性。 |
 
-### Docker Compose Ports
+### Docker Compose 端口
 
-| Port | Service |
+| 端口 | 服务 |
 |------|---------|
-| `18888` | Aspire Dashboard UI |
-| `18889` (mapped to `18890` on host) | OTLP HTTP receiver inside the container |
+| `16686` | Jaeger 查询界面 |
+| `4317` | OTLP gRPC 接收端 |
+| `4318` | OTLP HTTP 接收端 |
 
-Inside the Docker network, agents connect to `http://aspire:18889`. From the host, the receiver is accessible at `http://localhost:18890`.
+在 Docker 网络内部，智能体连接 `http://jaeger:4317`。三个端口都按 1:1 映射到宿主机，因此在宿主机上界面位于 `http://localhost:16686`，HTTP 接收端位于 `http://localhost:4318`。
 
-### Enabling Telemetry
+### 启用遥测
 
-In `.env` or `docker-compose.yml` environment section:
+在 `.env` 或 `docker-compose.yml` 的 environment 段中：
 
 ```bash
 OTEL_ENABLED=true
-OTEL_EXPORTER_OTLP_ENDPOINT=http://aspire:18889
+OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
 ```
 
-### Graceful Degradation
+### 优雅降级
 
-`setup_telemetry()` wraps the entire initialization in a try/except. If the Aspire Dashboard is unreachable or any instrumentor fails to load, the agent logs a warning and continues operating without telemetry. Individual instrumentors (`_instrument_httpx`, `_instrument_asyncpg`, `_instrument_logging`) also catch exceptions independently, so a failure in one does not prevent the others from loading.
+`setup_telemetry()` 把整个初始化过程包在 try/except 中。若 Jaeger 不可达，或某个 instrumentor 加载失败，智能体会记录一条警告并继续运行（只是没有遥测）。各 instrumentor（`_instrument_httpx`、`_instrument_asyncpg`、`_instrument_logging`）也会各自捕获异常，因此其中一个失败不会阻止其他几个加载。
 
 ---
 
-## Resource Attributes
+## 资源属性
 
-Every span, metric, and log record includes these resource attributes:
+每条跨度、指标与日志记录都带有以下资源属性：
 
-| Attribute | Source |
+| 属性 | 来源 |
 |-----------|--------|
-| `service.name` | Passed to `setup_telemetry()` |
-| `service.version` | Defaults to `1.0.0` |
-| `deployment.environment` | From `settings.ENVIRONMENT` |
+| `service.name` | 传给 `setup_telemetry()` 的值 |
+| `service.version` | 默认为 `1.0.0` |
+| `deployment.environment` | 来自 `settings.ENVIRONMENT` |
 
 ---
 
-## Telemetry Signal Details
+## 遥测信号细节
 
-| Signal | Exporter | Processor | Export Behavior |
+| 信号 | 导出器 | 处理器 | 导出行为 |
 |--------|----------|-----------|-----------------|
-| **Traces** | `OTLPSpanExporter` (gRPC, HTTP fallback) | `BatchSpanProcessor` | Batched export (SDK default: 5s interval, 512 span batch) |
-| **Metrics** | `OTLPMetricExporter` (gRPC, HTTP fallback) | `PeriodicExportingMetricReader` | Every 5 seconds (`export_interval_millis=5000`) |
-| **Logs** | `OTLPLogExporter` | `BatchLogRecordProcessor` | Batched |
+| **追踪** | `OTLPSpanExporter`（gRPC，可回退 HTTP） | `BatchSpanProcessor` | 批量导出（SDK 默认：5 秒间隔，每批 512 条跨度） |
+| **指标** | `OTLPMetricExporter`（gRPC，可回退 HTTP） | `PeriodicExportingMetricReader` | 每 5 秒一次（`export_interval_millis=5000`） |
+| **日志** | `OTLPLogExporter` | `BatchLogRecordProcessor` | 批量导出 |
 
-`setup_telemetry()` tries the gRPC exporters first — gRPC is Aspire's default OTLP transport — and falls back to HTTP (appending `/v1/traces` and `/v1/metrics` to the endpoint) if the gRPC packages are not installed. Which one is in use is logged at startup.
+`setup_telemetry()` 会先尝试 gRPC 导出器，若未安装 gRPC 相关包则回退到 HTTP（此时在端点后追加 `/v1/traces` 与 `/v1/metrics`）。实际使用的是哪一种，会在启动时记录到日志。
 
-The metrics interval is 5 seconds rather than the SDK's 60, so the Aspire dashboard updates responsively while developing.
+指标导出间隔为 5 秒；只有接入兼容的指标后端后才可消费这些数据，不能据此声称 Jaeger 会显示应用指标。
 
 ---
 
-## The .NET Stack
+## 跨度命名是承重的
 
-Everything above describes `agents/python`. The .NET stack (`agents/dotnet`) exports to the same Aspire dashboard through `Shared/Telemetry/TelemetrySetup.cs`, wired once per process by `AddAgentTelemetry(settings)` in each `Program.cs`.
+智能体调用跨度统一命名为 `invoke_agent <智能体名>`，并打上 `gen_ai.operation.name = invoke_agent` 属性。统一命名便于在 Jaeger 中按操作名查询，也方便其他遵循 GenAI 语义约定的消费者识别。使用不同名称的跨度仍可按其实际名称检索；Jaeger 并不要求专用 GenAI 视图。
 
-| Signal | Python | .NET |
-|---|---|---|
-| Traces | `BatchSpanProcessor` → OTLP | OTel SDK default batching → OTLP |
-| Auto-instrumentation | ASP.NET-equivalent (FastAPI), httpx, asyncpg, OpenAI | ASP.NET Core, `HttpClient`, Npgsql |
-| Metrics | auto-instrumentation only — **no custom metrics** | auto-instrumentation only |
-| Logs | `LoggingHandler` bridge → OTLP | `ILogger` → `AddOpenTelemetry()` → OTLP |
-| Langfuse sink | optional, additive | not implemented |
-
-### Span naming is load-bearing
-
-Both stacks name agent-invocation spans `invoke_agent <agent-name>` and tag them `gen_ai.operation.name = invoke_agent`. This is not cosmetic. Aspire's **GenAI** view selects on that convention, so a span named anything else still appears in the raw trace list but is invisible in the view built for reading agent runs.
-
-.NET emitted `agent.run <name>` with `gen_ai.operation.name = chat` until #19, which is why the GenAI view looked empty when running the .NET backend while working normally on Python.
-
-The resulting hierarchy is the same on both stacks:
+最终的跨度层级如下：
 
 ```
-invoke_agent orchestrator          INTERNAL, orchestrator process
-  chat gpt-4.1                     LLM call (auto-instrumented)
-  invoke_agent product-discovery   CLIENT, the A2A call
-    invoke_agent product-discovery INTERNAL, in the specialist process
+invoke_agent orchestrator          INTERNAL，编排器进程
+  chat gpt-4.1                     LLM 调用（自动埋点）
+  invoke_agent product-discovery   CLIENT，即 A2A 调用
+    invoke_agent product-discovery INTERNAL，位于专业智能体进程内
       chat gpt-4.1
-      SELECT ...                   database query
+      SELECT ...                   数据库查询
 ```
 
-### Grouping a conversation
+### 会话分组
 
-Spans carry `enduser.id`, `enduser.role`, `session.id` and `gen_ai.conversation.id`. The last is what Aspire groups a conversation's LLM calls by, and it is set from the same value as `session.id`.
+跨度上带有 `enduser.id`、`enduser.role`、`session.id` 与 `gen_ai.conversation.id`。最后一个（`gen_ai.conversation.id`）取与 `session.id` 相同的值，正是按会话归组 LLM 调用的依据。
 
-Worth knowing when reading older traces: that value was empty for all browser traffic on both stacks until #9, because the session id was only ever populated from an inbound header the web client never sent. Conversation grouping therefore never worked in practice before that fix, regardless of these attributes being present.
+阅读较早的追踪时值得知道：在 #9 修复之前，该值对所有浏览器流量都是空的，因为会话 ID 只从入站请求头填充，而 Web 客户端从未发送过该请求头。因此在那个修复之前，无论这些属性是否存在，会话分组实际上从未生效过。
 
 ---
 
-## Optional: Langfuse Integration
+## 可选：Langfuse 集成
 
-[Langfuse](https://langfuse.com) is a purpose-built LLM observability platform. The platform supports it as a **parallel, flag-gated OTel sink** — Aspire remains the primary trace target; Langfuse receives a copy when enabled.
+[Langfuse](https://langfuse.com) 是专为 LLM 可观测性打造的平台。本平台把它作为一个**可并行、受开关控制的 OTel 接收端**来支持 —— Jaeger 仍是主要的追踪目标，启用后 Langfuse 会收到一份副本。
 
-### How it works
+### 工作原理
 
-`shared/telemetry.py` adds a second `BatchSpanProcessor` pointing at Langfuse's OTLP endpoint using the standard `opentelemetry-exporter-otlp-proto-http` package (already installed). No extra SDK dependency is needed.
+`shared/telemetry.py` 使用标准的 `opentelemetry-exporter-otlp-proto-http` 包（已安装）新增第二个 `BatchSpanProcessor`，指向 Langfuse 的 OTLP 端点。无需额外的 SDK 依赖。
 
-### Setup
+### 配置步骤
 
-1. Create a free account at [cloud.langfuse.com](https://cloud.langfuse.com) and create a project.
-2. Copy the project's **Public Key** and **Secret Key** from the project settings.
-3. Add to your `.env`:
+1. 在 [cloud.langfuse.com](https://cloud.langfuse.com) 注册免费账号并创建一个项目。
+2. 在项目设置中复制 **Public Key** 与 **Secret Key**。
+3. 加入 `.env`：
 
 ```bash
 LANGFUSE_ENABLED=true
 LANGFUSE_PUBLIC_KEY=pk-lf-...
 LANGFUSE_SECRET_KEY=sk-lf-...
-LANGFUSE_HOST=https://cloud.langfuse.com   # default; omit for cloud
+LANGFUSE_HOST=https://cloud.langfuse.com   # 默认值；云端可省略
 ```
 
-4. Restart the stack. Traces will appear in both the Aspire Dashboard and Langfuse.
+4. 重启服务栈。追踪会同时出现在 Jaeger 与 Langfuse 中。
 
-### Self-hosted Langfuse
+### 自托管 Langfuse
 
-Point `LANGFUSE_HOST` at your self-hosted instance:
+把 `LANGFUSE_HOST` 指向你的自托管实例：
 
 ```bash
 LANGFUSE_HOST=http://langfuse.internal:3000
 ```
 
-### Failure behavior
+### 失败行为
 
-If the Langfuse exporter fails to initialize (wrong credentials, network unreachable), `setup_telemetry()` logs a warning and continues. Aspire tracing is unaffected — Langfuse is strictly additive.
+若 Langfuse 导出器初始化失败（凭据错误、网络不可达），`setup_telemetry()` 会记录一条警告并继续运行。Jaeger 侧的追踪不受影响 —— Langfuse 严格是增量附加的。
 
-### What you see in Langfuse
+### 在 Langfuse 中能看到什么
 
-- Every agent invocation appears as a **trace** with the agent name as the root span.
-- A2A calls between orchestrator and specialists appear as **child spans** (`invoke_agent`).
-- LLM calls (OpenAI/Azure OpenAI) appear as spans with token counts, model name, and (optionally) prompt/completion content when `GENAI_CAPTURE_CONTENT=true`.
-- Tool calls appear as function spans with input/output when `agent_execution_steps` are populated.
+- 每次智能体调用都呈现为一条**追踪（trace）**，以智能体名作为根跨度。
+- 编排器与专业智能体之间的 A2A 调用呈现为**子跨度**（`invoke_agent`）。
+- LLM 调用（OpenAI/Azure OpenAI）呈现为带 token 数、模型名的跨度；当 `GENAI_CAPTURE_CONTENT=true` 时还（可选地）包含提示词/补全内容。
+- 当 `agent_execution_steps` 有数据时，工具调用呈现为带输入/输出的函数跨度。
 
 ---
 
-## Related
+## 相关文档
 
-- [`docs/architecture.md`](architecture.md) — system overview including the OTel → Aspire pipeline
-- [`docs/deployment.md`](deployment.md) — `OTEL_ENABLED`, `OTEL_EXPORTER_OTLP_ENDPOINT`, Aspire port map
-- [`docs/troubleshooting.md`](troubleshooting.md) — Aspire dashboard empty / no traces fix
-- [Project README](../README.md)
+- [`docs/architecture.md`](architecture.md) —— 系统总览，含 OTel → Jaeger 流水线
+- [`docs/deployment.md`](deployment.md) —— `OTEL_ENABLED`、`OTEL_EXPORTER_OTLP_ENDPOINT`、Jaeger 端口映射
+- [`docs/troubleshooting.md`](troubleshooting.md) —— Jaeger 界面为空 / 无追踪的排查方法
+- [项目 README](../README.md)

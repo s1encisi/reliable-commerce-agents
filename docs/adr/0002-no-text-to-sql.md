@@ -1,48 +1,38 @@
-# ADR 0002 — No text-to-SQL; tools own their queries
+# ADR 0002 —— 不做 text-to-SQL；查询由工具自己持有
 
-**Status:** Accepted · **Date:** 2026-08-26 (recorded; decided much earlier)
+**状态：** 已接受 · **日期：** 2026 年 8 月 26 日（记录时间；决策时间远早于此）
 
-## Context
+## 背景
 
-Agents answer questions about a 34-table Postgres schema. The tempting shortcut is to
-hand the model the schema and let it write SQL — it is one tool instead of forty-six,
-and it answers questions nobody anticipated.
+智能体要回答关于一个 34 张表的 Postgres 模式的问题。诱人的捷径是把模式交给模型，让它写 SQL
+——那是一个工具而不是四十六个，而且能回答没人预先想到的问题。
 
-## Decision
+## 决策
 
-The model never writes SQL. Every query lives in a hand-written tool with parameterised
-arguments, and the model chooses among tools rather than composing queries.
+模型永远不写 SQL。每条查询都存在于一个手写的、带参数化参数的工具里，模型在工具之间做选择，
+而不是组合查询。
 
-## Why
+## 理由
 
-**Row-level scoping is a contract the model cannot be trusted to honour.** Every
-user-facing query filters on `user_email` or `user_id`, taken from a ContextVar the
-request sets — not from anything the model said. `docs/roadmap.md` states the
-consequence plainly: dynamic SQL would bypass that contract. A model that can write
-`WHERE` can write the wrong one, and the failure is a customer reading another
-customer's orders.
+**行级作用域是一份不能指望模型遵守的契约。** 每个面向用户的查询都按 `user_email` 或 `user_id`
+过滤，取自请求设置的 ContextVar——而不是取自模型说的任何东西。`docs/roadmap.md` 直白地写明了
+后果：动态 SQL 会绕过那份契约。一个能写 `WHERE` 的模型就能写错的那个，而失败的表现是客户读到
+了另一个客户的订单。
 
-**Parameterisation is not optional and not negotiable.** All queries use `$1, $2`
-placeholders through asyncpg. Generated SQL reintroduces injection as a model-behaviour
-problem, which is exactly the class of problem this repo spends the most effort
-defending against elsewhere.
+**参数化不是可选项，也不可商量。** 所有查询都通过 asyncpg 使用 `$1, $2` 占位符。生成的 SQL 会
+把注入重新引入为一个模型行为问题，而这恰恰是本仓库在其他地方花最多力气防御的那一类问题。
 
-**Auditability.** A fixed tool surface can be reviewed once. Generated SQL has to be
-reviewed every time it runs, by something.
+**可审计性。** 一套固定的工具面可以一次性评审。生成的 SQL 每次运行都得被什么东西评审一次。
 
-## Consequences
+## 后果
 
-Forty-six tools instead of one, and a question outside their surface simply cannot be
-answered. That is the accepted cost.
+四十六个工具而不是一个，而超出它们覆盖范围的问题干脆无法回答。这是被接受的代价。
 
-The planned mitigation is a **typed filter DSL** — a structured `ProductFilters` model
-(category, price, brand, sort) replacing `search_products`' flat parameter list. That
-gives the model flexibility at the boundary while SQL generation stays server-side and
-auditable. It is on the roadmap and not yet built.
+计划中的缓解措施是一个**带类型的过滤 DSL**——用一个结构化的 `ProductFilters` 模型（分类、价格、
+品牌、排序）取代 `search_products` 扁平参数列表。这在边界上给模型灵活性，同时 SQL 生成仍留在
+服务端、仍可审计。它在路线图上，尚未构建。
 
-## What would make this wrong
+## 什么情况下这个决定是错的
 
-A read-only replica with row-level security enforced by the *database* rather than by
-application code would remove the scoping argument, since the model could no longer
-express a query that crosses a tenant boundary. The injection and audit arguments would
-still stand.
+一个只读副本，其行级安全由*数据库*而不是应用代码强制，就会移除作用域这条论据，因为模型再也
+无法表达一个跨越租户边界的查询。注入与审计这两条论据依然成立。

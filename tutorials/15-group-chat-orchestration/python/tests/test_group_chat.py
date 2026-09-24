@@ -1,8 +1,4 @@
-"""
-Chapter 15 — Group Chat Orchestration: tests.
-
-Integration-only — three real LLM calls per run.
-"""
+"""第 15 章群聊测试，包含离线回放与单独控制的真实模型用例。"""
 
 from __future__ import annotations
 
@@ -33,23 +29,20 @@ def _llm_available() -> bool:
 
 
 def test_workflow_builds(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Construction-only — never calls the LLM, so it shouldn't need real
-    # credentials. _default_client()'s OpenAI branch reads OPENAI_API_KEY via
-    # a hard os.environ[...] lookup, which this test tripped over in a
-    # credential-less CI job. A placeholder is enough since the client is
-    # never actually invoked.
+    # 仅构建，不执行模型调用，
+    # 但默认客户端直接读取密钥环境变量。
+    # 因此无凭据 CI 提供测试占位值，
+    # 无需真实账号，
+    # 也不产生网络请求。
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test-placeholder-not-used")
     assert build_workflow() is not None
 
 
 @pytest.mark.asyncio
 async def test_replay_speakers_in_round_robin_order(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Plays back tests/fixtures/replay/ — no network, no credentials.
+    """无网络地回放已有夹具。
 
-    Recorded once against a real LLM (test_real_llm_speakers_in_round_robin_order
-    below, run with RECORD=true) and committed. Uses the deterministic
-    round-robin manager (no LLM call for speaker selection), so only the
-    three participants' own turns need fixtures.
+    轮询管理器是确定性的，只需三个参与者各自的响应夹具。
     """
     recording = os.environ.get("RECORD", "").lower() in ("1", "true", "yes")
     if not recording and not any(FIXTURES_DIR.glob("*.json")):
@@ -73,7 +66,7 @@ async def test_real_llm_speakers_in_round_robin_order() -> None:
     assert "writer" in speakers
     assert "critic" in speakers
     assert "editor" in speakers
-    # Round-robin selection: writer must speak before critic before editor.
+    # 轮询顺序必须是写作者、评论者、编辑。
     assert speakers.index("writer") < speakers.index("critic")
     assert speakers.index("critic") < speakers.index("editor")
 
@@ -84,7 +77,7 @@ async def test_real_llm_speakers_in_round_robin_order() -> None:
 async def test_real_llm_each_speaker_produces_content() -> None:
     turns = await run("slogan for a bookstore")
     assert len(turns) >= 3
-    # Each speaker's text is non-empty.
+    # 每位参与者输出非空。
     for speaker, text in turns[:3]:
         assert text.strip(), f"{speaker} produced empty text"
 

@@ -1,13 +1,12 @@
 """
-MAF v1 — Chapter 14: Handoff Orchestration (Python)
+MAF v1 —— 第 14 章：移交式编排（Python）
 
-A Triage agent routes customer questions to Math or History specialists.
-The mesh lets specialists hand back to Triage for follow-ups. Autonomous
-mode answers without waiting for human input — good for chat UIs.
+分诊智能体把用户问题路由到数学或历史专家。网状结构允许专家交回分诊
+智能体以处理追问。自主模式无需等待人工输入即可作答——适合聊天界面。
 
-Run:
-    python tutorials/14-handoff-orchestration/python/main.py "What's 37 * 42?"
-    python tutorials/14-handoff-orchestration/python/main.py "When did WWII end?"
+运行：
+    python tutorials/14-handoff-orchestration/python/main.py "37 * 42 等于多少？"
+    python tutorials/14-handoff-orchestration/python/main.py "二战是哪一年结束的？"
 """
 
 from __future__ import annotations
@@ -48,9 +47,9 @@ def _default_client() -> OpenAIChatClient | OpenAIChatCompletionClient | ReplayC
     return OpenAIChatClient(
         model=os.environ.get("LLM_MODEL", "gpt-4.1"),
         api_key=os.environ["OPENAI_API_KEY"],
-        # Phase 9: any OpenAI-compatible endpoint (GitHub Models, OpenRouter,
-        # vLLM, LM Studio, Ollama) instead of api.openai.com — see
-        # tutorials/00-setup/README.md's "Don't have a paid API key?" section.
+        # 第 9 阶段：可用任意 OpenAI 兼容端点（GitHub Models、OpenRouter、
+        # vLLM、LM Studio、Ollama）替代 api.openai.com——见
+        # tutorials/00-setup/README.md 的「没有付费 API 密钥怎么办？」一节。
         base_url=os.environ.get("LLM_BASE_URL") or None,
     )
 
@@ -65,10 +64,9 @@ def triage() -> Agent:
             "and stop — do not rewrite the answer."
         ),
         name="triage",
-        # HandoffBuilder.build() requires this on every participant as of
-        # agent-framework-orchestrations>=1.0.1 — its middleware short-circuits
-        # tool calls during a handoff, so local history has to stay in sync
-        # with what the service actually saw.
+        # 自 agent-framework-orchestrations>=1.0.1 起，HandoffBuilder.build()
+        # 要求每个参与者都设置该参数——其中间件会在移交期间短路工具调用，
+        # 因此本地历史必须与服务端实际看到的内容保持一致。
         require_per_service_call_history_persistence=True,
     )
 
@@ -105,7 +103,7 @@ def build_workflow():
         HandoffBuilder(participants=[t, m, h])
         .with_start_agent(t)
         .add_handoff(t, [m, h])
-        .add_handoff(m, [t])  # specialists can hand back to triage for follow-ups
+        .add_handoff(m, [t])  # 专家可交回分诊智能体以处理追问
         .add_handoff(h, [t])
         .with_autonomous_mode(agents=[t, m, h], turn_limits={"triage": 3, "math": 2, "history": 2})
         .build()
@@ -113,24 +111,23 @@ def build_workflow():
 
 
 async def _workflow_events(workflow, message: str):
-    """Yield workflow events from a streaming run.
+    """以流式运行产出工作流事件。
 
-    ``workflow.run(..., stream=True)`` drives each participant's turn through
-    MAF's streaming AgentExecutor path, which in turn streams the chat
-    client's response. ``ReplayChatClient`` (see
-    tutorials/_shared/replay_client.py) wires the same finalizer real clients
-    use, so replay mode streams correctly through this same path — no
-    provider-specific branch needed here.
+    ``workflow.run(..., stream=True)`` 通过 MAF 的流式 AgentExecutor 路径
+    驱动每个参与者的发言，进而流式获取聊天客户端的响应。``ReplayChatClient``
+    （见 tutorials/_shared/replay_client.py）接入了与真实客户端相同的
+    终结器，因此回放模式也能沿同一条路径正确流式输出——此处无需任何
+    针对具体提供方的分支。
     """
     async for event in workflow.run(message, stream=True):
         yield event
 
 
 async def ask(question: str) -> tuple[list[str], str]:
-    """Run the handoff graph; return (ordered participant ids, final answer).
+    """运行移交图；返回（有序的参与者 id 列表，最终答案）。
 
-    Output text streams in chunks on 'output' events (one chunk per delta).
-    We concatenate per-executor in order to reconstruct each agent's turn.
+    输出文本以分块形式出现在 'output' 事件上（每个增量一块）。
+    我们按执行器 id 顺序拼接，以重建每个智能体的发言。
     """
     workflow = build_workflow()
     current_agent: str | None = None

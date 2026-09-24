@@ -1,4 +1,4 @@
-/** Persist only an operation ID and a payload fingerprint, never the return reason. */
+/** 只持久化操作 ID 与载荷指纹，绝不保存退货原因。 */
 const prefix = "return-intent:v1:";
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -30,7 +30,7 @@ export async function getReturnIntent(owner: string, orderId: string, reason: st
   const existing = read(owner, orderId);
   if (existing?.fingerprint === fingerprint) return existing.id;
   const id = crypto.randomUUID();
-  // Save BEFORE sending. Storage failure must not launch an untrackable request.
+  // 在发送之前先保存。存储失败绝不能导致发出一个无法追踪的请求。
   localStorage.setItem(key(owner, orderId), JSON.stringify({ id, fingerprint }));
   return id;
 }

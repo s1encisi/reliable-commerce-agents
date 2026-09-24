@@ -1,16 +1,8 @@
-"""Reusable MAF middleware for E-Commerce Agents.
+"""可靠电商多智能体平台可复用的 MAF 中间件。
 
-Three stock middleware pieces that every specialist can plug in via
-``shared.factory.build_specialist_middleware(...)``:
-
-- :class:`AgentRunLogger` — log each agent run with timing + correlation id.
-- :class:`ToolAuditMiddleware` — structured audit log for every tool call.
-- :class:`PiiRedactionMiddleware` — mask credit-card-shaped strings in
-  outbound user messages before the LLM sees them.
-
-All three are observable: they write to module-level loggers and carry
-lightweight counters you can sample for health dashboards. Keep them
-stateless across runs unless your app explicitly needs shared state.
+AgentRunLogger 记录运行耗时与关联标识；ToolAuditMiddleware 审计
+工具调用；PiiRedactionMiddleware 在模型调用前遮蔽敏感模式。
+各模块提供日志和轻量计数器，除非明确需要共享状态，否则保持运行间无状态。
 """
 
 from __future__ import annotations
@@ -40,18 +32,23 @@ logger = logging.getLogger(__name__)
 
 
 class AgentRunLogger(AgentMiddleware):
-    """Emits start/finish log lines per agent invocation.
+    """记录每次智能体调用的开始与结束。
 
-    Generates a short correlation id and exposes it on
-    ``context.metadata["run_id"]`` so downstream middleware/tools can
-    include it in their own logs.
+    生成短关联标识并写入 context.metadata["run_id"]，供后续日志关联。
     """
 
     async def process(self, context: AgentContext, call_next: Callable[[], Awaitable[None]]) -> None:
-        run_id = str(uuid.uuid4())[:8]
+        from shared.paid_transport import current_root_run, current_run_deadline
+
+        root_token = current_root_run.set(current_root_run.get() or str(uuid.uuid4()))
+        deadline_token = current_run_deadline.set(
+            current_run_deadline.get() or time.time() + settings.MAF_STREAM_TIMEOUT_SECONDS
+        )
+        run_id = current_root_run.get()[:8]
         agent_name = getattr(getattr(context, "agent", None), "name", "agent") or "agent"
         if hasattr(context, "metadata") and isinstance(context.metadata, dict):
             context.metadata.setdefault("run_id", run_id)
+            context.metadata.setdefault("root_run_id", current_root_run.get())
 
         start = time.perf_counter()
         logger.info("agent.start agent=%s run_id=%s", agent_name, run_id)
@@ -75,16 +72,18 @@ class AgentRunLogger(AgentMiddleware):
                 elapsed,
             )
 
+        finally:
+            current_root_run.reset(root_token)
+            current_run_deadline.reset(deadline_token)
+
 
 # ─────────────────────── Tool audit ───────────────────────
 
 
 class ToolAuditMiddleware(FunctionMiddleware):
-    """Audit every tool invocation: name, caller, latency, success flag.
+    """审计工具名、调用者、延迟及成功状态。
 
-    Does NOT enforce approval — MAF handles that natively via
-    ``@tool(approval_mode="always_require")``. This middleware just
-    records what happened.
+    本中间件只记录行为；审批由 MAF 门控及项目的 HITL 执行路径负责。
     """
 
     def __init__(self, *, capture_arguments: bool = False) -> None:
@@ -139,17 +138,15 @@ class ToolAuditMiddleware(FunctionMiddleware):
 # ─────────────────────── PII redaction ───────────────────────
 
 
+_UUID_PATTERN = re.compile(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b")
 _CARD_PATTERN = re.compile(r"\b\d{4}[- ]?\d{4}[- ]?\d{4}[- ]?\d{4}\b")
 _SSN_PATTERN = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
 
 
 class PiiRedactionMiddleware(ChatMiddleware):
-    """Masks card-number- and SSN-shaped strings before the LLM sees them.
+    """模型调用前遮蔽银行卡号和美国社会安全号形态的字符串。
 
-    Counts redactions so you can alert when sensitive strings leak into
-    user messages at a higher than expected rate. Pattern set is
-    deliberately small; extend when you have a concrete regex vetted by
-    your security team.
+    记录脱敏次数供监测。规则集合较小，扩展前应核对匹配范围和误报。
     """
 
     CARD_MASK = "[REDACTED-CARD]"
@@ -165,14 +162,35 @@ class PiiRedactionMiddleware(ChatMiddleware):
                 text = getattr(content, "text", None)
                 if not text or not isinstance(text, str):
                     continue
-                redacted, cards = _CARD_PATTERN.subn(self.CARD_MASK, text)
-                redacted, ssns = _SSN_PATTERN.subn(self.SSN_MASK, redacted)
+                identifiers = [match.span() for match in _UUID_PATTERN.finditer(text)]
+                cards = 0
+
+                def redact_card(match: re.Match) -> str:
+                    nonlocal cards
+                    if any(start <= match.start() and match.end() <= end for start, end in identifiers):
+                        return match.group(0)
+                    cards += 1
+                    return self.CARD_MASK
+
+                redacted = _CARD_PATTERN.sub(redact_card, text)
+                # UUID 片段也可能匹配 SSN；只在标识符之外脱敏。
+                identifiers = [match.span() for match in _UUID_PATTERN.finditer(redacted)]
+                ssns = 0
+
+                def redact_ssn(match: re.Match) -> str:
+                    nonlocal ssns
+                    if any(start <= match.start() and match.end() <= end for start, end in identifiers):
+                        return match.group(0)
+                    ssns += 1
+                    return self.SSN_MASK
+
+                redacted = _SSN_PATTERN.sub(redact_ssn, redacted)
                 if cards + ssns:
                     self.redactions += cards + ssns
                     try:
                         content.text = redacted  # type: ignore[attr-defined]
                     except AttributeError:
-                        # Frozen content objects — not expected in MAF v1 but be defensive.
+                        # 兼容内容对象不可变的情形。
                         logger.warning("could not redact content of type %s", type(content).__name__)
         await call_next()
 
@@ -181,10 +199,10 @@ class PiiRedactionMiddleware(ChatMiddleware):
 
 
 def default_middleware_stack() -> list[Any]:
-    """The standard stack every specialist picks up by default.
+    """专业智能体默认中间件栈。
 
-    Ordering matters: logger wraps the whole run, tool audit intercepts
-    each tool call, PII redaction runs just before the chat client.
+    顺序有意义：运行日志包裹整体执行，审计拦截每个工具，
+    个人信息脱敏在聊天客户端之前执行。
     """
     return [
         AgentRunLogger(),
@@ -194,34 +212,20 @@ def default_middleware_stack() -> list[Any]:
 
 
 def build_specialist_middleware(*, include_steps: bool = True) -> list[Any]:
-    """Compose the middleware stack every specialist / orchestrator agent uses.
+    """专业智能体和编排器共用的中间件组装入口。
 
-    This is the single wiring point that finally activates the observability and
-    guardrail middleware (previously ``default_middleware_stack()`` was defined
-    but never attached — agents passed only the step recorder). MAF dispatches
-    the mixed list by type into its agent / chat / function pipelines:
+    MAF 按类型将列表分派到智能体、聊天和函数管线，覆盖运行日志、
+    工具审计、注入检测、个人信息脱敏、输出净化、事实台账与核验、
+    费用预算、内容审核和执行步骤记录。
 
-    - ``AgentRunLogger``        (agent)    — run timing + correlation id
-    - ``ToolAuditMiddleware``   (function) — per-tool audit log
-    - ``InjectionDetection``    (chat)     — flag inbound injection (observe-first)
-    - ``PiiRedactionMiddleware``(chat)     — mask card / SSN before the LLM
-    - ``OutputSanitization``    (function) — defang stored injection in tool output
-    - ``GroundingLedger``       (function) — record real product/order facts (optional)
-    - ``GroundingVerification`` (agent)    — verify/correct the final text (optional)
-    - ``CostBudget``            (chat)     — accumulate/cap per-run cost (optional)
-    - ``OutputModeration``      (chat)     — classify the model's own generated text (optional)
-    - ``StepRecorder``          (function) — agentic-timeline capture (optional)
-
-    The guardrail layers are gated by ``GUARDRAILS_ENABLED`` so the feature can
-    be disabled without a redeploy; PII redaction stays on regardless. Grounding
-    is gated by ``GROUNDING_MODE`` — "off" skips both grounding middleware. Cost
-    budgeting is gated by ``COST_BUDGET_MODE`` — "off" skips it entirely. Output
-    moderation is gated by ``OUTPUT_MODERATION_MODE`` — "off" skips it entirely.
+    GUARDRAILS_ENABLED 控制护栏，个人信息脱敏独立保留。事实核验、
+    费用预算与内容审核分别由各自 MODE 开关控制，off 时不挂载。
     """
-    # Imported lazily to avoid a circular import (the guardrails package imports
-    # shared.config, which is cheap, but the middleware module is imported early
-    # by agents — keep the dependency one-directional).
+    # 按需导入以避免循环依赖。
+    # 护栏依赖 shared.config，而智能体很早就会导入中间件，
+    # 因此保持依赖方向清晰。
     from shared.agent_observability import STEP_MIDDLEWARE
+    from shared.execution_policy import ReadOnlyToolMiddleware
     from shared.grounding.ledger import GROUNDING_LEDGER_MIDDLEWARE
     from shared.grounding.middleware import GroundingVerificationMiddleware
     from shared.guardrails.cost_budget_middleware import CostBudgetMiddleware
@@ -230,7 +234,7 @@ def build_specialist_middleware(*, include_steps: bool = True) -> list[Any]:
     from shared.guardrails.output_middleware import OutputSanitizationMiddleware
     from shared.hitl import HITLFunctionMiddleware
 
-    stack: list[Any] = [AgentRunLogger(), ToolAuditMiddleware()]
+    stack: list[Any] = [AgentRunLogger(), ReadOnlyToolMiddleware(), ToolAuditMiddleware()]
     if settings.GUARDRAILS_ENABLED:
         stack.append(InjectionDetectionChatMiddleware())
     stack.append(PiiRedactionMiddleware())

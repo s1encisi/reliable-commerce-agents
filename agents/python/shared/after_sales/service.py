@@ -1,8 +1,8 @@
-"""One return transaction shared by tools, REST, approval execution and workflows.
+"""工具、REST、审批和工作流共用的退货事务。
 
-Always lock the owned order before checking existing returns and delivery evidence.
-No model/network calls or human waits occur while the transaction holds the lock.
-The operation result and business writes commit together; lost responses are reconciled by operation ID.
+先锁定属于当前用户的订单，再检查已有退货与签收证据。持锁期间不调用
+模型、网络或等待人工操作。业务写入与操作回执一并提交；响应丢失时
+通过操作标识核实结果。
 """
 
 import asyncio
@@ -62,16 +62,16 @@ async def _load_snapshot(conn: asyncpg.Connection, order_id: UUID, email: str, *
         return None
     existing = await conn.fetchval("SELECT id FROM returns WHERE order_id = $1 LIMIT 1", order_id)
     if lock:
-        # Protect existing evidence against concurrent corrections/deletions.
-        # New child rows also need the FK's key-share lock on our locked order.
+        # 锁定已有证据，防止并发更正或删除。
+        # 新子记录的外键也需要获取当前已锁订单的键共享锁。
         history = await conn.fetch(
             "SELECT status, timestamp FROM order_status_history WHERE order_id = $1 FOR SHARE",
             order_id,
         )
         events = [row for row in history if row["status"] == "delivered"]
     else:
-        # Two distinct values suffice to establish disagreement. NULL must not
-        # be hidden by a valid event when determining eligibility.
+        # 两个不同值即可证明证据矛盾；判定资格时，
+        # 不能让有效事件掩盖缺失的 NULL 值。
         events = await conn.fetch(
             """SELECT DISTINCT timestamp FROM order_status_history
                WHERE order_id = $1 AND status = 'delivered' ORDER BY timestamp NULLS FIRST LIMIT 2""",
@@ -132,7 +132,7 @@ async def check_eligibility(order_id: str) -> dict[str, Any]:
 
 
 async def prepare_approval_input(tool_input: dict[str, Any], email: str) -> dict[str, Any]:
-    """Validate before queueing and bind the immutable server-stored request."""
+    """入队前校验，并绑定服务端保存的不可变请求。"""
     request = InitiateReturnInput.model_validate(tool_input)
     async with get_pool().acquire() as conn:
         snapshot = await _load_snapshot(conn, request.order_id, email, lock=False)
@@ -146,15 +146,15 @@ async def prepare_approval_input(tool_input: dict[str, Any], email: str) -> dict
 
 
 class CommitUncertainError(Exception):
-    """COMMIT was sent (or completed) but the caller did not receive a result."""
+    """COMMIT 已发送或完成，但调用方没有收到结果。"""
 
 
 async def _fault_boundary(stage: str, conn: asyncpg.Connection, operation_id: UUID) -> None:
-    """No-op seam for isolated fault tests; never exposed as a request parameter."""
+    """隔离故障测试用的空操作注入点，不暴露为请求参数。"""
 
 
 def _submission_decision(snapshot: ReturnSnapshot, now: datetime) -> ReturnDecision:
-    """A named boundary allows evaluation-only ablation without a runtime flag."""
+    """命名边界仅供评测消融使用，不增加运行时功能开关。"""
     return evaluate_return(snapshot, now=now)
 
 
@@ -293,8 +293,8 @@ async def _commit_return(
             await _fault_boundary("after_commit", conn, operation_id)
             return result
         except asyncio.CancelledError:
-            # Cancellation stops new attempts. A later status query acquires a
-            # row lock and resolves whether this transaction actually committed.
+            # 取消后停止新尝试；后续状态查询会获取行锁，
+            # 确认该事务是否真正提交。
             if not committing and not conn.is_closed():
                 await tx.rollback()
             raise
@@ -352,8 +352,8 @@ async def request_return(
             "Provide valid order/operation IDs, a reason of 1–255 characters, and a supported refund method.",
             Outcome.NEEDS_INPUT,
         )
-    # At most three preparation attempts plus three known-uncommitted write
-    # attempts, all under one deadline. There are no nested transport retries.
+    # 最多进行三次准备和三次已确认未提交的写入尝试，
+    # 共用一个截止时间，不叠加传输层重试。
     budget = RetryBudget.start(seconds=10.0, max_attempts=3)
     try:
         row = await retry_read(lambda: operations.reserve(request, operation_id), budget)

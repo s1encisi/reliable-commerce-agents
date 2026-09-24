@@ -1,85 +1,79 @@
-# E-Commerce Agents
+# 可靠电商多智能体平台
 
-A multi-agent e-commerce platform built on **Microsoft Agent Framework**, in **Python and .NET**, with the concepts written out in full beside the code that runs them.
+一个基于**微软智能体框架（Microsoft Agent Framework，MAF）**构建的多智能体电商平台，纯 **Python** 技术栈，概念说明与运行它的代码并排呈现。
 
-Six specialist agents collaborate over the A2A protocol to handle product discovery, orders, pricing, reviews, inventory and support. Five orchestration patterns are selectable at runtime from the same chat box, so you can watch the same question routed five different ways and compare what each costs.
+六个专业智能体通过 A2A 协议（Agent-to-Agent，智能体间通信协议）协同工作，覆盖商品发现、订单管理、定价与促销、评论情感分析、库存与履约、售后支持。五种编排模式可在运行时从同一个对话框中选择，因此你可以看到同一个问题被路由到五种不同的实现路径，并比较各自的成本。
 
-This site is generated from the repository. Every page here is a file you can read in the repo, and every code pointer resolves to real source.
+本站由仓库自动生成。这里的每个页面都是你可以在仓库中读到的文件，每个代码指针都指向真实的源码。
 
-> **Newer than this?** The [AI Knowledge Hub](https://nitinksingh.com/ai-resources/) is the layer
-> below: eleven modules and ten labs that go from running a model on your laptop to an agent in
-> production, all free and local. Start there if "agent", "tool call" or "orchestration" are not
-> yet familiar words — then come back here to see them doing real work at scale.
+## 运行它
 
-## Run it
-
-Docker is the only requirement — no Python, .NET or Node needed, and
-[no paid API key either]({{ site.baseurl }}/getting-started/quick-start.html#run-without-a-paid-api-key).
+唯一的前置条件是 Docker —— 无需安装 Python 或 Node，也
+[无需付费 API Key]({{ site.baseurl }}/getting-started/quick-start.html#run-without-a-paid-api-key)。
 
 ```bash
-git clone https://github.com/nitin27may/e-commerce-agents.git
-cd e-commerce-agents
-cp .env.example .env          # add your OPENAI_API_KEY (or Azure OpenAI credentials)
-./scripts/dev.sh              # builds, seeds, and starts everything
+git clone https://github.com/s1encisi/reliable-commerce-agents.git
+cd reliable-commerce-agents
+cp .env.example .env          # 填入你的 OPENAI_API_KEY（或 Azure OpenAI 凭据）
+./scripts/dev.sh              # 构建、灌入种子数据并启动全部服务
 ```
 
-Then open **<http://localhost:3000>** and sign in as `alice.johnson@gmail.com` / `customer123`.
+然后打开 **<http://localhost:3000>**，用 `zhangwei@example.com` / `customer123` 登录。
 
-**On Windows**, `scripts/dev.sh` is a bash script and will not run in PowerShell — use the
-PowerShell twin instead, which takes the same flags:
+**在 Windows 上**，`scripts/dev.sh` 是 bash 脚本，无法在 PowerShell 中运行 —— 请改用功能等价的
+PowerShell 版本，它接受相同的参数：
 
 ```powershell
-Copy-Item .env.example .env    # then set OPENAI_API_KEY in .env
+Copy-Item .env.example .env    # 然后在 .env 中设置 OPENAI_API_KEY
 ./scripts/dev.ps1
 ```
 
-→ **[Full Quick Start]({{ site.baseurl }}/getting-started/quick-start.html)** — the .NET stack,
-running without an API key, WSL2 notes, and what to do when something breaks.
+→ **[完整快速开始]({{ site.baseurl }}/getting-started/quick-start.html)** —— 无需 API Key 的运行方式、WSL2 注意事项，以及出问题时该怎么办。
 
 ---
 
-## Where to start
+## 从哪里开始
 
-| If you are… | Start here |
+| 如果你是…… | 从这里开始 |
 |---|---|
-| New to agents — you have not built one before | [Concepts]({{ site.baseurl }}/concepts/) — what an agent is, why more than one, what a graph means here |
-| Ready to build | [Tutorials]({{ site.baseurl }}/tutorials/) — 34 chapters, Python and .NET, each runnable without an API key |
-| Wanting to run the application | [Getting Started]({{ site.baseurl }}/getting-started/) |
-| Evaluating the architecture | [Architecture]({{ site.baseurl }}/architecture/) |
-| Checking what the .NET stack covers | [Parity matrix]({{ site.baseurl }}/reference/parity-matrix.html) |
+| 刚接触智能体 —— 此前从未构建过 | [概念]({{ site.baseurl }}/concepts/) —— 什么是智能体、为什么要多个智能体、这里的「图」指什么 |
+| 准备动手实现 | [教程]({{ site.baseurl }}/tutorials/) —— 34 章，每章都可在无需 API Key 的情况下运行 |
+| 想直接把应用跑起来 | [快速开始]({{ site.baseurl }}/getting-started/) |
+| 想评估架构 | [架构]({{ site.baseurl }}/architecture/) |
+| 想了解各模块能力覆盖情况 | [能力矩阵]({{ site.baseurl }}/reference/parity-matrix.html) |
 
-## What makes this different
+## 本项目的不同之处
 
-Most Agent Framework samples show one pattern in isolation. This repo solves **one non-trivial domain five ways** — tool router, handoff mesh, two workflow graphs, and a group-chat round table — in a single running application, so the question practitioners actually have ("which one should I use?") has an answer with latency and token numbers attached.
+大多数智能体框架示例只孤立地展示一种编排模式。本仓库把**同一个非平凡业务域用五种方式实现** —— 工具路由、处理权交接网络、两张工作流图，以及群聊圆桌 —— 并放在同一个可运行应用里，因此从业者真正关心的问题（「我该用哪一种？」）有了带延迟和 token 数据的答案。
 
-It also does the parts samples usually skip: server-side grounding that checks the model's claims against the database before the answer leaves, guardrails that actually block, human approval on destructive actions, idempotency on refunds, and an eval harness that runs the production path rather than a copy of it.
+它还做了示例通常跳过的部分：服务端事实核验（grounding），在答案离开服务端之前用数据库校验模型的结论；真正会拦截的护栏；破坏性操作上的人工审批；退款操作的幂等性；以及一套跑生产路径（而非其副本）的评测运行框架。
 
-## The four layers
+## 四个层次
 
-Each explains the same ideas at a different depth, and each says where to go next:
+每一层都以不同深度讲解同样的概念，并指出下一步该看什么：
 
-- **[Concepts]({{ site.baseurl }}/concepts/)** — the idea, in plain language, with a diagram and a pointer to where it does real work.
-- **[Tutorials]({{ site.baseurl }}/tutorials/)** — build it yourself, small, one mechanism at a time.
-- **[Architecture]({{ site.baseurl }}/architecture/)** — how the whole system fits together.
-- **The code** — [on GitHub](https://github.com/nitin27may/e-commerce-agents), doing it at full scale.
+- **[概念]({{ site.baseurl }}/concepts/)** —— 用平实的语言讲清思路，配一张图，并指向它真正发挥作用的地方。
+- **[教程]({{ site.baseurl }}/tutorials/)** —— 自己动手实现，规模很小，一次只讲一个机制。
+- **[架构]({{ site.baseurl }}/architecture/)** —— 整个系统如何拼合在一起。
+- **代码** —— [在 GitHub 上](https://github.com/s1encisi/reliable-commerce-agents)，按完整规模实现。
 
-## Where the project is
+## 项目当前状态
 
-**v1.1.** Both backends are live and stable; the pause-and-resume approval loop, server-side grounding, idempotency on money-moving actions, rate limiting and the five orchestration modes all ship on Python and .NET.
+**v1.1。** 暂停—恢复式审批循环、服务端事实核验、涉及资金操作的幂等性、限流，以及五种编排模式均已稳定运行在 Python 技术栈上。
 
-### Recently shipped
+### 近期完成
 
-- Follow-up questions keep their context. Specialists had been receiving *no* conversation history on any browser-originated turn — deterministically, while every test passed.
-- .NET runs now appear in the Aspire GenAI view; they were invisible there because the span naming didn't match the convention Aspire selects on.
-- Semantic search works. It was dead under replay mode, and beneath that sat a production bug: an IVFFlat index built on an empty table, returning unrelated products.
-- Promotions apply. The seeder and the reader disagreed about `promotions.rules` key names, so no promotion had ever applied correctly.
-- This site is indexable — per-page metadata, and an accessible title on every one of the 71 diagrams.
+- 追问会保留上下文。此前任何来自浏览器的对话轮次，专业智能体都收不到*任何*对话历史 —— 而且是确定性地复现，与此同时所有测试却都是通过的。
+- Python 运行现在会出现在 Jaeger 视图中；此前不可见，是因为跨度（span）命名与 Jaeger 的选取约定不一致。
+- 语义检索可用。它在重放模式下完全失效，而其下还藏着一个生产缺陷：IVFFlat 索引建在空表上，返回了不相关的商品。
+- 促销可以生效了。种子数据写入方与读取方对 `promotions.rules` 的键名理解不一致，因此此前没有任何促销活动正确生效过。
+- 本站可被搜索引擎索引 —— 逐页元数据，以及全部 71 张图上可访问的标题。
 
-### Coming next
+### 后续计划
 
-- **.NET eval suite** — 6 of 7 datasets ported; the recording run, baselines and CI gate remain.
-- **.NET tutorial coverage** — chapters 12–19 have code but no tests, and 22–32 have no `dotnet/` yet.
-- **Composer UX** — contextual prompt suggestions, and a collapsed mode selector.
-- **Search** — `search_products` is still `ILIKE`; full-text and hybrid retrieval are planned.
+- **评测数据集覆盖** —— 7 个数据集中已接入 6 个；录制运行、基线与 CI 门禁仍待补齐。
+- **教程代码覆盖** —— 第 12–19 章有代码但缺少测试，第 22–32 章尚无配套示例。
+- **编辑器体验** —— 上下文相关的提示词建议，以及可折叠的模式选择器。
+- **检索** —— `search_products` 目前仍是 `ILIKE`；全文检索与混合检索已在计划中。
 
-The full list, including gaps this page doesn't claim to cover, is in [`.claude/plans/remaining-work.md`](https://github.com/nitin27may/e-commerce-agents/blob/26f47c494dd6b371312593e82f066713f6f56e9c/.claude/plans/remaining-work.md).
+完整清单（包括本页未声称覆盖的缺口）见 [`.claude/plans/remaining-work.md`](https://github.com/s1encisi/reliable-commerce-agents/blob/26f47c494dd6b371312593e82f066713f6f56e9c/.claude/plans/remaining-work.md)。

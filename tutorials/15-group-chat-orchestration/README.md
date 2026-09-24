@@ -1,29 +1,31 @@
-# Chapter 15 — Group Chat Orchestration
+# 第 15 章 · 群聊编排
 
-## Why this chapter
+[项目首页](../../README.md) · [教程总览](../README.md) · [术语表](../_shared/jargon-glossary.md)
 
-Group Chat is like a meeting: everyone's at the table, but a manager decides who talks next. Use it when agents need to build on each other's work iteratively without a fixed handoff graph — think review cycles, brainstorming, or multi-angle refinement. It's a different shape from the fan-out/fan-in of Concurrent (Chapter 13) and the control-passing of Handoff (Chapter 14): here every participant speaks, in an order a manager controls, and each one sees what the others already said.
+## 本章动机
 
-Canonical example in this chapter: **Writer → Critic → Editor** drafting a marketing line together, with a manager picking the next speaker each round. The e-commerce-shaped version of the same pattern is live in this repo's own app — see "How this shows up in the capstone" below.
+群聊（Group Chat）就像一场会议：所有人都坐在桌边，但由一位管理者决定下一个谁发言。当多个智能体需要在不预设固定移交图的前提下迭代式地相互接续时，就该用它——比如评审循环、头脑风暴、或多角度打磨。它与并发编排（第 13 章）的扇出/汇聚、移交式编排（第 14 章）的控制权传递是不同的形状：这里每个参与者都会发言，顺序由管理者控制，且每个人都能看到其他人已经说过的内容。
 
-## Prerequisites
+本章的典型示例：**写手 → 批评者 → 编辑**共同打磨一句营销文案，每轮由管理者挑选下一位发言者。同一模式的电商版本已在本项目的应用中上线——见下文「在完整项目中的落点」。
 
-- Completed [Chapter 14 — Handoff Orchestration](../14-handoff-orchestration/)
-- Repo-root `.env` with one LLM provider configured:
+## 前置条件
 
-| Provider | Required | Optional |
+- 已完成[第 14 章 · 移交式编排](../14-handoff-orchestration/)
+- 仓库根目录的 `.env` 中配置一个 LLM 提供方：
+
+| 提供方 | 必填 | 可选 |
 |----------|----------|----------|
-| **OpenAI** | `OPENAI_API_KEY` | `LLM_MODEL` (default `gpt-4.1`) |
-| **Azure OpenAI** | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_KEY`, `AZURE_OPENAI_DEPLOYMENT` | `AZURE_OPENAI_API_VERSION` (default `2024-10-21`) |
+| **OpenAI** | `OPENAI_API_KEY` | `LLM_MODEL`（默认 `gpt-4.1`） |
+| **Azure OpenAI** | `AZURE_OPENAI_ENDPOINT`、`AZURE_OPENAI_KEY`、`AZURE_OPENAI_DEPLOYMENT` | `AZURE_OPENAI_API_VERSION`（默认 `2024-10-21`） |
 
-## The concept
+## 核心概念
 
-The key primitive is the **selection function** (Python) or **manager** (.NET): given the current conversation state, return the next speaker. Both SDKs cap the loop with a maximum round count so a manager that never terminates can't run forever.
+关键原语是**选择函数**：根据当前对话状态返回下一位发言者，并用最大轮次上限约束循环，防止对话无限运行。
 
-Two manager strategies show up in this chapter's code:
+本章代码中出现两种管理者策略：
 
-- **Round-robin** — a plain function walks a fixed order (`writer → critic → editor`), no LLM call involved in the selection itself.
-- **Agent-driven** — a full `Agent` is handed the roster and the conversation so far and decides who speaks next (and when to stop). MAF wires this in as `orchestrator_agent` on the builder; the chapter's CLI calls this the `prompt` strategy since the decision is still just an LLM call, only now made by a real agent object instead of a hand-rolled function.
+- **轮询（round-robin）**——一个普通函数按固定顺序走（`writer → critic → editor`），选择过程本身不涉及 LLM 调用。
+- **智能体驱动**——把一个完整的 `Agent` 连同成员名单与已有对话交给它，由它决定下一个谁发言（以及何时停止）。MAF 在构建器上以 `orchestrator_agent` 接入；本章 CLI 称其为 `prompt` 策略，因为该决策本质上仍是一次 LLM 调用，只是现在由真实的智能体对象而非手写函数做出。
 
 ```mermaid
 %%{init: {'theme':'base', 'themeVariables': {
@@ -35,19 +37,19 @@ flowchart LR
   classDef external fill:#f59e0b,stroke:#b45309,color:#000000
   classDef success  fill:#10b981,stroke:#047857,color:#ffffff
 
-  topic([Topic])
-  manager[Manager]
-  writer[Writer]
-  critic[Critic]
-  editor[Editor]
-  final([Final line])
+  topic([主题])
+  manager[管理者]
+  writer[写手]
+  critic[批评者]
+  editor[编辑]
+  final([最终文案])
 
   topic --> manager
-  manager -- "round 0: writer" --> writer
-  writer -- "draft" --> manager
-  manager -- "round 1: critic" --> critic
-  critic -- "feedback" --> manager
-  manager -- "round 2: editor" --> editor
+  manager -- "第 0 轮：写手" --> writer
+  writer -- "初稿" --> manager
+  manager -- "第 1 轮：批评者" --> critic
+  critic -- "反馈" --> manager
+  manager -- "第 2 轮：编辑" --> editor
   editor --> final
 
   class manager core
@@ -57,27 +59,29 @@ flowchart LR
   class final success
 ```
 
-The manager sits between every turn — each speaker's output goes back through it before the next one is chosen, so the manager (not the agents) owns the loop's termination.
+管理者位于每一轮之间——每位发言者的输出都要先回到它这里，才选择下一位，因此循环的终止权归管理者（而非各智能体）所有。
 
 ## Python
 
-Run from the repo root using the shared `tutorials/` uv project (one `uv sync` covers every chapter):
+在仓库根目录运行，使用共享的 `tutorials/` uv 项目（一次 `uv sync` 覆盖全部章节）：
 
 ```bash
 uv sync --project tutorials
-uv run --project tutorials python tutorials/15-group-chat-orchestration/python/main.py "slogan for a coffee shop"          # round-robin
-uv run --project tutorials python tutorials/15-group-chat-orchestration/python/main.py "slogan for a coffee shop" prompt   # agent-driven
+uv run --project tutorials python tutorials/15-group-chat-orchestration/python/main.py "slogan for a coffee shop"          # 轮询
+uv run --project tutorials python tutorials/15-group-chat-orchestration/python/main.py "slogan for a coffee shop" prompt   # 智能体驱动
 ```
 
-Source: [`python/main.py`](./python/main.py). The round-robin selector is a plain function over `GroupChatState`, not a closure — it derives the next speaker from `state.current_round`, so it's stateless and safe for MAF to call repeatedly:
+> 上面命令里的 `"slogan for a coffee shop"` 是传给模型的**主题字面量**，需与回放夹具保持一致，故保留英文原文。
+
+源码：[`python/main.py`](./python/main.py)。轮询选择器是针对 `GroupChatState` 的普通函数，而非闭包——它从 `state.current_round` 推导下一位发言者，因此无状态，可被 MAF 反复安全调用：
 
 ```python
 def round_robin_selector(state: GroupChatState) -> str:
-    """Round-robin: pick participants by index for each round.
+    """轮询：按索引为每一轮挑选参与者。
 
-    GroupChatState.participants is an OrderedDict[name, description]. Returning
-    the name at ``current_round % n`` cycles through the roster deterministically.
-    ``max_rounds=3`` on the builder caps total turns.
+    GroupChatState.participants 是一个 OrderedDict[name, description]。返回
+    ``current_round % n`` 位置的名字即可确定性地在成员名单中循环。
+    构建器上的 ``max_rounds=3`` 限制总轮次。
     """
     names = list(state.participants.keys())
     return names[state.current_round % len(names)]
@@ -90,7 +94,7 @@ def build_workflow(strategy: str = "round-robin"):
         return GroupChatBuilder(
             participants=participants,
             orchestrator_agent=prompt_driven_orchestrator(),
-            max_rounds=4,  # hard safety net; the orchestrator may finish earlier
+            max_rounds=4,  # 硬性安全网；编排器可能更早结束
         ).build()
 
     return GroupChatBuilder(
@@ -100,94 +104,41 @@ def build_workflow(strategy: str = "round-robin"):
     ).build()
 ```
 
-`workflow.run(message, stream=True)` drives each participant's turn through MAF's streaming `AgentExecutor` path. `main.py`'s `run()` collects `(speaker, text)` tuples from the `group_chat` and `executor_completed` events it sees along the way.
+`workflow.run(message, stream=True)` 通过 MAF 的流式 `AgentExecutor` 路径驱动每个参与者的发言。`main.py` 的 `run()` 从沿途看到的 `group_chat` 与 `executor_completed` 事件中收集 `(发言者, 文本)` 元组。
 
-## .NET
+## 常见坑
 
-```bash
-cd tutorials/15-group-chat-orchestration/dotnet
-dotnet run                                    # round-robin
-dotnet run -- "slogan for a bookstore" prompt  # agent-driven
-dotnet test
-```
+- **管理者可能无限循环。** 务必设置硬性轮次上限。本章在 Python 轮询路径上固定 `max_rounds=3`，即使在智能体驱动路径上也同样设置上限——该路径的首要停止条件是智能体自身的判断，上限只是安全网。
+- **选择函数必须可被反复安全调用。** MAF 可能每轮调用一次选择器；此处的 `round_robin_selector` 是 `GroupChatState.current_round` 的纯函数，而不是携带可变迭代器状态的闭包——这是刻意选择，以避免选择器状态与工作流自身的轮次计数器失步。
+- **消息可见性。** 默认情况下，每个参与者都能看到此前的完整记录。这使编辑无需额外管道就能同时回应写手的初稿与批评者的反馈——但也意味着提示词会随每一轮增长，对较长的评审小组需要留意。
+- **MAF v1.0 的空 `__init__.py` 打包缺陷已修复。** 你可能在较早的代码中看到补丁步骤的引用——`agents/python/patch_maf.py` 仍然存在，但已是有文档说明的空操作，因为本项目已固定 `agent-framework` 1.14.0，该版本随附真实的 `__init__.py`。本章 `main.py` 在导入时实际调用的是 `tutorials/_shared/maf_bootstrap.py` 的 `bootstrap()`，它同时会加载仓库根目录的 `.env`，使教程与完整项目应用共享凭据。
 
-[`dotnet/Program.cs`](./dotnet/Program.cs) wires the built-in `RoundRobinGroupChatManager` for the default strategy, and a hand-written `PromptDrivenManager : GroupChatManager` for `prompt` — proof that "agent-driven" isn't a separate MAF product type, just a manager subclass whose `SelectNextAgentAsync` calls an LLM instead of walking an index:
+## 测试
 
-```csharp
-Workflow workflow = strategy == "prompt"
-    ? AgentWorkflowBuilder
-        .CreateGroupChatBuilderWith(agents => new PromptDrivenManager(agents, selectorClient)
-        {
-            MaximumIterationCount = 3,
-        })
-        .AddParticipants(writer, critic, editor)
-        .Build()
-    : AgentWorkflowBuilder
-        .CreateGroupChatBuilderWith(agents => new RoundRobinGroupChatManager(agents)
-        {
-            MaximumIterationCount = 3,
-        })
-        .AddParticipants(writer, critic, editor)
-        .Build();
-```
+[`python/tests/test_group_chat.py`](./python/tests/test_group_chat.py) 覆盖：
 
-`PromptDrivenManager.SelectNextAgentAsync` asks the LLM for `{"next": "<name>"}`, matches it against the roster, and falls back to round-robin-by-`IterationCount` if the LLM call throws or returns an unrecognized name — the same "safe default" discipline the chapter's Gotchas section calls out below.
-
-## Side-by-side differences
-
-| Aspect | Python | .NET |
-|--------|--------|------|
-| Round-robin | `selection_func=round_robin_selector` (plain function over `GroupChatState`) | `RoundRobinGroupChatManager` (built-in) |
-| Agent-driven | `orchestrator_agent=<Agent instance>` | Custom `GroupChatManager` subclass calling an `IChatClient` in `SelectNextAgentAsync` |
-| Max rounds | `max_rounds=3` (or `4` as a safety net above the agent's own stopping logic) | `MaximumIterationCount = 3` on the manager instance |
-| Termination | Selector returns a name from an exhausted roster, or `orchestrator_agent` decides to stop | Manager's `ShouldTerminateAsync` (here: "has the editor spoken") plus the iteration cap |
-| Failure handling | N/A in this sample — round-robin can't fail; agent-driven relies on MAF's own retry/error surfaces | `PromptDrivenManager` explicitly catches selection failures and falls back to `_agents[(int)(IterationCount % _agents.Count)]` |
-
-## Gotchas
-
-- **The manager can loop forever.** Always set a hard round cap. This chapter pins `max_rounds=3` (Python round-robin) and `MaximumIterationCount = 3` (.NET) even on the agent-driven path, where the agent's own judgment is the primary stop condition and the cap is just the safety net.
-- **Selection functions must be safe to call repeatedly.** MAF may invoke the selector once per round; `round_robin_selector` here is a pure function of `GroupChatState.current_round`, not a closure carrying mutable iterator state — that's a deliberate choice to avoid selector state getting out of sync with the workflow's own round counter.
-- **Message visibility.** By default every participant sees the full transcript so far. That's what lets the Editor react to both the Writer's draft and the Critic's feedback without extra plumbing — but it also means prompts grow with every round, which matters for longer panels.
-- **The MAF v1.0 empty-`__init__.py` packaging bug is fixed.** You may see references to a patch step in older code — `agents/python/patch_maf.py` still exists but is a documented no-op now that the repo pins `agent-framework` 1.14.0, which ships a real `__init__.py`. The bootstrap this chapter's `main.py` actually calls at import time is `tutorials/_shared/maf_bootstrap.py`'s `bootstrap()`, which also loads the repo-root `.env` so tutorials share credentials with the capstone app.
-
-## Tests
-
-
-[`python/tests/test_group_chat.py`](./python/tests/test_group_chat.py) covers:
-
-1. `test_workflow_builds` — the round-robin workflow constructs without a network call.
-2. `test_replay_speakers_in_round_robin_order` — replays committed fixtures in [`python/tests/fixtures/replay/`](./python/tests/fixtures/replay/) (no network, no credentials) and asserts writer speaks before critic before editor.
-3. Three `@pytest.mark.integration` tests, skipped unless real LLM credentials are present (`test_real_llm_speakers_in_round_robin_order`, `test_real_llm_each_speaker_produces_content`, `test_real_llm_editor_output_differs_from_writer`) — they exercise the real round-robin loop end to end and assert the editor's output actually differs from the writer's draft.
+1. `test_workflow_builds`——轮询工作流无需网络调用即可构建。
+2. `test_replay_speakers_in_round_robin_order`——回放 [`python/tests/fixtures/replay/`](./python/tests/fixtures/replay/) 中已提交的夹具（无网络、无凭据），并断言写手先于批评者、批评者先于编辑发言。
+3. 三个 `@pytest.mark.integration` 测试，在缺少真实 LLM 凭据时跳过（`test_real_llm_speakers_in_round_robin_order`、`test_real_llm_each_speaker_produces_content`、`test_real_llm_editor_output_differs_from_writer`）——它们端到端跑真实的轮询循环，并断言编辑的输出确实与写手的初稿不同。
 
 ```bash
 uv sync --project tutorials
 uv run --project tutorials pytest tutorials/15-group-chat-orchestration/python/tests -v
-cd tutorials/15-group-chat-orchestration/dotnet && dotnet test
 ```
 
-The .NET side ships [`dotnet/tests/GroupChatTests.cs`](./dotnet/tests/GroupChatTests.cs) — twelve tests, no key, no network:
+## 在完整项目中的落点
 
-```bash
-cd tutorials/15-group-chat-orchestration/dotnet && dotnet test tests/GroupChat.Tests.csproj
-```
+本项目的应用里有该模式的线上生产版本——而且它的构建方式与教程中的 `GroupChatBuilder` API 不同，这一点值得注意。
 
-Most of them are about `PromptDrivenManager`'s failure paths — unknown agent named, unparseable JSON, selector call throws — because those three fallbacks are the difference between a demo and something you would run, and none is reachable from a `dotnet build`.
+`agents/python/workflows/group_chat.py:99` 定义了 `GroupChatWorkflow`——一个手写的顺序圆桌，直接基于 MAF 的 `Executor`/`WorkflowBuilder` 原语构建，而非教程中的 `GroupChatBuilder`/`selection_func` 管理者抽象。参与讨论者按固定顺序运行（不做动态发言者选择），每人向共享的 `GroupChatState.transcript` 追加内容，供下一位参与者读取，最后由 `_ModeratorExecutor` 汇总出结论。
 
-One is a regression test with a deliberate timeout: `PromptDriven_Respects_MaximumIterationCount_When_Its_Own_Condition_Never_Fires`. This chapter shipped with an override of `ShouldTerminateAsync` that did not chain to `base`, which is where `MaximumIterationCount` is enforced — so a selector that never picked the Editor ran forever, one provider call per turn. The failure mode is a hang rather than a wrong value, so the test asserts against a clock.
+`agents/python/orchestrator/modes/group_chat_mode.py:78` 的 `GroupChatMode` 是第一个生产调用方：两位由智能体驱动的参与者——一个价值/定价视角、一个质量/评价视角（第 32 行的 `_PANEL_PROMPTS`）——各自看到前一位发言者的内容，随后由主持人汇总出「这件商品值不值得买」的结论。把由智能体驱动的（异步）应答器接入 `GroupChatWorkflow` 需要一处小改动，该文件文档字符串中已有说明：`Responder` 原本严格同步，因为此前所有测试都只传入普通函数；现在 `_PanelistExecutor.run()` 会在应答器结果可等待时对其 await。
 
-## How this shows up in the capstone
+它在编排器中以 `group-chat` 模式注册，与 `tool`、`handoff`、`workflow:pre-purchase`、`workflow:return-replace` 并列（参见 `CLAUDE.md` 中的编排器路由布局说明）——可从聊天界面的模式切换器触达，而不只是本教程。
 
-This repo's own app has a live, production version of this pattern — and it's built differently from the tutorial's `GroupChatBuilder` API, which is worth noticing.
+## 下一步
 
-`agents/python/workflows/group_chat.py:99` defines `GroupChatWorkflow` — a hand-rolled sequential round-table built directly from MAF's `Executor`/`WorkflowBuilder` primitives rather than the tutorial's `GroupChatBuilder`/`selection_func` manager abstraction. Panelists run in a fixed order (no dynamic speaker selection), each one appending to a shared `GroupChatState.transcript` that the next panelist reads, followed by a `_ModeratorExecutor` that synthesizes a verdict.
-
-`agents/python/orchestrator/modes/group_chat_mode.py:78`'s `GroupChatMode` is the first production caller: two agent-backed panelists — a value/pricing perspective and a quality/reviews perspective (`_PANEL_PROMPTS` at line 32) — each seeing what the prior speaker said, then a moderator synthesizes a "is this worth buying?" verdict. Wiring an agent-backed (async) responder into `GroupChatWorkflow` required one small change noted in that file's docstring: `Responder` used to be strictly synchronous, since every existing test only ever passed a plain function; `_PanelistExecutor.run()` now awaits the responder's result when it's awaitable.
-
-Registered in the orchestrator as the `group-chat` mode alongside `tool`, `handoff`, `workflow:pre-purchase`, and `workflow:return-replace` (see `CLAUDE.md`'s orchestrator route layout notes) — reachable from the chat UI's mode switcher, not just this tutorial.
-
-## What's next
-
-- Next chapter: [Chapter 16 — Magentic Orchestration](../16-magentic-orchestration/)
-- Full source: [`python/`](./python/) · [`dotnet/`](./dotnet/)
-- Shared: [Mermaid style guide](../_shared/mermaid-style-guide.md) · [Jargon glossary](../_shared/jargon-glossary.md)
-- [Series index](../README.md) · Previous: [Chapter 14 — Handoff Orchestration](../14-handoff-orchestration/)
+- 下一章：[第 16 章 · Magentic 编排](../16-magentic-orchestration/)
+- 完整源码：[`python/`](./python/)
+- 共享资料：[Mermaid 风格指南](../_shared/mermaid-style-guide.md) · [术语表](../_shared/jargon-glossary.md)
+- [教程总览](../README.md) · 上一章：[第 14 章 · 移交式编排](../14-handoff-orchestration/)

@@ -1,8 +1,8 @@
 """
-Chapter 03 — Streaming and Multi-turn: tests.
+第 03 章 —— 流式输出与多轮对话：测试。
 
-Unit tests use a streaming-capable CannedChatClient that yields text chunks
-one at a time; integration tests hit the real LLM.
+单元测试使用一个支持流式的 CannedChatClient，它一次产出一段文本分片；
+集成测试访问真实 LLM。
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from main import FIXTURES_DIR, build_agent, chat, stream_answer  # noqa: E402
 
 
 class StreamingCannedClient(BaseChatClient):
-    """Yields each canned response as 3 text chunks so tests can assert on streaming."""
+    """把每条预置回答拆成 3 段文本分片产出，好让测试能对流式做断言。"""
 
     def __init__(self, *canned: str) -> None:
         super().__init__()
@@ -82,7 +82,7 @@ def _split_in_three(s: str) -> list[str]:
     return [s[:a], s[a:b], s[b:]]
 
 
-# ─────────── Unit tests (stubbed streaming) ───────────
+# ─────────── 单元测试（打桩的流式） ───────────
 
 
 @pytest.mark.asyncio
@@ -91,7 +91,7 @@ async def test_stream_yields_multiple_chunks() -> None:
     agent = build_agent(client=client)
     session = agent.create_session()
     chunks = await stream_answer(agent, "hi", session)
-    # Three non-empty chunks expected from our 3-way split.
+    # 按我们三分法的拆分，期望得到三个非空分片。
     assert len([c for c in chunks if c]) >= 2
 
 
@@ -100,7 +100,7 @@ async def test_multiturn_reuses_session() -> None:
     client = StreamingCannedClient("First answer", "Second answer")
     agent = build_agent(client=client)
     await chat(agent, ["First question?", "Follow-up?"])
-    # Two turns: second turn's conversation should be longer than the first.
+    # 两轮：第二轮的对话应当比第一轮更长。
     assert client.call_count == 2
     assert client.conversation_lengths[1] > client.conversation_lengths[0]
 
@@ -114,19 +114,19 @@ async def test_streamed_chunks_combine_to_full_text() -> None:
     assert "".join(chunks) == "abcdefghij"
 
 
-# ─────────── Replay test (no credentials, runs in CI) ───────────
+# ─────────── 回放测试（无需凭据，可在 CI 中运行） ───────────
 
 
 @pytest.mark.asyncio
 async def test_replay_multiturn_preserves_context(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Plays back tests/fixtures/replay/ — no network, no credentials.
+    """回放 tests/fixtures/replay/ —— 不走网络、不需凭据。
 
-    Recorded once against a real LLM (test_real_llm_multiturn_preserves_context
-    below, run with RECORD=true) and committed. Multi-turn, so two fixtures
-    are involved — one per turn's message history.
+    曾针对真实 LLM 录制过一次（即下方的
+    test_real_llm_multiturn_preserves_context，以 RECORD=true 运行），
+    随后提交入库。因为是两轮，会涉及两份夹具 —— 每轮的消息历史各一份。
     """
     if not any(FIXTURES_DIR.glob("*.json")):
-        pytest.skip(f"no recorded fixtures in {FIXTURES_DIR} — run with RECORD=true first")
+        pytest.skip(f"{FIXTURES_DIR} 中没有已录制的夹具 —— 请先以 RECORD=true 运行")
     monkeypatch.setenv("LLM_PROVIDER", "replay")
     agent = build_agent()
     per_turn = await chat(
@@ -137,10 +137,10 @@ async def test_replay_multiturn_preserves_context(monkeypatch: pytest.MonkeyPatc
         ],
     )
     second_answer = "".join(per_turn[1])
-    assert "1991" in second_answer, f"expected 1991 in follow-up, got: {second_answer!r}"
+    assert "1991" in second_answer, f"期望追问的回答中出现 1991，实际为：{second_answer!r}"
 
 
-# ─────────── Integration (real LLM) ───────────
+# ─────────── 集成测试（真实 LLM） ───────────
 
 
 def _llm_available() -> bool:
@@ -156,9 +156,9 @@ def _llm_available() -> bool:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-@pytest.mark.skipif(not _llm_available(), reason="no LLM credentials in .env")
+@pytest.mark.skipif(not _llm_available(), reason=".env 中没有 LLM 凭据")
 async def test_real_llm_multiturn_preserves_context() -> None:
-    """Second turn must be able to resolve 'it' to Python from turn 1."""
+    """第二轮必须能把「它」指代回第一轮的 Python。"""
     agent = build_agent()
     per_turn = await chat(
         agent,
@@ -168,4 +168,4 @@ async def test_real_llm_multiturn_preserves_context() -> None:
         ],
     )
     second_answer = "".join(per_turn[1])
-    assert "1991" in second_answer, f"expected 1991 in follow-up, got: {second_answer!r}"
+    assert "1991" in second_answer, f"期望追问的回答中出现 1991，实际为：{second_answer!r}"

@@ -1,68 +1,54 @@
-# Human-in-the-loop
+# 人工参与
 
-> **New to this?** [The harness](https://nitinksingh.com/ai-resources/02-agents/the-harness/) on the AI Knowledge Hub covers the
-> same ground from scratch, vendor-neutral, with a lab you can run locally for free.
-> This page assumes the concept and shows how it is built *here*.
+> **初次接触？** 本页假定你已经了解这个概念，重点展示它在本项目中是如何实现的。
 
-## What it is
+## 它是什么
 
-Human-in-the-loop (HITL) means a specific action requires an explicit human approval before it's
-allowed to execute, no matter how confident the model is. It's the acknowledgment that
-"confidence" and "correctness" are different things, and that some actions are expensive enough to
-get wrong — financially, or in terms of trust — that the cost of asking a human first is worth
-paying every time, not just when the model seems unsure.
+人工参与（Human-in-the-Loop，HITL）指某个具体操作在执行之前必须有明确的人工审批，无论模型
+多自信。它承认「自信」和「正确」是两件事，也承认有些操作一旦做错——在金钱上或在信任上——代价
+高到值得每一次都先问人，而不只是在模型看起来不确定时才问。
 
-## Why it matters
+## 为什么重要
 
-A model can be well-grounded (see [grounding and RAG](09-grounding-and-rag.md)), well-guarded (see
-[guardrails](10-guardrails.md)), and still make a judgment call a human wouldn't have made — an
-$800 refund approved for a return that's technically eligible but unusual enough that a person
-would have asked a follow-up question first. Grounding and guardrails answer "is this response
-factually correct and safe from attack"; HITL answers a different question entirely: "even if this
-is exactly what the model intends to do, should it be allowed to do it without a person saying
-yes?" Money moving and data being modified irreversibly are the two cases in this repo where the
-answer is "not without asking."
+一个模型可以事实核验良好（见[事实核验与 RAG](09-grounding-and-rag.md)）、护栏良好（见
+[护栏](10-guardrails.md)），却仍然做出一个人不会做的判断——为一笔技术上符合条件、但异常到人
+一定会先追问一句的退货批准 800 元退款。事实核验和护栏回答的是「这段回复在事实上是否正确、是否
+免于攻击」；HITL 回答的是一个完全不同的问题：「即便这正是模型打算做的事，是否应该在没有人点头
+的情况下允许它做？」资金流动和不可逆的数据修改，是本仓库里答案为「不先问就不行」的两类情况。
 
-## When to use it — and when not to
+## 什么时候用——什么时候不用
 
-Gate an action behind human approval when it's high-stakes and hard to reverse — canceling an
-order, issuing a refund, anything moving money or committing to an irreversible state change.
-**Don't** gate everything — a HITL check on every tool call would make the product unusable, and
-it dilutes the signal: if a human has to approve searching for a product, they'll rubber-stamp
-everything, including the refund that actually needed scrutiny. The gate is only meaningful if
-it's rare enough to get real attention.
+当一个操作高风险且难以撤销时，把它挡在人工审批之后——取消订单、发起退款，任何涉及资金流动或
+提交不可逆状态变更的操作。**不要**把所有东西都挡住——对每一次工具调用都做 HITL 检查会让产品
+无法使用，而且会稀释信号：如果搜个商品都要人工批准，人就会一律盖章放行，包括那笔真正需要审视
+的退款。这个门只有在足够罕见、能获得真正注意力时才有意义。
 
-## How it works here — two structurally different mechanisms, on purpose
+## 本项目怎么实现——两种结构上不同的机制，刻意如此
 
-This repo has two HITL implementations, and they are not interchangeable — knowing which one a
-given mode uses matters for understanding what actually happens when a gate fires.
+本仓库有两套 HITL 实现，它们不能互换——知道某个模式用的是哪一套，对理解门被触发时实际发生
+什么很重要。
 
-**Middleware-based approval** — [`shared/hitl.py`](https://github.com/nitin27may/e-commerce-agents/blob/main/agents/python/shared/hitl.py). A fixed set of high-stakes tools —
-`HITL_GATED_TOOLS` (line 38): `cancel_order`, `process_refund`, `initiate_return`, `modify_order`,
-`place_backorder` — are intercepted by `HITLFunctionMiddleware` *before* they execute. The
-docstring is explicit about what happens next: "the tool does NOT execute" (line 55). A
-`hitl_requests` row is written with `status="pending"`, and the agent's tool call returns
-immediately with a `pending_approval` result — the LLM's turn ends there, having been told the
-action is awaiting approval. When an admin later approves it, a *separate* code path,
-`execute_approved_action()` (line 254), runs the underlying database operation directly. **The
-original LLM loop is never resumed.** The approval doesn't continue the conversation — it just
-performs the action the model asked for, outside the conversation entirely.
+**基于中间件的审批** —— [`shared/hitl.py`](../../agents/python/shared/hitl.py)。一组固定的高风险工具——
+`HITL_GATED_TOOLS`（第 38 行）：`cancel_order`、`process_refund`、`initiate_return`、`modify_order`、
+`place_backorder`——会在执行*之前*被 `HITLFunctionMiddleware` 拦截。文档字符串明确写明了接下来
+发生什么：「工具不会执行」（第 55 行）。一行 `hitl_requests` 记录被写入，`status="pending"`，而
+智能体的工具调用立即以 `pending_approval` 结果返回——LLM 的这一轮到此结束，它已经被告知该操作
+正在等待审批。之后管理员批准时，一条*独立的*代码路径 `execute_approved_action()`（第 254 行）
+直接执行底层的数据库操作。**原来的 LLM 循环永远不会被恢复。** 审批不会继续对话——它只是在对话
+之外，执行模型请求的那个操作。
 
-**In-workflow suspend/resume** — [`workflows/return_replace.py`](https://github.com/nitin27may/e-commerce-agents/blob/main/agents/python/workflows/return_replace.py)'s `_HitlGateExecutor` (line 157).
-For return workflows above a value threshold (`settings.RETURN_HITL_THRESHOLD`), the executor
-calls `await ctx.request_info(ReturnApprovalRequest(...), response_type=bool)` (line 172) — and
-this doesn't short-circuit a single tool call, it **pauses the entire workflow graph**. Everything
-the graph had already computed is written to a checkpoint (see
-[state, memory, and sessions](08-state-memory-and-sessions.md)) so the pause can outlive the
-current request. Resume happens via a handler MAF calls back into automatically —
-`@response_handler(request=ReturnApprovalRequest, response=bool)` on `on_approval()` (line 185) —
-which picks the workflow back up from exactly where it paused and keeps running the remaining
-steps (loyalty discount, finalize).
+**工作流内挂起/恢复** —— [`workflows/return_replace.py`](../../agents/python/workflows/return_replace.py) 的 `_HitlGateExecutor`（第 157 行）。
+对于金额超过阈值的退货工作流（`settings.RETURN_HITL_THRESHOLD`），该执行器调用
+`await ctx.request_info(ReturnApprovalRequest(...), response_type=bool)`（第 172 行）——这不会
+短路单次工具调用，而是**暂停整张工作流图**。图已经算出的所有东西都被写入检查点（见
+[状态、记忆与会话](08-state-memory-and-sessions.md)），使这次暂停能活过当前请求。恢复通过 MAF
+自动回调的一个处理函数发生——`on_approval()`（第 185 行）上的
+`@response_handler(request=ReturnApprovalRequest, response=bool)`——它把工作流从暂停的确切位置
+接起来，继续跑完剩余步骤（会员折扣、收尾）。
 
-The difference in one sentence: `shared/hitl.py` intercepts one tool call and the tool simply never
-runs — there's no "loop" to resume, because nothing was ever mid-sequence. `return_replace.py`
-suspends a whole multi-step sequence mid-execution and picks it back up later, possibly served by
-a completely different process than the one that paused it.
+用一句话说清区别：`shared/hitl.py` 拦截一次工具调用，那个工具就干脆不运行——没有「循环」需要
+恢复，因为从来没有东西处在序列中途。`return_replace.py` 挂起整条多步序列的执行中状态，之后再
+把它接起来，而且可能由与暂停它的那个进程完全不同的进程来处理。
 
 ```mermaid
 %%{init: {'theme':'base', 'themeVariables': {
@@ -75,16 +61,16 @@ flowchart LR
   classDef success fill:#10b981,stroke:#047857,color:#ffffff
   classDef infra   fill:#64748b,stroke:#334155,color:#ffffff
 
-  subgraph mw["shared/hitl.py — tool mode"]
-    t1["model calls process_refund"] --> gate1["HITLFunctionMiddleware<br/>intercepts"]
-    gate1 --> block["tool does NOT execute<br/>LLM turn ends here"]
-    block -.later, separate path.-> exec["execute_approved_action()<br/>runs the DB write directly"]
+  subgraph mw["shared/hitl.py —— tool 模式"]
+    t1["模型调用 process_refund"] --> gate1["HITLFunctionMiddleware<br/>拦截"]
+    gate1 --> block["工具不执行<br/>LLM 这一轮到此结束"]
+    block -.之后，独立路径.-> exec["execute_approved_action()<br/>直接执行数据库写入"]
   end
 
-  subgraph wf["workflows/return_replace.py — workflow mode"]
-    t2["_HitlGateExecutor"] --> pause["ctx.request_info<br/>whole graph pauses"]
-    pause --> cp[("checkpoint saved")]
-    cp -.resume, maybe different process.-> resume["on_approval() —<br/>graph continues from here"]
+  subgraph wf["workflows/return_replace.py —— workflow 模式"]
+    t2["_HitlGateExecutor"] --> pause["ctx.request_info<br/>整张图暂停"]
+    pause --> cp[("保存检查点")]
+    cp -.恢复，可能在不同进程.-> resume["on_approval() ——<br/>图从这里继续"]
   end
 
   class t1,t2,gate1,exec,resume core
@@ -92,5 +78,5 @@ flowchart LR
   class cp infra
 ```
 
-Next: [evaluation](12-evaluation.md) — how to know any of this — grounding, guardrails, HITL gates
-— is actually working, instead of just looking right in a demo.
+下一页：[评测](12-evaluation.md) —— 怎么知道这些——事实核验、护栏、HITL 门——真的在起作用，而
+不是只在 demo 里看起来对。

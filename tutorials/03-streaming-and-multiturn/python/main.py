@@ -1,15 +1,15 @@
 """
-MAF v1 — Chapter 03: Streaming and Multi-turn (Python)
+MAF v1 — 第 03 章：流式输出与多轮对话（Python）
 
-Two concepts in one example:
-- Streaming: iterate agent.run(..., stream=True) to print tokens as they arrive.
-- Multi-turn: reuse the same AgentSession across .run() calls so the LLM sees
-  the full conversation context.
+一个示例讲两个概念：
+- 流式：迭代 `agent.run(..., stream=True)`，边到边打印 token。
+- 多轮：在多次 `.run()` 调用之间复用同一个 AgentSession，让 LLM 看到完整
+  的对话上下文。
 
-Interactive mode:
+交互模式：
     python tutorials/03-streaming-and-multiturn/python/main.py
 
-One-shot (no prompt):
+一次性传入问题（不进入交互）：
     python tutorials/03-streaming-and-multiturn/python/main.py "What's Python?" "How old is it?"
 """
 
@@ -52,9 +52,9 @@ def _default_client() -> OpenAIChatClient | OpenAIChatCompletionClient | ReplayC
     return OpenAIChatClient(
         model=os.environ.get("LLM_MODEL", "gpt-4.1"),
         api_key=os.environ["OPENAI_API_KEY"],
-        # Phase 9: any OpenAI-compatible endpoint (GitHub Models, OpenRouter,
-        # vLLM, LM Studio, Ollama) instead of api.openai.com — see
-        # tutorials/00-setup/README.md's "Don't have a paid API key?" section.
+        # Phase 9：可指向任何兼容 OpenAI 的端点（GitHub Models、OpenRouter、
+        # vLLM、LM Studio、Ollama），而不必是 api.openai.com —— 见
+        # tutorials/00-setup/README.md 的「没有付费 API key？」一节。
         base_url=os.environ.get("LLM_BASE_URL") or None,
     )
 
@@ -69,16 +69,14 @@ async def stream_answer(
     session: AgentSession,
 ) -> list[str]:
     """
-    Stream the agent's answer. Prints each chunk as it arrives and returns
-    the list of chunks so callers can verify streaming happened.
+    流式输出智能体的回答。边到边打印每个分片，并返回分片列表，好让调用方
+    验证流式确实发生了。
 
-    ``agent.run(..., stream=True)`` drives MAF's streaming function-invocation
-    loop, which finalizes each streamed turn via the chat client's
-    ``ResponseStream``. ``ReplayChatClient`` (see
-    tutorials/_shared/replay_client.py) wires the same finalizer real clients
-    use (``BaseChatClient._build_response_stream``), so replay mode streams
-    correctly through the same path as every other provider — no fallback
-    needed here.
+    ``agent.run(..., stream=True)`` 驱动的是 MAF 的流式函数调用循环，它通过
+    chat client 的 ``ResponseStream`` 为每个流式回合收尾。``ReplayChatClient``
+    （见 tutorials/_shared/replay_client.py）接的是与真实客户端相同的收尾器
+    （``BaseChatClient._build_response_stream``），因此回放模式是走与其它所有
+    提供方相同的路径正确流式的 —— 这里不需要任何回退分支。
     """
     chunks: list[str] = []
     async for update in agent.run(question, stream=True, session=session):
@@ -90,12 +88,12 @@ async def stream_answer(
 
 
 async def chat(agent: Agent, questions: list[str]) -> list[list[str]]:
-    """Run a scripted multi-turn conversation on one session; return per-turn chunks."""
+    """在同一个会话上跑一段脚本化的多轮对话；返回每一轮的分片列表。"""
     session = agent.create_session()
     all_chunks: list[list[str]] = []
     for q in questions:
-        print(f"\nQ: {q}")
-        print("A: ", end="", flush=True)
+        print(f"\n问：{q}")
+        print("答：", end="", flush=True)
         chunks = await stream_answer(agent, q, session)
         all_chunks.append(chunks)
     return all_chunks
@@ -108,17 +106,17 @@ async def main() -> None:
         await chat(agent, sys.argv[1:])
         return
 
-    # Interactive REPL
-    print("Multi-turn chat (empty line to quit).")
+    # 交互式 REPL
+    print("多轮对话（输入空行退出）。")
     session = agent.create_session()
     while True:
         try:
-            q = input("\nQ: ").strip()
+            q = input("\n问：").strip()
         except EOFError:
             break
         if not q:
             break
-        print("A: ", end="", flush=True)
+        print("答：", end="", flush=True)
         await stream_answer(agent, q, session)
 
 

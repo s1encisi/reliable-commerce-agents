@@ -1,29 +1,31 @@
-# Chapter 07 — Observability with OpenTelemetry
+# 第 07 章 · 基于 OpenTelemetry 的可观测性
 
-Wire OpenTelemetry to capture agent runs as spans with GenAI semantic attributes. Console exporter for dev, OTLP for Aspire / Jaeger / Azure Monitor in prod — both stacks.
+[项目首页](../../README.md) · [教程总览](../README.md) · [术语表](../_shared/jargon-glossary.md)
 
-## Why this chapter
+接入 OpenTelemetry，把智能体运行捕获为带 GenAI 语义属性的跨度。开发用控制台导出器，生产用 OTLP 送到 Jaeger / Azure Monitor。
 
-Agents fail in weird ways: the LLM called the wrong tool, the tool returned empty, the model decided not to call anything at all. You won't figure out which by reading logs — a log line tells you an agent ran, not what it decided, what it sent to the model, or how long each hop took. You need spans.
+## 本章动机
 
-MAF emits OpenTelemetry spans out of the box. One bit of plumbing per language and you're seeing agent-run and provider-HTTP spans annotated with GenAI semantic-convention attributes (model, input tokens, output tokens, finish reason). This is the same mechanism the capstone app uses to render its call tree — orchestrator → A2A → specialist → tool → LLM — in the Aspire Dashboard, so what you build here is a miniature of production telemetry, not a toy.
+智能体会以奇怪的方式失败：LLM 调错了工具、工具返回了空、模型决定什么都不调用。靠读日志你查不出是哪一种 —— 一行日志只能告诉你「有智能体运行过」，它不告诉你智能体决定了什么、给模型发了什么、每一跳花了多久。你需要**跨度（span）**。
 
-## Prerequisites
+MAF 开箱即输出 OpenTelemetry 跨度。每种语言加一点接线，你就能看到智能体运行跨度与提供方 HTTP 跨度，并附带 GenAI 语义约定属性（模型、输入 token、输出 token、结束原因）。完整项目正是用同一套机制在 Jaeger 界面中渲染它的调用树 —— 编排器 → A2A → 专家 → 工具 → LLM —— 所以这里搭出来的东西是生产遥测的微缩版，而不是玩具。
 
-- Completed [Chapter 06 — Middleware](../06-middleware/)
-- `.env` with working LLM credentials (`OPENAI_API_KEY`, or `AZURE_OPENAI_ENDPOINT` / `AZURE_OPENAI_KEY` / `AZURE_OPENAI_DEPLOYMENT`)
+## 前置条件
 
-## The concept
+- 已完成 [第 06 章 · 中间件与智能体管线](../06-middleware/)
+- `.env` 中有可用的 LLM 凭据（`OPENAI_API_KEY`，或 `AZURE_OPENAI_ENDPOINT` / `AZURE_OPENAI_KEY` / `AZURE_OPENAI_DEPLOYMENT`）
 
-Both languages follow the same three steps:
+## 核心概念
 
-1. Build a `TracerProvider` with an exporter (console for dev, OTLP for Aspire / Jaeger / Azure Monitor in prod).
-2. Register the MAF agent instrumentation source(s) on that provider.
-3. Run an agent — spans get emitted automatically, no manual `span.start()` calls in your business logic.
+三步走：
 
-Python opts in with one call — `enable_instrumentation()` — that turns on MAF's built-in instrumentation. .NET instead adds MAF's `ActivitySource` names to the tracer provider explicitly; .NET's tracing model (`System.Diagnostics.Activity`) doesn't have a single global "enable" switch, so you tell the provider which sources to listen to.
+1. 构建一个带导出器的 `TracerProvider`（开发用控制台，生产用 OTLP 送到 Jaeger / Azure Monitor）。
+2. 在该 provider 上注册 MAF 的智能体插桩来源。
+3. 运行智能体 —— 跨度会自动发出，你的业务逻辑里不需要手写 `span.start()`。
 
-A single agent run produces a small tree of nested spans — the agent invocation as the parent, with the underlying LLM call (and any tool calls) as children:
+Python 用一次调用 `enable_instrumentation()` 打开 MAF 内置插桩。Python 的设置是一次性的：一个进程只有一个 `TracerProvider`。
+
+一次智能体运行会产生一棵小的嵌套跨度树 —— 智能体调用是父，底层的 LLM 调用（以及任何工具调用）是子：
 
 ```mermaid
 %%{init: {'theme':'base', 'themeVariables': {
@@ -34,22 +36,22 @@ sequenceDiagram
   participant App as traced-agent
   participant Prov as TracerProvider
   participant LLM as OpenAI / Azure OpenAI
-  participant Exp as Exporter
+  participant Exp as 导出器
 
-  App->>Prov: start span "invoke_agent traced-agent"
-  Prov->>LLM: chat completion request
+  App->>Prov: 启动跨度 "invoke_agent traced-agent"
+  Prov->>LLM: chat completion 请求
   activate LLM
-  LLM-->>Prov: chat gpt-4.1 span (gen_ai.* attrs)
+  LLM-->>Prov: chat gpt-4.1 跨度（gen_ai.* 属性）
   deactivate LLM
-  Prov->>Exp: export finished spans
-  Note over Exp: Console in dev,<br/>OTLP -> Aspire Dashboard in prod
+  Prov->>Exp: 导出已完成的跨度
+  Note over Exp: 开发用控制台，<br/>生产用 OTLP -> Jaeger
 ```
 
-The parent span carries `gen_ai.operation.name`, the child LLM span carries `gen_ai.request.model` / `gen_ai.usage.*` — that's the GenAI semantic convention both languages emit, and it's what makes the Aspire Dashboard's GenAI view group and render them meaningfully.
+父跨度携带 `gen_ai.operation.name`，子 LLM 跨度携带 `gen_ai.request.model` / `gen_ai.usage.*` —— 这就是两种语言都会输出的 GenAI 语义约定，也正是它让 Jaeger 的界面能把它们有意义地分组与渲染。
 
 ## Python
 
-Source: [`python/main.py`](./python/main.py).
+源码：[`python/main.py`](./python/main.py)。
 
 ```python
 from agent_framework.observability import enable_instrumentation
@@ -69,89 +71,40 @@ def setup_tracing(service_name: str = "maf-v1-ch07", exporter: object | None = N
     return provider
 ```
 
-`main.py` calls `setup_tracing()` once at startup, then builds an `Agent` and runs it — `enable_instrumentation()` is what makes MAF start emitting spans for every agent/LLM call, and the `BatchSpanProcessor` + `ConsoleSpanExporter` is what prints them.
+`main.py` 在启动时调用一次 `setup_tracing()`，随后构造 `Agent` 并运行 —— `enable_instrumentation()` 让 MAF 开始为每次智能体/LLM 调用发出跨度，`BatchSpanProcessor` + `ConsoleSpanExporter` 则负责把它们打印出来。
 
-Run it from the repo root using the shared `tutorials/` uv project (one `uv sync` covers every chapter):
+在仓库根目录运行，共用 `tutorials/` 这一个 uv 项目（一次 `uv sync` 覆盖全部章节）：
 
 ```bash
 uv sync --project tutorials
 uv run --project tutorials python tutorials/07-observability-otel/python/main.py "What is Python?"
 ```
 
-`main.py` also supports `LLM_PROVIDER=replay` (via `tutorials/_shared/replay_client.py`), which plays back a recorded fixture instead of calling a real model — that's what the test suite uses so it can run in CI without credentials.
+`main.py` 同样支持 `LLM_PROVIDER=replay`（通过 `tutorials/_shared/replay_client.py`），它回放已录制的 fixture 而不调用真实模型 —— 测试套件正是靠它做到无需凭据即可在 CI 中运行。
 
-## .NET
+## 常见坑
 
-Source: [`dotnet/Program.cs`](./dotnet/Program.cs).
+- **Python 每个进程只设置一个 `TracerProvider`。** 第二次调用 `trace.set_tracer_provider()` 只会记一条警告然后被忽略 —— 第一个 provider 获胜。测试套件（[`test_observability.py`](./python/tests/test_observability.py)）的绕法是安装一个模块级的 `InMemorySpanExporter`，并在测试之间调用 `exporter.clear()`，而不是试图重建 provider。
+- **`enable_instrumentation(enable_sensitive_data=True)`** 会把完整的提示词与响应文本作为跨度属性包含进去。对本地开发追踪没问题；在生产环境面对真实用户/PII 数据时，请保持默认值（`False`），或用环境开关把它圈起来 —— 参见 `docker-compose.yml` 中的 `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`，它控制着完整应用里同一组权衡。
+- **两个 SDK 默认都会全量采样。** 对教程或低 QPS 服务没问题；对高吞吐服务，你应当配置基于 `TraceIdRatioBased` 的采样器，而不是导出 100% 的跨度。
+- **OTLP 端点不是 OTel 的默认端口。** 本仓库的 compose 栈里，Jaeger 的 OTLP 接收端对外暴露在 `4317`（gRPC）与 `4318`（HTTP），界面在 `16686`。若你把本章的导出器指向 Jaeger 而不是控制台，请使用 `http://localhost:4317`；容器内部则用 `http://jaeger:4317`（`docker-compose.yml` 为编排服务设置的 `OTEL_EXPORTER_OTLP_ENDPOINT` 就是它）。
 
-```csharp
-public static readonly string[] ActivitySources = new[]
-{
-    "Microsoft.Agents.AI",
-    "Microsoft.Extensions.AI",
-    "*",
-};
+## 测试
 
-public static TracerProvider BuildTracerProvider(BaseExporter<Activity> exporter)
-{
-    var builder = Sdk.CreateTracerProviderBuilder()
-        .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("maf-v1-ch07"))
-        .AddSource(ActivitySources)
-        .AddProcessor(new SimpleActivityExportProcessor(exporter));
-    return builder.Build()!;
-}
-```
-
-`Program.Main` calls `BuildTracerProvider(new ConsoleExporter())`, builds the agent with `chatClient.AsAIAgent(...)`, and runs it — the console exporter (a small `BaseExporter<Activity>` defined at the bottom of `Program.cs`) prints each span's display name and tag count as it's exported.
+Python 测试位于 [`python/tests/`](./python/tests/) —— `test_observability.py` 加上一个存放已录制 fixture 的 `fixtures/replay/` 目录。其中一个测试（`test_replay_run_emits_spans`）针对回放 fixture 运行，无需网络与凭据，因此它是 CI 中实际运行的那个；另外三个（`test_real_llm_run_emits_spans`、`test_spans_include_genai_attributes`、`test_two_runs_produce_distinct_trace_ids`）标记为 `@pytest.mark.integration`，当 `.env` 中没有 LLM 凭据时自动跳过。
 
 ```bash
-cd tutorials/07-observability-otel/dotnet
-dotnet run
-```
-
-## Side-by-side differences
-
-| Aspect | Python | .NET |
-|--------|--------|------|
-| Enable MAF instrumentation | `enable_instrumentation()` | `.AddSource("Microsoft.Agents.AI", "Microsoft.Extensions.AI", "*")` |
-| Span format | OpenTelemetry SDK span | `System.Diagnostics.Activity` (OTel .NET's compat layer) |
-| Default exporter | `ConsoleSpanExporter` | Custom `ConsoleExporter : BaseExporter<Activity>` |
-| GenAI attributes | `gen_ai.operation.name`, `gen_ai.request.model`, `gen_ai.usage.*` | Same attribute names, exposed as `Activity` tags |
-| Provider set-once rule | `trace.set_tracer_provider()` — second call is a silent no-op | `TracerProvider` is a disposable object you own; nothing stops you building two |
-
-Both produce the same data shape — swap the exporter for an OTLP one and point it at Aspire / Jaeger / Azure Monitor to see distributed traces instead of console lines.
-
-## Gotchas
-
-- **Python sets one `TracerProvider` per process.** Calling `trace.set_tracer_provider()` a second time logs a warning and is ignored — the first provider wins. The test suite in [`test_observability.py`](./python/tests/test_observability.py) works around this by installing a single module-level `InMemorySpanExporter` and calling `exporter.clear()` between tests, rather than trying to rebuild the provider.
-- **.NET needs explicit `ActivitySource` names.** MAF v1.1 emits under `Microsoft.Agents.AI` and `Microsoft.Extensions.AI`; adding `"*"` on top also picks up ambient HTTP-client spans (DNS, TLS handshake, the actual POST) so you can see the full network hop, not just the agent-level span.
-- **`enable_instrumentation(enable_sensitive_data=True)`** includes the full prompt and response text as span attributes. Fine for a local dev trace; in production against real user/PII data, leave it at the default (`False`) or scope it behind an environment flag — see `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` in `docker-compose.yml`, which controls the same trade-off for the capstone app.
-- **Both SDKs sample everything by default.** Fine for a tutorial or low-QPS service; for a high-throughput service you'd configure a `TraceIdRatioBased` sampler in both languages rather than exporting 100% of spans.
-- **The Aspire OTLP port is not the OTel default.** `docker-compose.yml`'s `aspire` service maps the dashboard UI to host `18888` and the OTLP receiver to host `18890` (container port `18889`) — not the OTel SDK's usual default of `4317`. If you point this chapter's exporter at Aspire instead of the console, use `http://localhost:18890` from the host, or `http://aspire:18889` from inside the compose network (that's the value `docker-compose.yml` sets for the orchestrator's `OTEL_EXPORTER_OTLP_ENDPOINT`).
-
-## Tests
-
-Python tests live in [`python/tests/`](./python/tests/) — `test_observability.py` plus a `fixtures/replay/` directory of recorded fixtures. One test (`test_replay_run_emits_spans`) runs against the replay fixture with no network or credentials, so it's the one that runs in CI; three more (`test_real_llm_run_emits_spans`, `test_spans_include_genai_attributes`, `test_two_runs_produce_distinct_trace_ids`) are marked `@pytest.mark.integration` and skip automatically when no LLM credentials are present in `.env`.
-
-.NET tests live in [`dotnet/tests/ObservabilityTests.cs`](./dotnet/tests/ObservabilityTests.cs) — two integration tests (`Real_LLM_Run_Produces_Spans`, `Spans_Include_Http_Call_To_LLM_Provider`) that each skip with a `[skip]` console line when no credentials are configured.
-
-```bash
-# Python
 uv sync --project tutorials
 uv run --project tutorials pytest tutorials/07-observability-otel/python/tests -v
-
-# .NET
-cd tutorials/07-observability-otel/dotnet
-dotnet test tests/Observability.Tests.csproj
 ```
 
-## How this shows up in the capstone
+## 在完整项目中的落点
 
-The production-grade version of this chapter is `agents/python/shared/telemetry.py`. `setup_telemetry()` at `agents/python/shared/telemetry.py:30` configures OTLP exporters plus auto-instrumentation for `httpx`, `asyncpg`, and FastAPI — none of which this chapter's minimal example needs, because the chapter has no database and no inbound HTTP server. Two context managers build on top of that: `agent_run_span()` at `agents/python/shared/telemetry.py:224` wraps one agent invocation with the same `gen_ai.operation.name` / `invoke_agent` convention this chapter uses, and `a2a_call_span()` at `agents/python/shared/telemetry.py:261` wraps outbound agent-to-agent HTTP calls with `SpanKind.CLIENT` so the orchestrator → specialist hop shows up as a single connected span tree rather than two disconnected traces. The `aspire` service in `docker-compose.yml` (dashboard on `:18888`, OTLP receiver on `:18890`/`18889`) is where those spans actually land and render as the orchestrator → A2A → specialist → tool → LLM call tree.
+本章的生产级版本是 `agents/python/shared/telemetry.py`。`agents/python/shared/telemetry.py:25` 的 `setup_telemetry()` 配置 OTLP 导出器，并为 `httpx`、`asyncpg`、FastAPI 开启自动插桩 —— 这些本章的最小示例都不需要，因为本章既没有数据库也没有入站 HTTP 服务。在其之上还有两个上下文管理器：`agents/python/shared/telemetry.py:215` 的 `agent_run_span()` 用与本章相同的 `gen_ai.operation.name` / `invoke_agent` 约定包裹一次智能体调用；`agents/python/shared/telemetry.py:248` 的 `a2a_call_span()` 用 `SpanKind.CLIENT` 包裹出站的智能体间 HTTP 调用，使「编排器 → 专家」这一跳呈现为一棵连通的跨度树，而不是两段互不相连的追踪。`docker-compose.yml` 中的 `jaeger` 服务（界面 `:16686`，OTLP 接收端 `:4317`）就是这些跨度的落点，它们在那里渲染为「编排器 → A2A → 专家 → 工具 → LLM」的调用树。
 
-## What's next
+## 下一步
 
-- Next chapter: [Chapter 08 — MCP Tools](../08-mcp-tools/)
-- Full source: [`python/`](./python/) · [`dotnet/`](./dotnet/)
-- Shared: [Mermaid style guide](../_shared/mermaid-style-guide.md) · [Jargon glossary](../_shared/jargon-glossary.md)
-- [MAF docs — Observability](https://learn.microsoft.com/en-us/agent-framework/agents/observability/)
+- 下一章：[第 08 章 · MCP 工具](../08-mcp-tools/)
+- 完整源码：[`python/`](./python/)
+- 共享材料：[Mermaid 风格指南](../_shared/mermaid-style-guide.md) · [术语表](../_shared/jargon-glossary.md)
+- [MAF 官方文档 —— 可观测性](https://learn.microsoft.com/en-us/agent-framework/agents/observability/)

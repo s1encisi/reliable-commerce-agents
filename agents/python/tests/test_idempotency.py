@@ -1,25 +1,8 @@
-"""Phase 6.1 — idempotency infrastructure and the money-moving paths it protects.
+"""真实 PostgreSQL 上的幂等协议与敏感写入测试。
 
-Real Postgres throughout (``clean_db``), per this repo's standing policy —
-never mock the database. Covers, in order:
-
-1. ``shared/idempotency.py``'s core protocol against a synthetic decorated
-   function: reserve, replay-on-completed, conflict-on-fresh-in-progress,
-   reclaim-on-stale-in-progress, release-on-exception.
-2. ``initiate_return``/``process_refund`` (``shared/tools/return_tools.py``)
-   actually deduping a sequential retry with identical args instead of
-   hitting their own "already returned"/"already refunded" error paths.
-3. ``shared/hitl.py``'s fail-closed behavior when the approval record can't
-   be written (previously failed open — let the gated tool execute
-   unapproved).
-4. ``execute_approved_action``'s two real correctness bugs this phase fixed
-   alongside idempotency: the ``process_refund`` branch reading a
-   nonexistent ``order_id`` key instead of the real ``return_id``, and the
-   ``initiate_return`` branch's missing duplicate-return guard.
-5. ``claim_hitl_request`` closing the TOCTOU window between the admin
-   approve route's pre-check and its post-execution status flip.
-6. Checkout (``POST /api/checkout``) deduping a double-submit instead of
-   placing two orders and double-decrementing inventory.
+覆盖预留、成功重放、新请求冲突、过期接管、异常释放；退货与退款
+顺序重试；审批记录写入失败时拒绝执行；退款参数和重复退货防护；
+审批先认领后执行；结算重复提交不重复下单或扣库存。
 """
 
 from __future__ import annotations
@@ -45,8 +28,8 @@ pytestmark = pytest.mark.asyncio
 async def db_pool(clean_db: asyncpg.Pool, monkeypatch: pytest.MonkeyPatch) -> asyncpg.Pool:
     import shared.db as shared_db
 
-    # Config-loader tests reload shared.config. Patch the singleton actually
-    # held by the return service, even when the module attribute was replaced.
+    # 配置测试可能重载模块，
+    # 应替换退货服务实际持有的配置单例。
     from shared.after_sales.service import settings
 
     monkeypatch.setattr(shared_db, "_pool", clean_db)
@@ -178,8 +161,8 @@ async def test_different_identity_is_not_deduped(db_pool: asyncpg.Pool) -> None:
 
 async def test_fresh_in_progress_conflict_is_refused(db_pool: asyncpg.Pool) -> None:
     current_user_email.set("alice@example.com")
-    # Manually insert a fresh in_progress row for the same key _echo("stuck")
-    # would compute, simulating a concurrent duplicate that's still running.
+    # 手动插入相同键的新 in_progress 记录，
+    # 模拟仍在执行的并发重复请求。
     from shared.idempotency import _canonical_key
 
     key = _canonical_key("test_scope", "alice@example.com", {"value": "stuck"})
@@ -216,19 +199,19 @@ async def test_exception_releases_the_reservation_for_a_real_retry(db_pool: asyn
     with pytest.raises(ValueError, match="boom"):
         await _maybe_raise(should_raise=True)
 
-    # A genuine retry after a real failure must be allowed to actually
-    # re-execute, not get stuck behind a dangling in_progress reservation.
+    # 真实失败后的重试必须能够重新执行，
+    # 不能被遗留预留永久阻止。
     result = await _maybe_raise(should_raise=False)
     assert result == {"ok": True}
     assert _maybe_raise.calls == 2
 
 
 async def test_no_identity_skips_idempotency_entirely_without_touching_the_pool() -> None:
-    # No db_pool fixture requested here on purpose — this must not call
-    # get_pool() at all when there's no identity to key against, exactly
-    # the regression this test guards (an earlier version crashed with
-    # "DB pool not initialized" for every unauthenticated call, breaking
-    # role-guard tests that intentionally never set up a DB pool).
+    # 有意不创建数据库池：无身份时，
+    # 幂等装饰器不能调用 get_pool。
+    # 否则未认证请求会在角色守卫之前，
+    # 因连接池未初始化而崩溃，
+    # 破坏无需数据库的拒绝路径。
     current_user_email.set(None)
     _echo.calls = 0
     result = await _echo("anon")
@@ -316,14 +299,10 @@ async def test_hitl_fails_closed_when_approval_record_write_fails(monkeypatch: p
 
 
 async def test_execute_approved_action_process_refund_operates_on_the_real_return(db_pool: asyncpg.Pool) -> None:
-    """Regression test for the pre-existing order_id/return_id argument-name bug.
+    """退款参数名回归测试。
 
-    HITLFunctionMiddleware captures whatever the gated tool was actually
-    called with — process_refund only ever takes `return_id`, so
-    tool_input never has an `order_id` key. The old branch read
-    tool_input.get("order_id", "") (always empty) and updated `orders` by
-    that empty id, so it always failed to find a row and never actually
-    marked the return processed.
+    中间件捕获的实际参数只有 return_id；不能读取空 order_id 后
+    更新 orders，必须按退货标识更新正确记录。
     """
     from shared.hitl import execute_approved_action
 
@@ -359,11 +338,11 @@ async def test_execute_approved_action_process_refund_is_guarded_against_double_
     )
     assert first["success"] is True
 
-    # A second execution against the exact same args, bypassing the
-    # idempotency decorator (as could happen via a distinct HITL request
-    # for the same return), must still not report a second success — the
-    # WHERE status NOT IN ('refunded', 'denied') guard on the UPDATE
-    # itself is the defense-in-depth layer for that case.
+    # 绕过幂等包装再次执行相同参数，
+    # 模拟同一退货对应不同审批记录，
+    # 仍不能报告第二次成功。
+    # UPDATE 的状态条件提供
+    # 这一层纵深保护。
     from shared.idempotency import _canonical_key
 
     key = _canonical_key(
@@ -522,12 +501,12 @@ async def test_checkout_double_submit_places_one_order_and_decrements_inventory_
         assert first_resp.status_code == 200
         first = first_resp.json()
 
-        # Simulate a client retry after a timeout/network blip — the exact
-        # same request body, sent again. The cart is already cleared by the
-        # first attempt in real usage, but the idempotency key is computed
-        # from the ORIGINAL request args (user_id, body), not the cart's
-        # current state, so this must replay rather than 400 on "No cart
-        # found" or (worse, if the cart existed) place a second order.
+        # 模拟超时后原样重发请求。
+        # 首次结算已经清空购物车，
+        # 但幂等键来自原请求身份和参数，
+        # 不依赖当前购物车状态。
+        # 应重放成功，不能因购物车为空报错，
+        # 更不能再次下单。
         second_resp = await http.post("/api/checkout", json=body, headers={"Authorization": "Bearer fake"})
         assert second_resp.status_code == 200
         second = second_resp.json()
@@ -575,9 +554,9 @@ async def test_checkout_with_different_body_is_not_deduped(db_pool: asyncpg.Pool
         )
         assert first_resp.status_code == 200
 
-        # A genuinely different order — cart is now empty (cleared by the
-        # first checkout) so this legitimately 400s, but it must be a real
-        # attempt (a distinct idempotency key), not a replay of the first.
+        # 不同订单参数对应新的业务尝试。
+        # 即使购物车为空而返回 400，
+        # 也不能错误重放首次成功。
         second_resp = await http.post(
             "/api/checkout",
             json={

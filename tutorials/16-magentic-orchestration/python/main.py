@@ -1,13 +1,7 @@
-"""
-MAF v1 — Chapter 16: Magentic Orchestration (Python)
+"""第 16 章：Magentic 动态编排。
 
-A Magentic manager decomposes a task into subtasks and delegates to
-worker agents. Here: plan a short product launch brief. The manager picks
-from three workers — Researcher, Marketer, Legal — iterating until the
-task is complete.
-
-Run:
-    python tutorials/16-magentic-orchestration/python/main.py "plan a product launch for an AI meal planner"
+管理者拆分产品发布任务，选择研究、营销、法律三个工作智能体，
+反复委派直到完成。运行提示字符串保持与现有回放一致。
 """
 
 from __future__ import annotations
@@ -49,9 +43,9 @@ def _default_client() -> OpenAIChatClient | OpenAIChatCompletionClient | ReplayC
     return OpenAIChatClient(
         model=os.environ.get("LLM_MODEL", "gpt-4.1"),
         api_key=os.environ["OPENAI_API_KEY"],
-        # Phase 9: any OpenAI-compatible endpoint (GitHub Models, OpenRouter,
-        # vLLM, LM Studio, Ollama) instead of api.openai.com — see
-        # tutorials/00-setup/README.md's "Don't have a paid API key?" section.
+        # 第 9 阶段：可用任意 OpenAI 兼容端点（GitHub Models、OpenRouter、
+        # vLLM、LM Studio、Ollama）替代 api.openai.com——见
+        # tutorials/00-setup/README.md 的「没有付费 API 密钥怎么办？」一节。
         base_url=os.environ.get("LLM_BASE_URL") or None,
     )
 
@@ -81,7 +75,7 @@ def legal() -> Agent:
 
 
 def manager_agent() -> Agent:
-    """A planning LLM the Magentic manager uses to decompose and delegate."""
+    """Magentic 管理者用于分解与委派的规划 LLM。"""
     return Agent(
         _default_client(),
         instructions=(
@@ -106,21 +100,17 @@ def build_workflow():
 
 
 async def _workflow_events(workflow, message: str):
-    """Yield workflow events from a streaming run.
+    """流式输出 Magentic 工作流事件。
 
-    ``workflow.run(..., stream=True)`` drives each participant's turn through
-    MAF's streaming AgentExecutor path, which in turn streams the chat
-    client's response. ``ReplayChatClient`` (see
-    tutorials/_shared/replay_client.py) wires the same finalizer real clients
-    use, so replay mode streams correctly through this same path — no
-    provider-specific branch needed here.
+    真实客户端和回放客户端共用 MAF 的流式执行器及最终响应终结器，
+    无需提供方专用分支。
     """
     async for event in workflow.run(message, stream=True):
         yield event
 
 
 async def plan(task: str) -> tuple[list[str], str]:
-    """Run the Magentic flow; return (participants consulted in order, final answer)."""
+    """运行 Magentic，返回参与者顺序及最终答案。"""
     workflow = build_workflow()
     speakers: list[str] = []
     final_messages: list[str] = []
@@ -128,16 +118,16 @@ async def plan(task: str) -> tuple[list[str], str]:
         etype = getattr(event, "type", None)
         if etype == "group_chat":
             data = getattr(event, "data", None)
-            # GroupChatRequestSentEvent carries participant_name on dispatch.
+            # GroupChatRequestSentEvent 在派发时携带 participant_name。
             if data and type(data).__name__ == "GroupChatRequestSentEvent":
                 pname = getattr(data, "participant_name", None)
                 if pname:
                     speakers.append(pname)
         elif etype == "output":
             payload = getattr(event, "data", None)
-            # The magentic manager's final "output" event carries either a
-            # list of AgentResponseUpdate items or a single one, depending on
-            # the run — handle both shapes.
+            # magentic 管理者的最终 "output" 事件，其载荷可能是一个
+            # AgentResponseUpdate 列表，也可能是单个对象，取决于具体运行——
+            # 两种形状都要处理。
             items = payload if isinstance(payload, list) else [payload] if payload is not None else []
             for item in items:
                 text = getattr(item, "text", None)

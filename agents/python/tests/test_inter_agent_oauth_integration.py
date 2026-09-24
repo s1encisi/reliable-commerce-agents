@@ -1,14 +1,7 @@
-"""Phase C integration: a real AS-issued service token authenticating a
-real ``AgentAuthMiddleware`` inter-agent request.
+"""真实 OAuth 服务令牌通过真实智能体认证中间件的集成测试。
 
-Uses the same ``OAuthAuthorizationServer`` direct-construction harness as
-``test_auth_server_integration.py`` (real testcontainers Postgres via
-``clean_db``, real authlib grant machinery) to mint genuine RS256 tokens,
-then feeds them through the real ``RS256Verifier`` (JWKS fetch monkeypatched
-to the in-process AS's own signing key, not a real network call — same
-convention as ``test_rs256_verifier.py``) and the real
-``AgentAuthMiddleware``. No stubbed verifier here — this is the thing the
-stubbed tests in ``test_auth_identity_validation.py`` assume works.
+使用真实 PostgreSQL 和 authlib 签发 RS256；只把 JWKS 网络获取
+替换为本进程签名密钥，校验器与中间件均真实执行。
 """
 
 from __future__ import annotations
@@ -83,9 +76,7 @@ async def server(clean_db):
 
 @pytest.fixture
 def verifier(server, monkeypatch):
-    """A real ``RS256Verifier`` whose JWKS fetch is pointed at the in-process
-    AS's own signing key — no real network call, matching
-    ``test_rs256_verifier.py``'s established convention."""
+    """真实 RS256 校验器，从本进程授权服务器密钥获取 JWKS，无网络调用。"""
     _srv, signing_key = server
     monkeypatch.setattr(settings, "AUTH_SERVER_ISSUER", ISSUER)
     monkeypatch.setattr(settings, "AUTH_AGENT_AUDIENCE", "ecommerce-agents")
@@ -178,9 +169,7 @@ async def test_real_service_token_with_no_user_headers_defaults_to_system(clean_
 
 
 async def test_wrong_audience_token_rejected(clean_db, server, verifier):
-    """A real, validly-signed token issued for the orchestrator's own
-    api:chat scope (aud=ecommerce-orchestrator) must not authenticate an
-    inter-agent call expecting agent:invoke/ecommerce-agents."""
+    """api:chat 受众的有效令牌不能认证需要 agent:invoke 的智能体间请求。"""
     srv, _signing_key = server
     token = await _issue_token(
         clean_db,
@@ -223,7 +212,6 @@ async def test_spoofed_role_rejected_under_strict_identity(clean_db, server, ver
 
 
 async def test_agent_secret_rejected_when_oauth_mode_active(clean_db, server, verifier):
-    """Retirement guard: even a correct shared secret is refused once
-    AUTH_MODE=oauth — the acquirer/service-token path is the only door."""
+    """oauth 模式即使共享密钥正确也必须拒绝，只接受服务令牌。"""
     resp = _client().post("/x", headers={"x-agent-secret": settings.AGENT_SHARED_SECRET})
     assert resp.status_code == 401

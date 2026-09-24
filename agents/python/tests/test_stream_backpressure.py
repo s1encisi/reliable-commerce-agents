@@ -1,11 +1,7 @@
-"""
-Audit fix #9 — chat-stream backpressure tests.
+"""聊天流背压守卫测试。
 
-Re-implements the body of the orchestrator's ``event_generator`` in
-isolation (no FastAPI, no agent loop, no DB) so we can drive the three
-guards directly: client disconnect, wall-clock timeout, max-bytes
-truncation. Keeps the test fast and deterministic — no testcontainers,
-no LLM call.
+在隔离的生成器逻辑中覆盖断连、墙钟超时和字节上限，无外部调用；
+真实路由另有集成测试。
 """
 
 from __future__ import annotations
@@ -18,7 +14,7 @@ import pytest
 
 
 class _FakeRequest:
-    """Mimics Starlette's ``Request.is_disconnected()`` API."""
+    """模拟 Starlette 请求的断连查询接口。"""
 
     def __init__(self, disconnect_after_chunks: int | None = None) -> None:
         self._disconnect_after = disconnect_after_chunks
@@ -40,8 +36,8 @@ async def _run_generator(
     timeout_s: float,
     max_bytes: int,
 ) -> tuple[list[str], list[str]]:
-    """Mirror ``orchestrator.routes.chat_stream.event_generator`` minus
-    DB / telemetry / agent-loop wiring. Returns ``(yields, full_response)``.
+    """复现事件生成器的守卫逻辑，省略数据库和智能体接线，
+    返回已输出内容和累计响应。
     """
     full_response: list[str] = []
     yields: list[str] = []
@@ -96,8 +92,8 @@ async def test_client_disconnect_aborts_mid_stream() -> None:
 
     request = _FakeRequest(disconnect_after_chunks=3)
     yields, _ = await _run_generator(chunks(), request, timeout_s=10, max_bytes=1_000_000)
-    # We yield 3 chunks, then on the 4th iteration the disconnect probe
-    # fires and the loop breaks.
+    # 输出三个分块后，第四轮检测到断连，
+    # 循环随即结束。
     assert len(yields) == 3
     assert yields == ["chunk0 ", "chunk1 ", "chunk2 "]
 
@@ -105,15 +101,15 @@ async def test_client_disconnect_aborts_mid_stream() -> None:
 @pytest.mark.asyncio
 async def test_wall_clock_timeout_stops_runaway_stream() -> None:
     async def chunks():
-        # Each chunk waits 50ms; with timeout 0.12s we should get ≤2
-        # chunks before the timeout fires.
+        # 每块等待 50 毫秒，0.12 秒超时，
+        # 通常应在两块后触发。
         for i in range(20):
             await asyncio.sleep(0.05)
             yield f"chunk{i}"
 
     yields, full = await _run_generator(chunks(), _FakeRequest(), timeout_s=0.12, max_bytes=1_000_000)
     assert any("stream timed out" in y for y in yields)
-    # Real chunks before the timeout marker are at most 3 (loop overhead)
+    # 考虑循环调度开销，超时标记前最多三块。
     real = [y for y in yields if "stream timed out" not in y]
     assert len(real) <= 3
 
@@ -122,13 +118,13 @@ async def test_wall_clock_timeout_stops_runaway_stream() -> None:
 async def test_max_bytes_truncates_with_marker() -> None:
     async def chunks():
         for _ in range(100):
-            yield "x" * 1024  # 1 KiB chunks
+            yield "x" * 1024  # 每块 1 KiB。
 
     yields, _ = await _run_generator(
         chunks(),
         _FakeRequest(),
         timeout_s=10,
-        max_bytes=4 * 1024,  # 4 KiB ceiling
+        max_bytes=4 * 1024,  # 总上限 4 KiB。
     )
     real = [y for y in yields if "truncated" not in y]
     assert sum(len(y) for y in real) <= 4 * 1024

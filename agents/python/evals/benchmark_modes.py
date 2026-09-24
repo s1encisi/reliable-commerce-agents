@@ -1,27 +1,26 @@
 #!/usr/bin/env python3
-"""Benchmark the five orchestration modes against a running stack.
+"""对五种编排模式进行基准测试，针对一个正在运行的技术栈。
 
-The site says the same question can be routed five ways and compared. This
-produces the comparison, with numbers attached.
+站点上写着同一个问题可以经由五种路径被路由并加以比较。这里就生成这种比较，
+并附上具体数字。
 
-**It drives the HTTP API, not the modes directly.** `POST /api/chat` with a
-`mode` in the body is exactly what the composer's mode switcher sends, so a run
-here exercises the real path — auth, guardrails, sanitization, grounding, HITL
-gates, usage logging — rather than a copy of it. Calling `get_mode(...).run()`
-in-process would be less code and would measure something nobody runs.
+**它驱动的是 HTTP API，而不是直接调用各模式。** 在请求体中带 `mode` 的
+`POST /api/chat` 正是编辑器里模式切换器所发送的内容，因此在这里跑一次
+就是走真实路径——鉴权、护栏、净化、事实核验（grounding）、人工参与
+（Human-in-the-Loop，HITL）闸门、用量记录——而不是它的副本。在进程内调用
+`get_mode(...).run()` 代码更少，但测量的却是没人会真正运行的东西。
 
-Tokens are read from `usage_logs` as a before/after delta per request, and cost
-comes from `shared.cost.estimate_cost`. When a mode logs no usage rows, that is
-reported as "not captured" rather than as zero, because those are very different
-claims.
+Token 以每次请求前后的差值形式从 `usage_logs` 读取，成本则来自
+`shared.cost.estimate_cost`。当某个模式没有记录任何用量行时，会报告为
+"not captured" 而不是零，因为这两者是截然不同的结论。
 
-This costs real money and cannot run under `LLM_PROVIDER=replay` — replay
-fixtures return instantly, which makes latency meaningless. It is deliberately
-not wired into CI; the PR gate stays the free replay-driven smoke suite.
+这会花费真金白银，且无法在 `LLM_PROVIDER=replay` 下运行——回放夹具会瞬时
+返回，从而使延迟数据失去意义。它被刻意排除在 CI 之外；PR 闸门仍然使用
+免费的、由回放驱动的冒烟测试套件。
 
-Usage::
+用法::
 
-    # with the stack already running (./scripts/dev.sh --demo)
+    # 在技术栈已运行的情况下（./scripts/dev.sh --demo）
     uv run python -m evals.benchmark_modes --reps 3
     uv run python -m evals.benchmark_modes --modes tool,handoff --reps 1 --dry-run
 """
@@ -53,10 +52,9 @@ DEMO_PASS = os.environ.get("BENCH_PASS", "customer123")
 
 ALL_MODES = ["tool", "handoff", "workflow:pre-purchase", "workflow:return-replace", "group-chat"]
 
-# Prompts are chosen so every mode has something legitimate to do. The two
-# workflow modes resolve a product_id / order_id out of the message themselves,
-# so a routing-only prompt set would make them look artificially bad -- they
-# would spend their time failing to resolve an entity rather than orchestrating.
+# 提示词的选取保证每种模式都有正当的事情可做。两个工作流模式会自行从消息中
+# 解析出 product_id / order_id，因此一套只用于路由的提示词集合会让它们显得
+# 人为地糟糕——它们会把时间花在解析不出实体上，而不是花在编排上。
 PROMPTS: list[dict[str, str]] = [
     {"id": "product-search", "text": "What Allbirds products do you have and what do they cost?"},
     {"id": "order-status", "text": "What is the status of my most recent order?"},
@@ -112,7 +110,7 @@ async def run_once(
         elapsed = (time.perf_counter() - started) * 1000
         resp.raise_for_status()
         body = resp.json()
-    except Exception as exc:  # noqa: BLE001 - a failed mode is a datapoint, not a crash
+    except Exception as exc:  # noqa: BLE001 - 某个模式失败是一个数据点，而不是崩溃
         return RunResult(
             mode=mode,
             prompt_id=prompt["id"],

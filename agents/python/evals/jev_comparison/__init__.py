@@ -1,15 +1,14 @@
-"""Jev (TypeSafe System One) comparison harness.
+"""Jev（TypeSafe System One）对比运行框架。
 
-Measures two decision points against the rule-based implementations a team
-would ship without a decision model:
+把两个决策点与团队在没有决策模型时会交付的基于规则的实现做对比测量：
 
-    routing  (choice)  vs  weighted keyword matching
-    gate     (noul)    vs  regex denylist
+    routing  (choice)  vs  加权关键词匹配
+    gate     (noul)    vs  正则拒绝名单
 
-Run from ``agents/python``::
+从 ``agents/python`` 运行::
 
     TYPESAFE_API_KEY=... python -m evals.jev_comparison.runner
 
-See ``results/`` for output and ``../../shared/jev/README.md`` for the
-integration notes and the list of things this does not claim.
+输出参见 ``results/``，集成说明以及"本方案不主张什么"的清单参见
+``../../shared/jev/README.md``。
 """

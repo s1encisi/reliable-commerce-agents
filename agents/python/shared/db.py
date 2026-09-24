@@ -1,4 +1,4 @@
-"""asyncpg connection pool management."""
+"""asyncpg 连接池管理。"""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ _pool: asyncpg.Pool | None = None
 
 
 async def init_db_pool() -> None:
-    """Initialize the asyncpg connection pool. Call in agent lifespan startup."""
+    """在智能体生命周期启动阶段初始化连接池。"""
     global _pool
     _pool = await asyncpg.create_pool(
         settings.DATABASE_URL,
@@ -20,14 +20,14 @@ async def init_db_pool() -> None:
 
 
 def get_pool() -> asyncpg.Pool:
-    """Get the connection pool. Raises if not initialized."""
+    """获取连接池；尚未初始化时抛错。"""
     if _pool is None:
         raise RuntimeError("DB pool not initialized — call init_db_pool() first")
     return _pool
 
 
 async def close_db_pool() -> None:
-    """Close the connection pool. Call in agent lifespan shutdown."""
+    """在智能体生命周期结束时关闭连接池。"""
     global _pool
     if _pool:
         await _pool.close()

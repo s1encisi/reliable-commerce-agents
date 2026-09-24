@@ -1,9 +1,4 @@
-"""
-Minimal smoke test that exercises the conftest plumbing itself.
-
-This file is intentionally small — it exists so Phase 0 ships with a green
-pytest run. Real test files land with their respective refactor / port sub-plans.
-"""
+"""验证共享测试夹具本身能工作的最小冒烟测试。"""
 
 from __future__ import annotations
 
@@ -18,7 +13,7 @@ def test_sample_env(sample_env: dict[str, str]) -> None:
 
 
 def test_fake_chat_client_round_trip(fake_chat_client) -> None:
-    """FakeChatClient queues, pops, and records inputs deterministically."""
+    """客户端替身确定性地排队、取出响应并记录输入。"""
     fake_chat_client.enqueue("first", "second")
     assert fake_chat_client.call_count == 0
 

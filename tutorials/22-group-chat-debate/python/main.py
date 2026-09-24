@@ -1,7 +1,7 @@
-"""Runnable demo for Chapter 22 — group-chat / round-table debate.
+"""第 22 章的可运行演示 —— 群聊 / 圆桌辩论。
 
-Deterministic by default (no LLM): panelists are plain callables. Run from the
-backend package so the ``workflows`` import resolves:
+默认是确定性的（不调用 LLM）：圆桌成员就是普通的可调用对象。请从后端包内运行，
+这样 ``workflows`` 导入才能解析：
 
     cd agents/python && uv run python ../../tutorials/22-group-chat-debate/python/main.py
 """

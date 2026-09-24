@@ -1,22 +1,19 @@
 """
-Chapter 22 — Group-Chat Debate: tests.
+第 22 章 —— 群聊辩论：测试。
 
-No LLM — the panelists are plain callables, so every assertion is exact
-(same precedent as Chapter 09's and Chapter 30's LLM-free workflow tests).
+不涉及 LLM —— 圆桌成员就是普通的可调用对象，因此每条断言都是精确的
+（与第 09 章、第 30 章的无 LLM 工作流测试遵循同一先例）。
 
-This chapter is unusual in the series: it imports the *production*
-`workflows.group_chat` module out of `agents/python` rather than shipping a
-self-contained example, so the sys.path setup below reaches into the backend
-package the way the chapter's own README tells readers to run it.
+本章在本系列中比较特殊：它从 `agents/python` 导入*生产*的
+`workflows.group_chat` 模块，而不是自带一份独立示例，因此下面的 sys.path
+设置会伸进后端包，正如本章自己的 README 告诉读者该如何运行它那样。
 
-That import is also why this file exists at all. The production module has its
-own tests in `agents/python/tests/test_workflow_group_chat.py`, and for a long
-time that was treated as covering this chapter too. It does not: it covers the
-module, not the chapter. The demo's own panelists, its synthesizer, and the
-claim the chapter is built on — that a later panelist can see earlier turns —
-were untested. That claim is the one thing a reader takes away, and it is
-invisible from the demo's output: two panelists who happen not to reference
-each other produce the same transcript whether the state was shared or not.
+这个导入也正是本文件存在的原因。生产模块有自己的测试，位于
+`agents/python/tests/test_workflow_group_chat.py`，在很长一段时间里，那被视为
+同时也覆盖了本章。并非如此：它覆盖的是模块，不是本章。演示自己的圆桌成员、
+它的综合器，以及本章赖以成立的那个主张 —— 靠后的圆桌成员能看到此前的发言 ——
+都没有被测到。那个主张恰恰是读者唯一带走的东西，而它在演示输出里是看不见的：
+两位恰好不引用彼此的圆桌成员，无论状态是否共享，产出的记录都一模一样。
 """
 
 from __future__ import annotations
@@ -29,7 +26,7 @@ from tutorials._shared import maf_bootstrap  # noqa: E402
 
 maf_bootstrap.bootstrap()
 
-# The chapter runs from agents/python so `workflows` resolves — see its README.
+# 本章从 agents/python 运行，这样 `workflows` 才能解析 —— 见其 README。
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[4] / "agents" / "python"))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
@@ -52,7 +49,7 @@ def _reports_prior_speakers():
     return responder
 
 
-# ─────────────── Sequencing ───────────────
+# ─────────────── 顺序性 ───────────────
 
 
 async def test_every_panelist_speaks_once_in_declared_order() -> None:
@@ -67,8 +64,8 @@ async def test_every_panelist_speaks_once_in_declared_order() -> None:
 
 
 async def test_a_later_panelist_sees_every_earlier_turn() -> None:
-    # The assertion the pattern lives on. Without a shared transcript the third
-    # panelist reports "I spoke first" — and nothing else in the run looks wrong.
+    # 这个模式赖以成立的那条断言。若不共享记录，第三位圆桌成员会报告
+    # "I spoke first" —— 而且整轮运行里其他任何地方都看不出异常。
     workflow = GroupChatWorkflow(
         panelists=[
             ("first", _reports_prior_speakers()),
@@ -85,9 +82,8 @@ async def test_a_later_panelist_sees_every_earlier_turn() -> None:
 
 
 async def test_a_panelist_cannot_see_turns_that_have_not_happened_yet() -> None:
-    # The other half of the ordering guarantee, and not implied by the test
-    # above: a transcript shared by reference could expose later turns if the
-    # panel ran concurrently.
+    # 顺序性保证的另一半，且并不能由上一条测试推出：如果圆桌是并发跑的，
+    # 一份按引用共享的记录就可能暴露出后面的发言。
     seen: list[int] = []
 
     def counting(question, transcript):
@@ -113,12 +109,12 @@ async def test_the_question_reaches_every_panelist() -> None:
     assert questions == [QUESTION, QUESTION]
 
 
-# ─────────────── The moderator ───────────────
+# ─────────────── 主持人 ───────────────
 
 
 async def test_the_moderator_runs_last_and_is_recorded() -> None:
-    # completed_steps is the audit trail. A moderator that ran before the last
-    # panelist would still produce a plausible verdict — from a short transcript.
+    # completed_steps 是审计轨迹。一个在最后一位圆桌成员之前运行的主持人，
+    # 仍会产出一个看似合理的结论 —— 只是基于一份过短的记录。
     state = await GroupChatWorkflow(
         panelists=[("value", _says("cheap")), ("quality", _says("solid"))]
     ).execute(QUESTION)
@@ -146,8 +142,8 @@ async def test_a_custom_synthesizer_replaces_the_default() -> None:
 
 
 async def test_the_synthesizer_sees_the_complete_transcript() -> None:
-    # Handed a copy taken before the last turn, this would read 1 — and the
-    # verdict would be confidently wrong rather than obviously broken.
+    # 如果拿到的是最后一位发言之前取的副本，这里会读到 1 —— 而结论会
+    # 自信地出错，而不是明显地崩掉。
     seen = -1
 
     def synthesizer(state: GroupChatState) -> str:
@@ -162,13 +158,12 @@ async def test_the_synthesizer_sees_the_complete_transcript() -> None:
     assert seen == 2
 
 
-# ─────────────── Failure handling ───────────────
+# ─────────────── 失败处理 ───────────────
 
 
 async def test_a_failing_panelist_becomes_a_visible_turn() -> None:
-    # A round-table that dies because one specialist timed out is worse than one
-    # that reports a missing voice: the moderator can reconcile around a gap it
-    # can see.
+    # 因为某位专家超时就让整张圆桌崩掉，比让它报告「有一个声音缺席」更糟：
+    # 主持人可以围绕一个它看得见的缺口去做调和。
     def boom(question, transcript):
         raise RuntimeError("provider down")
 
@@ -195,8 +190,7 @@ async def test_a_panelist_after_a_failure_still_runs_and_sees_the_failed_turn() 
 
 
 async def test_an_empty_panel_is_rejected() -> None:
-    # A moderator summarizing silence would emit a confident verdict about
-    # nothing at all.
+    # 一个总结「沉默」的主持人会针对什么都没有的东西给出一个自信的结论。
     import pytest
 
     with pytest.raises(ValueError, match="at least one panelist"):
@@ -211,7 +205,7 @@ async def test_a_single_panelist_panel_still_reaches_the_moderator() -> None:
     assert state.verdict
 
 
-# ─────────────── The chapter's own demo ───────────────
+# ─────────────── 本章自己的演示 ───────────────
 
 
 async def test_the_demo_panel_produces_a_two_turn_debate_and_a_verdict() -> None:
@@ -225,9 +219,8 @@ async def test_the_demo_panel_produces_a_two_turn_debate_and_a_verdict() -> None
 
 
 async def test_the_quality_panelist_demonstrably_reads_the_transcript() -> None:
-    # The demo's own proof that this is a debate. If the quality voice ever
-    # stopped counting prior turns, the chapter would keep running and stop
-    # demonstrating its own subject.
+    # 演示自己对「这是一场辩论」的证明。如果质量视角哪天不再统计此前的发言，
+    # 本章会继续正常运行，却不再演示它自己的主题。
     state = await GroupChatWorkflow(
         panelists=[("value", value_voice), ("quality", quality_voice)],
         synthesizer=synthesize,
@@ -237,9 +230,9 @@ async def test_the_quality_panelist_demonstrably_reads_the_transcript() -> None:
 
 
 async def test_an_async_panelist_is_awaited() -> None:
-    # The Responder contract allows a coroutine so a real agent-backed panelist
-    # fits without changing the signature — this is the path
-    # orchestrator/modes/group_chat_mode.py takes in production.
+    # Responder 契约允许返回协程，这样由真实智能体支撑的圆桌成员无需改动
+    # 签名就能接入 —— 这正是 orchestrator/modes/group_chat_mode.py 在生产中
+    # 所走的路径。
     async def async_voice(question, transcript):
         return "async take"
 

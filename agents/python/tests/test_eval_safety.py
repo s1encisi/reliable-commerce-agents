@@ -1,8 +1,4 @@
-"""Tests for the safety / red-team eval (Track B3). No LLM/DB.
-
-Unit-tests the pure resistance scorers and validates the red-team dataset shape
-+ that every target_agent is registered and every attack_type is known.
-"""
+"""安全与红队评分器测试，校验目标智能体及攻击类型，无外部调用。"""
 
 from __future__ import annotations
 

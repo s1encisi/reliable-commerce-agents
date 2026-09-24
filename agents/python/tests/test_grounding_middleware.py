@@ -1,9 +1,7 @@
-"""GroundingVerificationMiddleware — the GROUNDING_MODE dispatch point.
+"""事实核验模式分派测试。
 
-Two tiers, same convention as tests/test_shared_tools.py:
-1. Ledger-tier tests (no DB) — off/observe/annotate mode dispatch.
-2. DB-backed tests (real Postgres via clean_db) — enforce mode's strip/correct
-   behavior, which needs a real "not found" / "wrong price" verdict to act on.
+台账层覆盖 off、observe、annotate；真实数据库层覆盖 enforce
+对不存在或金额错误卡片的删除和修正。
 """
 
 from __future__ import annotations
@@ -72,7 +70,7 @@ async def test_observe_mode_verifies_but_does_not_attach_report(monkeypatch: pyt
     await mw.process(ctx, call_next)
 
     assert "grounding" not in response.additional_properties
-    assert mw.verified_total == 1  # still counted internally for observability
+    assert mw.verified_total == 1  # 内部仍计数，供可观测性使用。
 
 
 @pytest.mark.asyncio
@@ -112,9 +110,9 @@ async def test_no_claims_in_text_is_a_cheap_no_op(monkeypatch: pytest.MonkeyPatc
 
 @pytest.mark.asyncio
 async def test_enforce_mode_does_not_strip_when_unverifiable(monkeypatch: pytest.MonkeyPatch) -> None:
-    # No ledger match and no DB pool available — must fail open (leave the
-    # card as-is) rather than strip real content just because the check
-    # itself couldn't run.
+    # 台账未命中且无数据库时，保持原卡片，
+    # 不能仅因核验无法执行，
+    # 就删除可能真实的内容。
     monkeypatch.setattr(settings, "GROUNDING_MODE", "enforce")
     original_text = f'```product\n{{"name": "X", "id": "{_PRODUCT_ID}", "price": 5.0}}\n```'
     response = _text_response(original_text)
@@ -146,15 +144,15 @@ async def test_streaming_registers_a_result_hook_instead_of_editing_directly(
 
     await GroundingVerificationMiddleware().process(ctx, call_next)
 
-    assert ctx.result is stream  # not replaced synchronously — mutation happens after the stream finishes
+    assert ctx.result is stream  # 不立即替换，等流结束后才修改最终响应。
     assert len(ctx.stream_result_hooks) == 1
 
 
 @pytest.mark.asyncio
 async def test_streaming_hook_fires_on_plain_iteration_to_exhaustion(monkeypatch: pytest.MonkeyPatch) -> None:
-    # This is the exact mechanism shared/agent_host.py::_run_agent_native_stream
-    # relies on: a plain `async for update in stream` with no explicit
-    # get_final_response() call must still trigger the registered result hook.
+    # 宿主流式辅助函数依赖此机制：
+    # 只进行 async for 迭代，
+    # 也应触发已注册的最终结果钩子。
     monkeypatch.setattr(settings, "GROUNDING_MODE", "annotate")
     ledger = GroundingLedger()
     ledger.products[_PRODUCT_ID] = ProductFact(id=_PRODUCT_ID, name="X", price=5.0)
@@ -173,13 +171,13 @@ async def test_streaming_hook_fires_on_plain_iteration_to_exhaustion(monkeypatch
         ctx.result = stream
 
     await GroundingVerificationMiddleware().process(ctx, call_next)
-    # Simulate what AgentMiddlewarePipeline.execute() does after every
-    # middleware's process() returns.
+    # 模拟 AgentMiddlewarePipeline 在每次执行后触发结果钩子。
+    # 即中间件 process() 返回之后。
     for hook in ctx.stream_result_hooks:
         stream.with_result_hook(hook)
 
     async for _ in stream:
-        pass  # no updates to consume — exhaustion alone must trigger the hook
+        pass  # 即使没有分块，仅流耗尽也必须触发钩子。
 
     final = await stream.get_final_response()
     assert final.additional_properties["grounding"]["verified"] == 1
@@ -241,4 +239,4 @@ async def test_enforce_mode_corrects_a_wrong_price(
     await GroundingVerificationMiddleware().process(ctx, call_next)
 
     assert '"price":49.99' in response.text
-    assert pid in response.text  # corrected in place, not stripped
+    assert pid in response.text  # 原地修正，而非删除。

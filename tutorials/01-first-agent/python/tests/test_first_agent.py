@@ -1,14 +1,13 @@
 """
-Tests for Chapter 01 — Your First Agent.
+第 01 章 —— 你的第一个智能体：测试。
 
-Three modes:
-- Unit tests use a canned BaseChatClient subclass — no LLM calls, run anywhere.
-- The replay test plays back a committed fixture (tests/fixtures/replay/) via
-  LLM_PROVIDER=replay — no credentials, runs in CI.
-- The integration test hits a real LLM using keys from the repo-root .env, to
-  verify against an actual model (not just the fixture). Skipped when
-  OPENAI_API_KEY (or Azure equivalent) is missing. Also how the fixture used
-  by the replay test above was recorded — see main.py's module docstring.
+三种模式：
+- 单元测试使用一个预置回答的 BaseChatClient 子类 —— 不调用 LLM，随处可跑。
+- 回放测试通过 LLM_PROVIDER=replay 回放一份已提交的夹具
+  （tests/fixtures/replay/）—— 无需凭据，可在 CI 中运行。
+- 集成测试用仓库根目录 .env 里的密钥访问真实 LLM，以便对照真实模型
+  （而不只是夹具）验证。缺少 OPENAI_API_KEY（或 Azure 对应变量）时跳过。
+  上面那份回放测试所用的夹具也正是这样录制的 —— 见 main.py 的模块文档字符串。
 """
 
 from __future__ import annotations
@@ -21,7 +20,7 @@ from typing import Any
 
 import pytest
 
-# Bootstrap MAF + load repo-root .env before touching agent_framework.
+# 在触碰 agent_framework 之前先引导 MAF 并加载仓库根目录的 .env。
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[4]))
 from tutorials._shared import maf_bootstrap  # noqa: E402
 
@@ -34,7 +33,7 @@ from main import FIXTURES_DIR, INSTRUCTIONS, _default_client, ask, build_agent  
 
 
 class CannedChatClient(BaseChatClient):
-    """Test-only chat client that returns canned responses and records inputs."""
+    """仅供测试使用的 chat client：返回预置回答并记录输入。"""
 
     def __init__(self, *canned: str) -> None:
         super().__init__()
@@ -61,24 +60,23 @@ class CannedChatClient(BaseChatClient):
         return _return()
 
 
-# ───────────────────── Unit tests (no LLM) ──────────────────────
+# ───────────────────── 单元测试（不涉及 LLM） ──────────────────────
 
 
 def test_build_agent_uses_instructions() -> None:
     client = CannedChatClient("Paris.")
     agent = build_agent(client=client)
     assert isinstance(agent, Agent)
-    # MAF stores system instructions inside default_options, not as a top-level attribute.
+    # MAF 把系统指令存在 default_options 里，而不是作为顶层属性。
     assert agent.default_options["instructions"] == INSTRUCTIONS
     assert agent.name == "first-agent"
 
 
 def test_default_client_honors_llm_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Phase 9: LLM_BASE_URL is what lets LLM_PROVIDER=openai point at any
-    OpenAI-compatible endpoint (Ollama, LM Studio, vLLM, OpenRouter, GitHub
-    Models) instead of api.openai.com. Every tutorial chapter shares this
-    exact _default_client() shape — this is the representative test; the
-    other 22 chapters' main.py files use the identical construction.
+    """Phase 9：正是 LLM_BASE_URL 让 LLM_PROVIDER=openai 可以指向任何兼容
+    OpenAI 的端点（Ollama、LM Studio、vLLM、OpenRouter、GitHub Models），
+    而不必是 api.openai.com。每个教程章节都共用这同一个 `_default_client()`
+    形状 —— 这里是代表性测试；其余 22 章的 main.py 用的是完全相同的构造。
     """
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.setenv("OPENAI_API_KEY", "ollama")
@@ -118,14 +116,14 @@ async def test_system_instructions_reach_chat_client() -> None:
     agent = build_agent(client=client)
     await ask(agent, "What is the capital of Australia?")
 
-    assert client.calls, "expected at least one call to the chat client"
+    assert client.calls, "期望至少有一次对 chat client 的调用"
     sent_messages, sent_options = client.calls[0]
-    # MAF can carry instructions either in ChatOptions or as a system message in the list.
+    # MAF 可以把指令放在 ChatOptions 里，也可以作为消息列表中的一条 system 消息。
     options_instructions = sent_options.get("instructions", "") if isinstance(sent_options, Mapping) else ""
     system_texts = [m.text for m in sent_messages if str(m.role).lower() == "system"]
     combined = options_instructions + " " + " ".join(system_texts)
     assert INSTRUCTIONS in combined, (
-        f"system instructions missing — options={options_instructions!r} messages={system_texts!r}"
+        f"缺少系统指令 —— options={options_instructions!r} messages={system_texts!r}"
     )
 
 
@@ -142,32 +140,32 @@ async def test_user_question_reaches_chat_client() -> None:
 
 @pytest.mark.asyncio
 async def test_run_out_of_canned_responses_raises() -> None:
-    client = CannedChatClient()  # no canned responses
+    client = CannedChatClient()  # 没有预置回答
     agent = build_agent(client=client)
     with pytest.raises(AssertionError, match="ran out of responses"):
         await ask(agent, "nothing to say")
 
 
-# ─────────────────── Replay test (no credentials, runs in CI) ────
+# ─────────────────── 回放测试（无需凭据，可在 CI 中运行） ────
 
 
 @pytest.mark.asyncio
 async def test_replay_answers_capital_of_france(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Plays back tests/fixtures/replay/ — no network, no credentials.
+    """回放 tests/fixtures/replay/ —— 不走网络、不需凭据。
 
-    Recorded once against a real LLM (test_real_llm_answers_capital_of_france
-    below, run with RECORD=true) and committed. This is what lets this
-    chapter's "real LLM" assertion run in CI on every PR.
+    曾针对真实 LLM 录制过一次（即下方的 test_real_llm_answers_capital_of_france，
+    以 RECORD=true 运行），随后提交入库。正是它让本章那条「真实 LLM」断言能在
+    每个 PR 的 CI 中运行。
     """
     if not any(FIXTURES_DIR.glob("*.json")):
-        pytest.skip(f"no recorded fixtures in {FIXTURES_DIR} — run with RECORD=true first")
+        pytest.skip(f"{FIXTURES_DIR} 中没有已录制的夹具 —— 请先以 RECORD=true 运行")
     monkeypatch.setenv("LLM_PROVIDER", "replay")
     agent = build_agent()
     answer = await ask(agent, "What is the capital of France? Answer with the city name only.")
-    assert "paris" in answer.lower(), f"expected Paris in answer, got: {answer!r}"
+    assert "paris" in answer.lower(), f"期望答案中出现 Paris，实际为：{answer!r}"
 
 
-# ─────────────────── Integration test (hits LLM) ────────────────
+# ─────────────────── 集成测试（访问真实 LLM） ────────────────
 
 
 def _llm_available() -> bool:
@@ -182,9 +180,9 @@ def _llm_available() -> bool:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-@pytest.mark.skipif(not _llm_available(), reason="no LLM credentials in .env")
+@pytest.mark.skipif(not _llm_available(), reason=".env 中没有 LLM 凭据")
 async def test_real_llm_answers_capital_of_france() -> None:
-    """Hit the real LLM to prove the whole stack works end-to-end."""
+    """访问真实 LLM，以证明整条链路端到端可用。"""
     agent = build_agent()
     answer = await ask(agent, "What is the capital of France? Answer with the city name only.")
-    assert "paris" in answer.lower(), f"expected Paris in answer, got: {answer!r}"
+    assert "paris" in answer.lower(), f"期望答案中出现 Paris，实际为：{answer!r}"

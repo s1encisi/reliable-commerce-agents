@@ -1,67 +1,57 @@
-# Graphs in agent systems
+# 智能体系统中的图
 
-> **New to this?** [The agent loop](https://nitinksingh.com/ai-resources/02-agents/the-agent-loop/) on the AI Knowledge Hub covers the
-> same ground from scratch, vendor-neutral, with a lab you can run locally for free.
-> This page assumes the concept and shows how it is built *here*.
+> **初次接触？** 本页假定你已经了解这个概念，重点展示它在本项目中是如何实现的。
 
-## What it is
+## 它是什么
 
-A graph, in this context, is a fixed structure of **nodes** (units of work — here, "executors":
-plain classes that do one job, like "check stock" or "merge results") connected by **edges**
-(which node's output feeds which node's input). Once built, the graph's shape doesn't change per
-request — every run walks the same nodes in the same order, except where the graph explicitly
-allows branching or concurrency.
+在这个语境下，图（graph）是一种固定的结构：**节点**（工作单元——这里指「执行器」：只做一件事
+的普通类，比如「查库存」或「合并结果」）由**边**（哪个节点的输出喂给哪个节点的输入）连接。一旦
+构建完成，图的形状就不会随请求变化——每次运行都按相同顺序走过相同的节点，除非图明确允许分支
+或并发。
 
-This is a different idea from an if/else ladder even though both are "fixed logic," because a
-graph makes the *shape* of the computation a first-class, inspectable thing: you can list every
-node, list every edge, and render the whole thing as a diagram, without executing it. An if-ladder
-buried across several functions can't be inspected that way — you'd have to read the code to
-reconstruct the shape.
+这与 if/else 阶梯是不同的概念，尽管两者都是「固定逻辑」，因为图让计算的*形状*成为一等、可检查
+的东西：你可以列出每个节点、每条边，并把整体渲染成一张图，而无需执行它。散落在多个函数里的
+if 阶梯无法这样被检查——你必须读代码才能重建出形状。
 
-## Why it matters
+## 为什么重要
 
-Once a system has more than a handful of fixed steps, an if-ladder starts hiding real structure.
-Consider "check reviews, check stock, and check price history, then merge all three before
-answering" — as nested conditionals and sequential calls, it's not obvious from a glance that the
-three checks *can* run concurrently and don't depend on each other, or where exactly the "wait for
-all three" point is. As a graph with an explicit fan-out to three nodes and a fan-in back to one,
-that structure is the *definition*, not an inference you have to make from reading imperative code.
+一旦系统有超过一小撮固定步骤，if 阶梯就开始掩盖真实结构。想想「查评论、查库存、查价格历史，
+然后在回答前把三者合并」——写成嵌套条件和顺序调用时，一眼看不出这三项检查*可以*并发运行、
+彼此不依赖，也看不出「等三项都完成」这一点究竟在哪。写成一张带显式扇出到三个节点、再扇入回
+一个节点的图，这个结构就是*定义本身*，而不是你必须读命令式代码才能推断出来的东西。
 
-Graphs also buy you things imperative code doesn't get for free: automatic parallelism (the fan-out
-above runs three nodes concurrently just by being drawn that way — the runtime doesn't need to be
-told to use `asyncio.gather`), a natural place to persist progress mid-run (checkpoint after any
-node — see [state, memory, and sessions](08-state-memory-and-sessions.md)), and a structure you can
-render as a live diagram instead of describing in prose.
+图还能给你一些命令式代码无法免费获得的东西：自动并行（上面那个扇出仅仅因为画成这样，三个
+节点就并发运行——运行框架不需要被额外告知去用 `asyncio.gather`）、运行中途持久化进度的自然
+位置（任意节点之后都可打检查点——见[状态、记忆与会话](08-state-memory-and-sessions.md)），以及
+一个可以渲染成实时图、而不必用文字描述的结构。
 
-## When to use it — and when not to
+## 什么时候用——什么时候不用
 
-Reach for a graph when the steps and their dependencies are fixed and you want that structure to
-be explicit and inspectable — especially once concurrency or a mid-run pause enters the picture.
-[Orchestration patterns](06-orchestration-patterns.md) covers `workflow:pre-purchase` and
-`workflow:return-replace`, the two modes in this repo built this way.
+当步骤及其依赖关系固定、且你希望这个结构显式且可检查时，就用图——尤其是当并发或运行中途暂停
+进入画面之后。[编排模式](06-orchestration-patterns.md)介绍了 `workflow:pre-purchase` 和
+`workflow:return-replace`，本仓库中以这种方式构建的两种模式。
 
-**Don't** reach for a graph when the sequence of steps genuinely needs to vary per request based
-on the model's judgment — that's what `tool` or `handoff` mode are for. A graph's whole value is
-that its shape is fixed; forcing a graph to encode "sometimes step B, sometimes step C, depending
-on what the model decides" usually means smuggling a router back in through conditional edges,
-at which point you've built the flexibility of `tool` mode with more ceremony.
+**不要**在步骤顺序确实需要根据模型判断随请求变化时用图——那是 `tool` 或 `handoff` 模式的用武
+之地。图的全部价值就在于它的形状是固定的；强迫图去表达「有时步骤 B、有时步骤 C，取决于模型
+怎么决定」，通常意味着通过条件边偷偷把一个路由器塞回来，到那时你就是用更多的繁文缛节实现了
+`tool` 模式的灵活性。
 
-## How it works here
+## 本项目怎么实现
 
-[`workflows/pre_purchase.py`](https://github.com/nitin27may/e-commerce-agents/blob/main/agents/python/workflows/pre_purchase.py) is a real fan-out/fan-in graph. Six executor classes, each a small,
-focused unit of work:
+[`workflows/pre_purchase.py`](../../agents/python/workflows/pre_purchase.py) 是一张真实的扇出/扇入图。六个执行器类，每一个都是一个
+小的、聚焦的工作单元：
 
 ```python
 # agents/python/workflows/pre_purchase.py
-class _FanOutExecutor(Executor):        # line 49 — kicks off the three parallel checks
-class _ReviewsExecutor(Executor):       # line 60
-class _StockExecutor(Executor):         # line 79
-class _PriceHistoryExecutor(Executor):  # line 98
-class _MergeAndShipExecutor(Executor):  # line 117 — waits for all three, merges
-class _SynthesisExecutor(Executor):     # line 148 — final answer
+class _FanOutExecutor(Executor):        # 第 49 行 —— 启动三项并行检查
+class _ReviewsExecutor(Executor):       # 第 60 行
+class _StockExecutor(Executor):         # 第 79 行
+class _PriceHistoryExecutor(Executor):  # 第 98 行
+class _MergeAndShipExecutor(Executor):  # 第 117 行 —— 等待三项全部完成并合并
+class _SynthesisExecutor(Executor):     # 第 148 行 —— 最终回答
 ```
 
-And the edges that connect them, `_build_maf_workflow()` at line 229:
+连接它们的边，`_build_maf_workflow()` 在第 229 行：
 
 ```python
 # agents/python/workflows/pre_purchase.py
@@ -74,29 +64,26 @@ return (
 )
 ```
 
-Read that literally: one start node, fanning out to three nodes that run concurrently, fanning
-back in to one merge node, then a plain edge to synthesis. That's the entire shape of the
-workflow — no hidden branching, nothing else going on.
+直白地读：一个起始节点，扇出到三个并发运行的节点，再扇入合并到一个归并节点，然后一条普通边
+连到综合节点。这就是这条工作流的全部形状——没有隐藏分支，没有别的东西。
 
-This graph isn't just internal structure — it's rendered live. `PrePurchaseMode.graph_mermaid()`
-([`orchestrator/modes/workflow_mode.py`](https://github.com/nitin27may/e-commerce-agents/blob/main/agents/python/orchestrator/modes/workflow_mode.py)) returns a Mermaid string built from the *same*
-executor ids used at runtime, and the web UI ([`web/src/components/chat/orchestration-graph.tsx`](https://github.com/nitin27may/e-commerce-agents/blob/main/web/src/components/chat/orchestration-graph.tsx))
-fetches that string and re-applies the house palette client-side (lines 20-23) to animate nodes
-from idle → active → done as real `event: node` SSE frames arrive during a run. The id convention
-that makes this correlation possible — dashes in an executor id become underscores in the Mermaid
-node id, and back — is implemented on both sides deliberately, not by coincidence:
-`workflow_mode.py`'s comment explains the graph-side half, `toMermaidId()`
-([`orchestration-graph.tsx`](https://github.com/nitin27may/e-commerce-agents/blob/main/web/src/components/chat/orchestration-graph.tsx)) is the client-side half.
+这张图不只是内部结构——它会被实时渲染。`PrePurchaseMode.graph_mermaid()`
+（[`orchestrator/modes/workflow_mode.py`](../../agents/python/orchestrator/modes/workflow_mode.py)）返回一段 Mermaid 字符串，由运行时使用的*同一批*
+执行器 id 构建，Web UI（[`web/src/components/chat/orchestration-graph.tsx`](../../web/src/components/chat/orchestration-graph.tsx)）获取该字符串
+并在客户端重新套用项目配色（第 20-23 行），在一次运行中真实的 `event: node` SSE 帧到达时，把
+节点从空闲 → 活跃 → 完成依次动画展示。让这种对应关系得以成立的 id 约定——执行器 id 里的连字符
+在 Mermaid 节点 id 里变成下划线，再变回来——是两端刻意实现的，不是巧合：`workflow_mode.py` 的
+注释解释了图这一半，`toMermaidId()`
+（[`orchestration-graph.tsx`](../../web/src/components/chat/orchestration-graph.tsx)）是客户端那一半。
 
-**Not every mode has a graph.** `is_graph=True`/`False` on each mode's `capabilities`
-([`orchestrator/modes/base.py`](https://github.com/nitin27may/e-commerce-agents/blob/main/agents/python/orchestrator/modes/base.py)) is an honest signal, not a formality: `tool` mode
-(`tool_router.py`) and `handoff` mode (`handoff_mode.py`) both set `is_graph=True` or
-`False` correctly, but only three of the five registered modes — `workflow:pre-purchase`,
-`workflow:return-replace`, and `group-chat` — actually implement `graph_mermaid()` with real
-output. `tool_router.py` and `handoff_mode.py` both return `None`: a plain LLM tool
-router has no fixed graph to draw (the "graph" is different on every request, since the model
-decides it), and `handoff`'s mesh doesn't render a live diagram yet even though its topology is
-fixed — a real gap, not a design choice, tracked rather than glossed over.
+**并非每种模式都有图。** 每种模式的 `capabilities` 上的 `is_graph=True`/`False`
+（[`orchestrator/modes/base.py`](../../agents/python/orchestrator/modes/base.py)）是一个诚实的信号，不是形式主义：`tool` 模式
+（`tool_router.py`）和 `handoff` 模式（`handoff_mode.py`）都正确设置了 `is_graph=True` 或
+`False`，但五个已注册模式中只有三个——`workflow:pre-purchase`、`workflow:return-replace` 和
+`group-chat`——真正实现了有真实输出的 `graph_mermaid()`。`tool_router.py` 和 `handoff_mode.py`
+都返回 `None`：一个普通的 LLM 工具路由器没有固定图可画（每个请求的「图」都不同，因为由模型
+决定），而 `handoff` 的网状图尽管拓扑固定，却还没有渲染成实时图——这是一个真实的缺口，不是
+设计取舍，被记录在案而不是被粉饰过去。
 
 ```mermaid
 %%{init: {'theme':'base', 'themeVariables': {
@@ -119,5 +106,5 @@ flowchart LR
   class reviews,stock,price,merge core
 ```
 
-Next: [state, memory, and sessions](08-state-memory-and-sessions.md) — including how a paused
-graph like `workflow:return-replace`'s survives past the request that paused it.
+下一页：[状态、记忆与会话](08-state-memory-and-sessions.md) —— 包括像 `workflow:return-replace`
+这样被暂停的图，如何活过暂停它的那个请求。

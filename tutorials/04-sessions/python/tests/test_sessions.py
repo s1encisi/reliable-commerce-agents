@@ -1,9 +1,8 @@
 """
-Chapter 04 — Sessions and Memory: tests.
+第 04 章 —— 会话与记忆：测试。
 
-- Unit tests round-trip an AgentSession through a dict (no LLM).
-- Integration test proves persistence across fresh agent invocations
-  against real Azure OpenAI.
+- 单元测试让 AgentSession 走一遍 dict 往返（不涉及 LLM）。
+- 集成测试针对真实的 Azure OpenAI，证明持久化能跨全新的智能体实例生效。
 """
 
 from __future__ import annotations
@@ -24,7 +23,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from agent_framework import AgentSession  # noqa: E402
 from main import FIXTURES_DIR, ask_and_save, build_agent  # noqa: E402
 
-# ─────────── Unit tests (no LLM) ───────────
+# ─────────── 单元测试（不涉及 LLM） ───────────
 
 
 def test_session_roundtrip_preserves_session_id() -> None:
@@ -32,7 +31,7 @@ def test_session_roundtrip_preserves_session_id() -> None:
     original.state["foo"] = "bar"
     as_dict = original.to_dict()
 
-    # Must round-trip through JSON (the on-disk format).
+    # 必须能走一遍 JSON 往返（也就是磁盘上的存储格式）。
     rehydrated = AgentSession.from_dict(json.loads(json.dumps(as_dict)))
     assert rehydrated.session_id == "sess-42"
 
@@ -40,7 +39,7 @@ def test_session_roundtrip_preserves_session_id() -> None:
 def test_session_to_dict_is_json_serialisable() -> None:
     session = AgentSession()
     session.state["hello"] = "world"
-    json.dumps(session.to_dict())  # raises if not serialisable
+    json.dumps(session.to_dict())  # 不可序列化时会抛错
 
 
 def test_session_state_is_roundtrip_safe() -> None:
@@ -61,22 +60,21 @@ def test_fresh_session_has_new_id() -> None:
     assert a.session_id != b.session_id
 
 
-# ─────────── Replay test (no credentials, runs in CI) ───────────
+# ─────────── 回放测试（无需凭据，可在 CI 中运行） ───────────
 
 
 @pytest.mark.asyncio
 async def test_replay_session_persists_across_fresh_agent_instances(
     monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
 ) -> None:
-    """Plays back tests/fixtures/replay/ — no network, no credentials.
+    """回放 tests/fixtures/replay/ —— 不走网络、不需凭据。
 
-    Recorded once against a real LLM
-    (test_session_persists_across_fresh_agent_instances below, run with
-    RECORD=true) and committed. Two turns, so two fixtures are involved —
-    one per turn's message history.
+    曾针对真实 LLM 录制过一次（即下方的
+    test_session_persists_across_fresh_agent_instances，以 RECORD=true 运行），
+    随后提交入库。因为是两轮，会涉及两份夹具 —— 每轮的消息历史各一份。
     """
     if not any(FIXTURES_DIR.glob("*.json")):
-        pytest.skip(f"no recorded fixtures in {FIXTURES_DIR} — run with RECORD=true first")
+        pytest.skip(f"{FIXTURES_DIR} 中没有已录制的夹具 —— 请先以 RECORD=true 运行")
     monkeypatch.setenv("LLM_PROVIDER", "replay")
     session_file = tmp_path / "session.json"
 
@@ -90,10 +88,10 @@ async def test_replay_session_persists_across_fresh_agent_instances(
         "What did I say I wanted to buy? Answer with the SKU only.",
         session_file,
     )
-    assert "SKU-4471" in answer.upper(), f"expected 'SKU-4471' in follow-up answer, got: {answer!r}"
+    assert "SKU-4471" in answer.upper(), f"期望追问的回答中出现 'SKU-4471'，实际为：{answer!r}"
 
 
-# ─────────── Integration: real LLM persistence ───────────
+# ─────────── 集成测试：真实 LLM 的持久化 ───────────
 
 
 def _llm_available() -> bool:
@@ -109,11 +107,11 @@ def _llm_available() -> bool:
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-@pytest.mark.skipif(not _llm_available(), reason="no LLM credentials in .env")
+@pytest.mark.skipif(not _llm_available(), reason=".env 中没有 LLM 凭据")
 async def test_session_persists_across_fresh_agent_instances(tmp_path: pathlib.Path) -> None:
     """
-    Save a fact in turn 1 against one Agent instance, discard that agent,
-    build a brand-new one, load the session, and ask a follow-up.
+    在第 1 轮用一个 Agent 实例存下一个事实，丢弃该智能体，构建一个全新的，
+    加载会话，然后追问。
     """
     session_file = tmp_path / "session.json"
 
@@ -121,12 +119,12 @@ async def test_session_persists_across_fresh_agent_instances(tmp_path: pathlib.P
     await ask_and_save(agent1, "Remember: I want to buy SKU-4471.", session_file)
     assert session_file.exists()
 
-    # Build a fresh agent (a separate Agent instance, which is what the
-    # second CLI invocation of main.py would do).
+    # 构建一个全新的智能体（另一个 Agent 实例，也就是第二次从命令行
+    # 调用 main.py 时会做的事）。
     agent2 = build_agent()
     answer = await ask_and_save(
         agent2,
         "What did I say I wanted to buy? Answer with the SKU only.",
         session_file,
     )
-    assert "SKU-4471" in answer.upper(), f"expected 'SKU-4471' in follow-up answer, got: {answer!r}"
+    assert "SKU-4471" in answer.upper(), f"期望追问的回答中出现 'SKU-4471'，实际为：{answer!r}"

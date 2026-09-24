@@ -1,8 +1,7 @@
 """
-Chapter 09 — Workflow Executors and Edges: tests.
+第 09 章 —— 工作流执行器与边：测试。
 
-No LLM — workflow logic is deterministic so we can assert exactly on the
-event stream and final outputs.
+不涉及 LLM —— 工作流逻辑是确定性的，因此我们可以精确断言事件流与最终输出。
 """
 
 from __future__ import annotations
@@ -50,8 +49,7 @@ async def test_workflow_wires_executors_and_edges() -> None:
 @pytest.mark.asyncio
 async def test_event_stream_reports_executor_invocations_in_order() -> None:
     workflow = build_workflow()
-    # Materialise every event via get_final_response-compatible API by
-    # exhausting the async generator.
+    # 通过把异步生成器耗尽，把每一个事件都实体化出来。
     stream = workflow.run("ord-1234", stream=True)
     events = [event async for event in stream]
     invoked = [

@@ -1,15 +1,15 @@
 """
-MAF v1 — Chapter 04: Sessions and Memory (Python)
+MAF v1 — 第 04 章：会话与记忆（Python）
 
-Persist an AgentSession to disk between process runs. Demonstrates:
-  - InMemoryHistoryProvider storing conversation in session state.
-  - session.to_dict() / AgentSession.from_dict() for disk persistence.
-  - The saved session, reloaded in a separate process, still carries prior turns.
+在两次进程运行之间把 AgentSession 持久化到磁盘。演示：
+  - InMemoryHistoryProvider 把对话存进会话状态。
+  - session.to_dict() / AgentSession.from_dict() 用于磁盘持久化。
+  - 保存下来的会话在另一个进程里重新加载后，仍带着之前的轮次。
 
-Usage:
-    # Turn 1 writes session.json:
+用法：
+    # 第 1 轮写入 session.json：
     python tutorials/04-sessions/python/main.py save "Remember: I want to buy SKU-4471."
-    # Turn 2 reads session.json and asks a follow-up:
+    # 第 2 轮读取 session.json 并追问：
     python tutorials/04-sessions/python/main.py load "What did I say I wanted to buy?"
 """
 
@@ -54,9 +54,9 @@ def _default_client() -> OpenAIChatClient | OpenAIChatCompletionClient | ReplayC
     return OpenAIChatClient(
         model=os.environ.get("LLM_MODEL", "gpt-4.1"),
         api_key=os.environ["OPENAI_API_KEY"],
-        # Phase 9: any OpenAI-compatible endpoint (GitHub Models, OpenRouter,
-        # vLLM, LM Studio, Ollama) instead of api.openai.com — see
-        # tutorials/00-setup/README.md's "Don't have a paid API key?" section.
+        # Phase 9：可指向任何兼容 OpenAI 的端点（GitHub Models、OpenRouter、
+        # vLLM、LM Studio、Ollama），而不必是 api.openai.com —— 见
+        # tutorials/00-setup/README.md 的「没有付费 API key？」一节。
         base_url=os.environ.get("LLM_BASE_URL") or None,
     )
 
@@ -66,13 +66,13 @@ def build_agent(client: object | None = None) -> Agent:
         client or _default_client(),
         instructions=INSTRUCTIONS,
         name="stateful-agent",
-        # InMemoryHistoryProvider turns AgentSession into a conversation carrier.
+        # InMemoryHistoryProvider 让 AgentSession 成为对话的载体。
         context_providers=[InMemoryHistoryProvider()],
     )
 
 
 async def ask_and_save(agent: Agent, question: str, path: pathlib.Path) -> str:
-    """Run one turn on a fresh-or-loaded session, then persist the session to disk."""
+    """在全新或已加载的会话上跑一轮，然后把会话持久化到磁盘。"""
     session = _load_or_new(agent, path)
     response = await agent.run(question, session=session)
     _save(session, path)
@@ -97,14 +97,14 @@ async def main() -> None:
     if mode == "reset":
         if SESSION_FILE.exists():
             SESSION_FILE.unlink()
-        print("Session cleared.")
+        print("会话已清除。")
         return
 
     agent = build_agent()
     answer = await ask_and_save(agent, question, SESSION_FILE)
-    print(f"Q: {question}")
-    print(f"A: {answer}")
-    print(f"(session persisted to {SESSION_FILE.name})")
+    print(f"问：{question}")
+    print(f"答：{answer}")
+    print(f"（会话已持久化到 {SESSION_FILE.name}）")
 
 
 if __name__ == "__main__":

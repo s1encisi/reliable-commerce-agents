@@ -1,20 +1,17 @@
 """
-MAF v1 — Chapter 29: Planner-Executor (Python)
+MAF v1 — 第 29 章：规划器-执行器（Python）
 
-Decompose a user request into an ordered plan up front (structured Pydantic
-output from a "planner" agent), then execute each step in sequence with an
-"executor" agent — a step might be a product-catalog search or a reasoning
-step over earlier results. The plan is printed before any step runs, then
-each step's result is printed as it executes.
+先把用户请求分解成一份有序计划（由「规划器」智能体输出 Pydantic 结构化
+结果），再用「执行器」智能体逐步顺序执行 —— 某一步可能是商品目录检索，
+也可能是对前面结果的推理。计划会在任何一步执行之前先打印出来，随后每
+执行一步就打印该步结果。
 
-Contrast with the router/tool pattern (Chapters 02, 12+ / this repo's own
-"tool" orchestration mode): there, the LLM decides one tool call at a time,
-reactively, with no advance plan. Here, the whole plan is committed to and
-inspectable up front — more predictable, easier to approve or cost-estimate,
-but less adaptive to a step's surprise result unless you add re-planning
-(not implemented here — see "Gotchas").
+与路由器 / 工具模式（第 02、12 章及以后 / 本仓库自有的「tool」编排模式）
+对比：那里由 LLM 反应式地一次决定一个工具调用，没有预先计划。这里整份
+计划在开始前就已确定且可检视 —— 更可预测、更易审批或估算成本，但对某
+一步的意外结果适应性较差，除非你加入重规划（本章未实现 —— 见「常见坑」）。
 
-Run:
+运行：
     python tutorials/29-planner-executor/python/main.py \
         "help me put together a birthday gift for someone who likes photography under $200"
 """
@@ -60,8 +57,8 @@ EXECUTOR_INSTRUCTIONS = (
     "conversation. Keep your answer to a few sentences and stay focused on this one step."
 )
 
-# Toy in-memory catalog. Deliberately self-contained — this chapter does not
-# import Chapter 24's RAG catalog, to keep the two chapters independent.
+# 玩具级内存目录。刻意自包含 —— 本章不导入第 24 章的 RAG 目录，
+# 以保持两章彼此独立。
 _CATALOG: list[dict[str, object]] = [
     {
         "name": "Compact Mirrorless Camera",
@@ -129,7 +126,7 @@ def search_products(
     return "\n".join(f"- {m['name']} (${m['price']:.0f}): {m['description']}" for m in matches)
 
 
-# ─────────────────── The plan: structured output, not free text ──────────
+# ─────────────────── 计划：结构化输出，而非自由文本 ──────────
 
 
 class PlanStep(BaseModel):
@@ -164,15 +161,15 @@ def _default_client() -> OpenAIChatClient | OpenAIChatCompletionClient | ReplayC
     return OpenAIChatClient(
         model=os.environ.get("LLM_MODEL", "gpt-4.1"),
         api_key=os.environ["OPENAI_API_KEY"],
-        # Phase 9: any OpenAI-compatible endpoint (GitHub Models, OpenRouter,
-        # vLLM, LM Studio, Ollama) instead of api.openai.com — see
-        # tutorials/00-setup/README.md's "Don't have a paid API key?" section.
+        # Phase 9：可指向任何兼容 OpenAI 的端点（GitHub Models、OpenRouter、
+        # vLLM、LM Studio、Ollama），而不必是 api.openai.com —— 见
+        # tutorials/00-setup/README.md 的「没有付费 API key？」一节。
         base_url=os.environ.get("LLM_BASE_URL") or None,
     )
 
 
 def build_planner_agent(client: object | None = None) -> Agent:
-    """The planner: no tools, structured `Plan` output only."""
+    """规划器：不带工具，只输出结构化的 `Plan`。"""
     return Agent(
         client or _default_client(),
         instructions=PLANNER_INSTRUCTIONS,
@@ -181,7 +178,7 @@ def build_planner_agent(client: object | None = None) -> Agent:
 
 
 def build_executor_agent(client: object | None = None) -> Agent:
-    """The executor: runs one step at a time, with the catalog tool and a shared session."""
+    """执行器：一次执行一步，带目录检索工具与共享会话。"""
     return Agent(
         client or _default_client(),
         instructions=EXECUTOR_INSTRUCTIONS,
@@ -192,7 +189,7 @@ def build_executor_agent(client: object | None = None) -> Agent:
 
 
 async def make_plan(planner: Agent, request: str) -> Plan:
-    """Ask the planner for a structured Plan. Raises if the model didn't return parseable JSON."""
+    """向规划器索取结构化的 Plan。若模型未返回可解析的 JSON 则抛错。"""
     response = await planner.run(request, options={"response_format": Plan})
     plan = response.value
     if plan is None:
@@ -201,7 +198,7 @@ async def make_plan(planner: Agent, request: str) -> Plan:
 
 
 async def run_step(executor: Agent, session: AgentSession, step: PlanStep) -> str:
-    """Execute exactly one plan step. All steps share one session, so step N sees step N-1's result."""
+    """只执行一个计划步骤。所有步骤共享同一个会话，因此第 N 步能看到第 N-1 步的结果。"""
     if step.query:
         prompt = f"Step {step.step}: {step.action} Use search_products with query={step.query!r}."
     else:
@@ -211,7 +208,7 @@ async def run_step(executor: Agent, session: AgentSession, step: PlanStep) -> st
 
 
 async def run_plan(request: str) -> tuple[Plan, list[str]]:
-    """Plan the whole request up front, then execute each step in order. Returns (plan, per-step results)."""
+    """先把整个请求规划好，再按顺序执行每一步。返回 (plan, 每步结果)。"""
     planner = build_planner_agent()
     executor = build_executor_agent()
     plan = await make_plan(planner, request)

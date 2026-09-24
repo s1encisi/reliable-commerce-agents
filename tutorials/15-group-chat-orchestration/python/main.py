@@ -1,19 +1,8 @@
-"""
-MAF v1 — Chapter 15: Group Chat Orchestration (Python)
+"""第 15 章：群聊编排。
 
-Three agents — Writer, Critic, Editor — discuss a short piece of copy. A
-centralized manager picks who speaks next each round. Two manager strategies
-are demonstrated:
-
-  1. Round-robin via ``selection_func`` — a plain function over GroupChatState
-     that picks the next speaker by index. Deterministic, no LLM call.
-  2. Prompt-driven via ``orchestrator_agent`` — a full ``Agent`` acts as the
-     manager and chooses the next speaker (and when to stop) from the roster
-     and the conversation so far.
-
-Run:
-    python tutorials/15-group-chat-orchestration/python/main.py "slogan for a coffee shop"
-    python tutorials/15-group-chat-orchestration/python/main.py "slogan for a coffee shop" prompt
+写作者、评论者和编辑讨论文案。演示两种管理策略：selection_func
+按索引轮询，不调用模型；orchestrator_agent 由模型根据已有对话
+决定下一位发言者和终止时机。运行命令中的提示字符串保持与夹具一致。
 """
 
 from __future__ import annotations
@@ -54,9 +43,9 @@ def _default_client() -> OpenAIChatClient | OpenAIChatCompletionClient | ReplayC
     return OpenAIChatClient(
         model=os.environ.get("LLM_MODEL", "gpt-4.1"),
         api_key=os.environ["OPENAI_API_KEY"],
-        # Phase 9: any OpenAI-compatible endpoint (GitHub Models, OpenRouter,
-        # vLLM, LM Studio, Ollama) instead of api.openai.com — see
-        # tutorials/00-setup/README.md's "Don't have a paid API key?" section.
+        # 第 9 阶段：可用任意 OpenAI 兼容端点（GitHub Models、OpenRouter、
+        # vLLM、LM Studio、Ollama）替代 api.openai.com——见
+        # tutorials/00-setup/README.md 的「没有付费 API 密钥怎么办？」一节。
         base_url=os.environ.get("LLM_BASE_URL") or None,
     )
 
@@ -94,23 +83,20 @@ def editor() -> Agent:
 
 
 def round_robin_selector(state: GroupChatState) -> str:
-    """Round-robin: pick participants by index for each round.
+    """按轮次索引轮询参与者。
 
-    GroupChatState.participants is an OrderedDict[name, description]. Returning
-    the name at ``current_round % n`` cycles through the roster deterministically.
-    ``max_rounds=3`` on the builder caps total turns.
+    participants 为有序映射，current_round % n 决定下一位；
+    构建器 max_rounds=3 限制总轮数。
     """
     names = list(state.participants.keys())
     return names[state.current_round % len(names)]
 
 
 def prompt_driven_orchestrator() -> Agent:
-    """Build an LLM-backed orchestrator agent that picks the next speaker.
+    """创建选择下一位发言者的模型管理智能体。
 
-    Returning an ``Agent`` as ``orchestrator_agent`` on ``GroupChatBuilder``
-    wires a prompt-driven manager: each round MAF asks this agent (with the
-    conversation so far) which participant should speak next. No custom code
-    required beyond the instructions.
+    通过 GroupChatBuilder.orchestrator_agent 接入，MAF 每轮提供已有
+    对话并请求选择，无需另写管理循环。
     """
     return Agent(
         _default_client(),
@@ -128,11 +114,9 @@ def prompt_driven_orchestrator() -> Agent:
 
 
 def build_workflow(strategy: str = "round-robin"):
-    """Build the group-chat workflow for the given manager strategy.
+    """按管理策略构建群聊。
 
-    ``strategy`` accepts:
-        * ``"round-robin"`` — deterministic walk via ``selection_func``.
-        * ``"prompt"``      — LLM-driven via ``orchestrator_agent``.
+    round-robin 使用确定性选择函数，prompt 使用模型管理智能体。
     """
     participants = [writer(), critic(), editor()]
 
@@ -140,7 +124,7 @@ def build_workflow(strategy: str = "round-robin"):
         return GroupChatBuilder(
             participants=participants,
             orchestrator_agent=prompt_driven_orchestrator(),
-            # Hard safety net; the orchestrator may finish earlier.
+            # 硬性安全网；编排器可能更早结束。
             max_rounds=4,
         ).build()
 
@@ -152,21 +136,17 @@ def build_workflow(strategy: str = "round-robin"):
 
 
 async def _workflow_events(workflow, message: str):
-    """Yield workflow events from a streaming run.
+    """输出工作流流式事件。
 
-    ``workflow.run(..., stream=True)`` drives each participant's turn through
-    MAF's streaming AgentExecutor path, which in turn streams the chat
-    client's response. ``ReplayChatClient`` (see
-    tutorials/_shared/replay_client.py) wires the same finalizer real clients
-    use, so replay mode streams correctly through this same path — no
-    provider-specific branch needed here.
+    MAF 通过流式 AgentExecutor 驱动参与者；回放客户端也安装相同
+    终结器，因此无需按提供方分支处理。
     """
     async for event in workflow.run(message, stream=True):
         yield event
 
 
 async def run(topic: str, strategy: str = "round-robin") -> list[tuple[str, str]]:
-    """Run the group chat and return ``[(speaker, text)]`` in turn order."""
+    """执行群聊，按轮次返回（发言者，文本）列表。"""
     workflow = build_workflow(strategy)
     turns: list[tuple[str, str]] = []
     async for event in _workflow_events(workflow, topic):

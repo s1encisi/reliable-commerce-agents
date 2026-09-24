@@ -1,9 +1,8 @@
 """
-Chapter 31 — Retry and Compensation (Saga Pattern): tests.
+第 31 章 —— 重试与补偿（Saga 模式）：测试。
 
-No LLM — the saga engine is deterministic orchestration logic, so every
-assertion here is exact: which steps ran, which failed, which compensations
-fired, and in what order.
+不涉及 LLM —— saga 引擎是确定性的编排逻辑，因此这里每条断言都是精确的：
+哪些步骤跑了、哪一步失败、哪些补偿被触发，以及它们的顺序。
 """
 
 from __future__ import annotations
@@ -22,7 +21,7 @@ from main import (  # noqa: E402
     run_saga,
 )
 
-# ─────────────────── Happy path ──────────────────
+# ─────────────────── 顺利路径 ──────────────────
 
 
 def test_happy_path_completes_all_steps_with_no_compensation() -> None:
@@ -35,14 +34,14 @@ def test_happy_path_completes_all_steps_with_no_compensation() -> None:
     assert result.failed_step is None
     assert result.compensated_steps == []
 
-    # Real side effects landed in all three backends.
+    # 真实副作用已落到三个后端上。
     assert backends.stock["widget"] == 8
     assert backends.reservations["widget"] == 2
     assert backends.payments["order-1"] == 49.99
     assert backends.shipments["order-1"] == "created"
 
 
-# ─────────────────── Genuine failure -> immediate compensation ──────────
+# ─────────────────── 真实失败 -> 立即补偿 ──────────
 
 
 def test_payment_declined_compensates_reserved_stock_only() -> None:
@@ -53,29 +52,26 @@ def test_payment_declined_compensates_reserved_stock_only() -> None:
     assert result.succeeded is False
     assert result.completed_steps == ["reserve_stock"]
     assert result.failed_step == "charge_payment"
-    # Compensation walks backward: only reserve_stock had completed, so only
-    # release_stock runs.
+    # 补偿反向遍历：只有 reserve_stock 已完成，所以只跑 release_stock。
     assert result.compensated_steps == ["reserve_stock"]
 
-    # The stock reservation was fully undone.
+    # 库存预留已被完全撤销。
     assert backends.stock["widget"] == 10
     assert backends.reservations["widget"] == 0
     assert "order-3" not in backends.payments
 
 
 def test_payment_declined_is_not_retried() -> None:
-    """PaymentDeclinedError must trigger compensation on the first failure —
-    retrying a declined card is exactly the anti-pattern this chapter warns
-    against.
+    """PaymentDeclinedError 必须在首次失败时就触发补偿 ——
+    重试一张被拒的卡正是本章所警告的反模式。
     """
     backends = Backends()
     steps = build_place_order_saga(backends, "order-x", "widget", 1, 10.0, fail_payment=True)
     result = run_saga("order-x", steps, max_attempts=5)
 
     assert result.failed_step == "charge_payment"
-    # Only stock's compensation ran; nothing suggests charge_payment was
-    # attempted more than once (no retry bookkeeping to check, but the
-    # unwound stock count proves the saga stopped after the first failure).
+    # 只有库存的补偿跑了；没有任何迹象表明 charge_payment 被尝试了不止一次
+    # （没有重试记录可供检查，但被回滚的库存数证明了 saga 在首次失败后就停了）。
     assert backends.stock["widget"] == 10
 
 
@@ -87,8 +83,7 @@ def test_shipment_failure_unwinds_both_earlier_steps_in_reverse_order() -> None:
     assert result.succeeded is False
     assert result.completed_steps == ["reserve_stock", "charge_payment"]
     assert result.failed_step == "create_shipment"
-    # Reverse order: payment was charged after stock was reserved, so it
-    # must be refunded before stock is released.
+    # 逆序：支付是在库存预留之后扣的，所以必须先退款再释放库存。
     assert result.compensated_steps == ["charge_payment", "reserve_stock"]
 
     assert backends.stock["widget"] == 10
@@ -99,16 +94,16 @@ def test_shipment_failure_unwinds_both_earlier_steps_in_reverse_order() -> None:
 
 def test_out_of_stock_is_a_genuine_failure_not_retried() -> None:
     backends = Backends()
-    steps = build_place_order_saga(backends, "order-5", "gadget", 1, 10.0)  # gadget stock is 0
+    steps = build_place_order_saga(backends, "order-5", "gadget", 1, 10.0)  # gadget 库存为 0
     result = run_saga("order-5", steps, max_attempts=5)
 
     assert result.failed_step == "reserve_stock"
-    # Nothing completed before the failing step, so nothing to compensate.
+    # 失败步骤之前没有任何步骤完成，因此无需补偿。
     assert result.completed_steps == []
     assert result.compensated_steps == []
 
 
-# ─────────────────── Transient failure -> retry with backoff ────────────
+# ─────────────────── 瞬时故障 -> 带退避重试 ────────────
 
 
 def test_transient_failure_retries_then_succeeds() -> None:
@@ -118,12 +113,12 @@ def test_transient_failure_retries_then_succeeds() -> None:
 
     assert result.succeeded is True
     assert result.completed_steps == ["reserve_stock", "charge_payment", "create_shipment"]
-    # Confirms the retries actually happened: two failed calls, then attempt 3 succeeded.
+    # 证实重试确实发生了：两次调用失败，第 3 次成功。
     assert backends._reserve_attempts == 3
 
 
 def test_transient_failure_exhausts_retries_and_compensates() -> None:
-    # Flakier than max_attempts allows for — every attempt fails.
+    # 抖动程度超出 max_attempts 所能容忍的范围 —— 每次尝试都失败。
     backends = Backends(reserve_stock_flaky_calls=5)
     steps = build_place_order_saga(backends, "order-6", "widget", 1, 10.0)
     result = run_saga("order-6", steps, max_attempts=3, base_delay=0.0)
@@ -136,15 +131,15 @@ def test_transient_failure_exhausts_retries_and_compensates() -> None:
 
 
 def test_non_retryable_step_does_not_retry_on_transient_error() -> None:
-    """Only steps marked retryable=True get retried. Force a TransientError
-    on a non-retryable step (charge_payment) by monkeypatching its action,
-    and confirm the saga compensates instead of looping.
+    """只有标记了 retryable=True 的步骤才会被重试。通过对动作打猴子补丁，
+    在一个不可重试的步骤（charge_payment）上强行制造 TransientError，
+    确认 saga 会补偿而不是空转。
     """
     calls = {"count": 0}
 
     def flaky_non_retryable_action() -> None:
         calls["count"] += 1
-        raise TransientError("simulated blip on a step that isn't marked retryable")
+        raise TransientError("在未标记为可重试的步骤上模拟一次瞬时抖动")
 
     steps = [
         SagaStep(
@@ -162,11 +157,11 @@ def test_non_retryable_step_does_not_retry_on_transient_error() -> None:
     result = run_saga("order-7", steps, max_attempts=5)
 
     assert result.failed_step == "flaky_step"
-    assert calls["count"] == 1  # no retry — retryable=False wins even for a TransientError
+    assert calls["count"] == 1  # 没有重试 —— 即使是 TransientError，retryable=False 也优先
     assert result.compensated_steps == ["reserve_stock"]
 
 
-# ─────────────────── Visible unwind in stdout ────────────────────────────
+# ─────────────────── stdout 中可见的回滚 ────────────────────────────
 
 
 def test_unwind_is_printed_in_reverse_order(capsys) -> None:
@@ -181,7 +176,7 @@ def test_unwind_is_printed_in_reverse_order(capsys) -> None:
     assert "reserve_stock" in compensate_lines[1]
 
 
-# ─────────────────── Exception types ─────────────────────────────────────
+# ─────────────────── 异常类型 ─────────────────────────────────────
 
 
 def test_exception_types_are_distinguishable() -> None:

@@ -1,7 +1,7 @@
 # 开发环境与待登录服务
 
-项目需要 Python 3.12、uv、Node.js 22、pnpm 10.15.0、.NET SDK 10 和 Docker Compose。
-Python 后端及两个 MCP 包、教程、前端和 .NET 示例分别安装，避免不同环境互相覆盖。
+项目需要 Python 3.12、uv、Node.js 22、pnpm 10.15.0 和 Docker Compose。
+Python 后端及两个 MCP 包、教程和前端分别安装，避免不同环境互相覆盖。
 
 ## 安装与检查
 
@@ -25,9 +25,8 @@ Python 的 `httpx[socks]` 支持本地 SOCKS 代理。Docker daemon 不自动继
 终端能下载软件但 `docker pull` 超时，需要为 Docker 单独配置代理，或用已配置代理的镜像工具下载并导入。
 本机已在 `.local/bin/crane` 准备经过发布校验和验证的镜像下载工具，安装脚本的 `--images`
 会优先使用它，并跳过已有镜像；它只对这些公开镜像使用临时匿名配置，不改动现有 Docker 登录信息。
-Python 和 .NET 的 Testcontainers 分别还需要 `testcontainers/ryuk:0.8.1`、`testcontainers/ryuk:0.14.0`。
-Aspire 镜像不含 shell，因此不再使用容器内 shell 健康探针；启动后可用
-`curl -fL http://localhost:18888/ -o /dev/null` 检查面板实际可访问。
+Jaeger 镜像不含 shell，因此不使用容器内 shell 健康探针；启动后可用
+`curl -fL http://localhost:16686/ -o /dev/null` 检查界面实际可访问。
 
 ## 回来后登录或填写
 
@@ -56,7 +55,7 @@ Hugging Face 登录不会自动把主项目切换成 Hugging Face 推理。
 Docker Compose 为容器单独提供内部服务地址。基础设施已启动并初始化演示数据；标准 Docker
 全栈启动仍会首次构建 agent 和前端镜像，需要能访问基础镜像仓库及软件源。
 真实配置、令牌、工具缓存和测试日志不会提交；本地安装记录位于 `.claude/memory/`，日志位于 `.local/`。
-认证是项目自带的 JWT/OAuth 服务，PostgreSQL、Redis 和 Aspire 不需要外部账号。
+认证是项目自带的 JWT/OAuth 服务，PostgreSQL、Redis 和 Jaeger 不需要外部账号。
 
 ```bash
 # 标准 Docker 启动：先填写 .env 中的模型凭据。

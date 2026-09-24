@@ -1,60 +1,15 @@
-"""Record/replay chat client — runs agents against a frozen LLM cassette.
+"""教程的模型响应录制与回放客户端。
 
-Removes the paid-key wall for running any tutorial chapter: with
-``LLM_PROVIDER=replay`` and a committed fixtures directory, an agent runs
-exactly as it did when the fixture was recorded, with zero network calls and
-zero credentials.
+replay 默认读取章节 tests/fixtures/replay，无网络和凭据。只有
+RECORD=true 且夹具缺失时，才经指定真实提供方录制，需相应授权。
 
-Usage::
+每轮按有序消息、系统指令及工具模式计算请求哈希。组合真实
+FunctionInvocationLayer，使回放仍执行本地工具并推进下一轮。
+录制直接读取底层单轮响应，保留 function_call，不能提前执行完整循环。
+流式输出按消息分块，不是逐 token。
 
-    LLM_PROVIDER=replay uv run --project tutorials python tutorials/01-first-agent/python/main.py
-    LLM_PROVIDER=replay RECORD=true uv run --project tutorials python tutorials/01-first-agent/python/main.py
-
-The first form plays back whatever is already in the chapter's
-``tests/fixtures/replay`` directory. The second form additionally falls
-through to a real call — via ``REPLAY_RECORD_PROVIDER`` (``openai`` or
-``azure``, read straight from ``os.environ`` the same way each chapter's own
-``_default_client()`` already does) — whenever a fixture is missing, and
-persists the response before returning it. Re-running with ``RECORD`` unset
-then replays deterministically with no network access at all.
-
-Design notes:
-
-- Fixtures are keyed by a hash of the exact request (every message, in
-  order, plus the tool schemas offered) — not the response. A conversation
-  with N turns, or a tool-calling loop with N model calls, produces N
-  fixture files, each keyed on the request state at that point. This falls
-  naturally out of how ``BaseChatClient._inner_get_response`` is invoked:
-  MAF calls it once per model turn, and the message list already reflects
-  prior turns (including appended tool results) by the time of each call.
-- This class composes ``FunctionInvocationLayer`` directly with
-  ``BaseChatClient``, the same layering ``OpenAIChatClient`` uses internally
-  (``OpenAIChatClient``'s MRO is
-  ``FunctionInvocationLayer -> ChatMiddlewareLayer -> ChatTelemetryLayer ->
-  RawOpenAIChatClient -> BaseChatClient``) minus the middleware/telemetry
-  layers, which a replay client doesn't need. This is what makes recorded
-  tool-calling fixtures replay correctly: the recorded response can contain
-  a ``function_call`` content item, and ``FunctionInvocationLayer`` actually
-  executes the real local tool function and re-invokes
-  ``_inner_get_response`` with the tool result appended — exactly like a
-  live model would drive the loop, just without a live model.
-- Recording always calls the real client's ``_inner_get_response`` directly
-  (not its public ``get_response()``), for the same reason: providers like
-  ``OpenAIChatClient`` also layer ``FunctionInvocationLayer`` on top of their
-  raw client, and if recording went through that layer it would execute
-  tools *during recording* — leaving nothing to replay, since the fixture
-  would only ever contain the already-resolved final answer. Calling
-  ``_inner_get_response`` directly captures the raw, single-turn response —
-  including a raw ``function_call`` when the model wants one — so replay
-  reproduces the same tool-invocation loop, not just its answer.
-- Streaming isn't token-level here: the full recorded/replayed response is
-  emitted as one ``ChatResponseUpdate`` per message.
-- ``agents/python/shared/replay_client.py`` is a second, independent copy of
-  this file — the production app reads credentials from
-  ``shared.config.settings``, not raw ``os.environ``, so the two can't share
-  a single implementation without a cross-workspace dependency this repo
-  doesn't have. Same precedent as ``tutorials/_shared/maf_bootstrap.py`` /
-  ``agents/python/patch_maf.py``. Keep the two in sync when either changes.
+应用端另有独立实现，读取 Settings；教程读取环境变量且不依赖
+应用工作区。公共机制同步维护，数据库易变值归一化仅存在于应用端。
 """
 
 from __future__ import annotations
@@ -77,19 +32,13 @@ logger = logging.getLogger(__name__)
 
 
 class ReplayFixtureMissingError(RuntimeError):
-    """Raised in replay mode when no fixture exists for a request.
-
-    Not raised when ``record=True`` — a missing fixture then triggers a real
-    call instead.
-    """
+    """回放缺少夹具时抛出；record=True 则改为真实调用。"""
 
 
 def _canonical_request(messages: Any, options: dict[str, Any] | None) -> dict[str, Any]:
-    """JSON-serializable, hashable view of a request: every message plus tool schemas.
+    """生成包含消息和工具模式的可序列化请求视图。
 
-    Deliberately excludes sampling params (temperature, etc.) from the key —
-    those don't change what a cassette should replay, and excluding them
-    means minor prompt-adjacent config tweaks don't invalidate every fixture.
+    采样参数不参与键，避免无关配置调整使全部夹具失效。
     """
     tools = (options or {}).get("tools") or []
     tool_specs: list[dict[str, Any]] = []
@@ -101,9 +50,9 @@ def _canonical_request(messages: Any, options: dict[str, Any] | None) -> dict[st
     return {
         "messages": [m.to_dict() for m in messages],
         "tools": tool_specs,
-        # Agent-level system instructions travel in options, not as a message
-        # — include them so "same question, different instructions" doesn't
-        # collide on one fixture.
+        # 系统指令位于 options，
+        # 也必须加入哈希，防止不同指令
+        # 错误命中同一夹具。
         "instructions": (options or {}).get("instructions"),
     }
 
@@ -114,11 +63,7 @@ def _request_hash(canonical: dict[str, Any]) -> str:
 
 
 class ReplayChatClient(FunctionInvocationLayer, BaseChatClient):
-    """``BaseChatClient`` that serves recorded fixtures instead of calling a live LLM.
-
-    See the module docstring for the record/replay contract and why this
-    composes ``FunctionInvocationLayer`` directly.
-    """
+    """用录制夹具代替真实模型的客户端，并保留实际工具执行层。"""
 
     OTEL_PROVIDER_NAME = "replay"
 
@@ -136,11 +81,9 @@ class ReplayChatClient(FunctionInvocationLayer, BaseChatClient):
         self._record_client: BaseChatClient | None = None
 
     def _build_record_client(self) -> BaseChatClient:
-        """Lazily build the real client used only when recording a missing fixture.
+        """仅录制缺失夹具时按需构造真实客户端。
 
-        Reads credentials straight from ``os.environ``, matching every
-        chapter's own ``_default_client()`` — the tutorials workspace has no
-        settings singleton equivalent to ``shared.config``.
+        与各章默认客户端一样直接读取环境变量，教程没有应用端配置单例。
         """
         if self._record_client is not None:
             return self._record_client
@@ -222,13 +165,13 @@ class ReplayChatClient(FunctionInvocationLayer, BaseChatClient):
                 for msg in response.messages:
                     yield ChatResponseUpdate(role=msg.role, contents=msg.contents, author_name=msg.author_name)
 
-            # _build_response_stream (not a bare ResponseStream(_gen())) wires
-            # the finalizer that turns the update chunks back into a
-            # ChatResponse. Skipping it works for a direct agent.run(stream=True)
-            # caller that only consumes the update iterator, but breaks under
-            # MAF's own streaming call sites (e.g. an AgentExecutor inside a
-            # WorkflowBuilder) that call ResponseStream.get_final_response() —
-            # without a finalizer that raises, not returns a ChatResponse.
+            # 使用 _build_response_stream 安装终结器，
+            # 将分块重新合成为
+            # ChatResponse。裸 ResponseStream 虽可迭代，
+            # 但 MAF 工作流内部
+            # 还会调用最终响应接口，
+            # 没有终结器时 get_final_response()
+            # 会抛错，而非返回预期结果。
             return self._build_response_stream(_gen())
 
         return self._load_or_record(messages, options)

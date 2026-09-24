@@ -1,13 +1,8 @@
-"""
-MAF v1 — Chapter 20: Workflow Visualization (Python)
+"""第 20 章：工作流可视化。
 
-Render a MAF workflow as Mermaid and Graphviz DOT so you can commit
-diagrams alongside code, include them in docs, and diff graph changes
-in PRs.
-
-Run:
-    python tutorials/20-visualization/python/main.py
-    # writes workflow.mmd and workflow.dot alongside this script.
+把真实 MAF 图输出为 Mermaid 和 Graphviz DOT，供文档展示与差异审阅。
+运行 python tutorials/20-visualization/python/main.py，
+在脚本同目录写入 workflow.mmd 与 workflow.dot。
 """
 
 import asyncio
@@ -62,10 +57,7 @@ def build_workflow():
     validate = ValidateExecutor()
     log = LogExecutor()
     return (
-        WorkflowBuilder(start_executor=up, name="demo-pipeline")
-        .add_edge(up, validate)
-        .add_edge(validate, log)
-        .build()
+        WorkflowBuilder(start_executor=up, name="demo-pipeline").add_edge(up, validate).add_edge(validate, log).build()
     )
 
 

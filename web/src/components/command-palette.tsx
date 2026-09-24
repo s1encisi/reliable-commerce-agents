@@ -8,26 +8,27 @@ import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { visibleGroups, type NavItem } from "@/lib/nav";
 import { DEMO_SCENARIOS, chatPromptHref } from "@/lib/scenarios";
+import { STATUS_CONFIG } from "@/components/status-badge";
 import { cn } from "@/lib/utils";
 
 const OPEN_EVENT = "ecommerce:open-command-palette";
 
-/** Open the command palette from anywhere (e.g. the top-bar search button). */
+/** 从任意位置打开命令面板（例如顶栏的搜索按钮）。 */
 export function openCommandPalette() {
   window.dispatchEvent(new CustomEvent(OPEN_EVENT));
 }
 
 type RecentOrder = { id: string; status: string; total: number };
 
-/** Unified item for keyboard navigation. */
+/** 键盘导航使用的统一条目类型。 */
 type PaletteItem =
   | { kind: "nav"; nav: NavItem }
   | { kind: "scenario"; label: string; description: string; href: string }
   | { kind: "order"; order: RecentOrder };
 
 /**
- * Cmd/Ctrl-K command palette — navigation, demo scenarios, and recent orders.
- * Mounted once in the app layout.
+ * Cmd/Ctrl-K 命令面板——聚合导航、演示场景与最近订单。
+ * 在应用布局中挂载一次即可。
  */
 export function CommandPalette() {
   const router = useRouter();
@@ -44,7 +45,7 @@ export function CommandPalette() {
     [isAdmin, isSeller],
   );
 
-  // Fetch recent orders when palette opens (top 5, no caching needed)
+  // 面板打开时拉取最近订单（取前 5 条，无需缓存）
   useEffect(() => {
     if (!open || !user) return;
     api
@@ -81,11 +82,13 @@ export function CommandPalette() {
       if (item.kind === "nav") return item.nav.label.toLowerCase().includes(q);
       if (item.kind === "scenario")
         return `${item.label} ${item.description}`.toLowerCase().includes(q);
-      // orders: match on id prefix or status
+      // 订单：按 id 前缀、状态（英文原值或中文标签）匹配
+      const statusLabel = STATUS_CONFIG[item.order.status]?.label ?? item.order.status;
       return (
         item.order.id.toLowerCase().startsWith(q) ||
         item.order.status.toLowerCase().includes(q) ||
-        `order #${item.order.id.slice(0, 8)}`.includes(q)
+        statusLabel.includes(q) ||
+        `订单 #${item.order.id.slice(0, 8)}`.includes(q)
       );
     });
   }, [allItems, query]);
@@ -166,7 +169,7 @@ export function CommandPalette() {
         showCloseButton={false}
         className="overflow-hidden p-0 sm:max-w-lg"
       >
-        <DialogTitle className="sr-only">Command palette</DialogTitle>
+        <DialogTitle className="sr-only">命令面板</DialogTitle>
         <div className="flex items-center gap-2 border-b px-3">
           <Search className="size-4 shrink-0 text-muted-foreground" />
           <input
@@ -177,8 +180,8 @@ export function CommandPalette() {
               setActive(0);
             }}
             onKeyDown={onInputKey}
-            placeholder="Search pages, scenarios, or orders…"
-            aria-label="Search pages, scenarios, or orders"
+            placeholder="搜索页面、场景或订单…"
+            aria-label="搜索页面、场景或订单"
             className="h-11 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
           <kbd className="hidden rounded border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground sm:inline">
@@ -189,15 +192,15 @@ export function CommandPalette() {
         <div className="max-h-[26rem] overflow-y-auto">
           {isEmpty && (
             <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-              No results
+              无匹配结果
             </p>
           )}
 
-          {/* Nav pages */}
+          {/* 页面导航 */}
           {filteredNav.length > 0 && (
             <section>
               <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Pages
+                页面
               </p>
               <ul className="px-2 pb-1">
                 {filteredNav.map((item, i) => {
@@ -229,11 +232,11 @@ export function CommandPalette() {
             </section>
           )}
 
-          {/* Demo scenarios */}
+          {/* 演示场景 */}
           {filteredScenarios.length > 0 && (
             <section>
               <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Demo scenarios
+                演示场景
               </p>
               <ul className="px-2 pb-1">
                 {filteredScenarios.map((item, i) => {
@@ -267,11 +270,11 @@ export function CommandPalette() {
             </section>
           )}
 
-          {/* Recent orders */}
+          {/* 最近订单 */}
           {filteredOrders.length > 0 && (
             <section>
               <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Recent orders
+                最近订单
               </p>
               <ul className="px-2 pb-2">
                 {filteredOrders.map((item, i) => {
@@ -292,10 +295,10 @@ export function CommandPalette() {
                       >
                         <Package className="size-4 shrink-0 text-muted-foreground" />
                         <span className="flex-1 font-medium">
-                          Order #{o.id.slice(0, 8)}
+                          订单 #{o.id.slice(0, 8)}
                         </span>
-                        <span className="text-xs capitalize text-muted-foreground">
-                          {o.status}
+                        <span className="text-xs text-muted-foreground">
+                          {STATUS_CONFIG[o.status]?.label ?? o.status}
                         </span>
                         {globalIdx === active && (
                           <CornerDownLeft className="size-3.5 shrink-0 text-muted-foreground" />

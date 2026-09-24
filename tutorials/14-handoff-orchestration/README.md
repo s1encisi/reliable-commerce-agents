@@ -1,21 +1,23 @@
-# Chapter 14 — Handoff Orchestration
+# 第 14 章 · 移交式编排（Handoff）
 
-## Why this chapter
+[项目首页](../../README.md) · [教程总览](../README.md) · [术语表](../_shared/jargon-glossary.md)
 
-Sequential and Concurrent orchestration (Chapters 12 and 13) both predetermine the flow — the graph shape is fixed before any agent runs. Handoff lets the *agents* decide where the conversation goes next. A Triage agent reads the question and hands off to the right specialist by emitting a synthesized `handoff_to_<name>` tool call; specialists can hand back to Triage for follow-ups. It's the mesh topology that powers customer-support bots and research assistants that pull in domain experts on demand — and it's the same shape this repo's capstone uses to let the orchestrator route live traffic to specialist agents mechanically instead of through hand-rolled tool logic.
+## 本章动机
 
-Canonical example: **Triage agent routes to a Math or History specialist, which can hand back for follow-ups.**
+顺序编排与并发编排（第 12、13 章）都会预先确定流程——图的结构在任何智能体运行之前就已固定。移交（Handoff）则让**智能体自己**决定对话接下来走向哪里。一个分诊（Triage）智能体会先读问题，然后通过发出一个合成的 `handoff_to_<name>` 工具调用来把控制权交给合适的专家；专家也可以交回分诊智能体以处理追问。这就是支撑客服机器人与研究助手的网状拓扑——它们按需引入领域专家。本项目的完整系统也采用同一形状：编排器据此把线上请求机械地路由给专家智能体，而不必手写工具逻辑。
 
-## Prerequisites
+典型示例：**分诊智能体路由到数学或历史专家，专家可交回以处理追问。**
 
-- Completed [Chapter 13 — Concurrent Orchestration](../13-concurrent-orchestration/)
-- Repo-root `.env` with one LLM provider: `OPENAI_API_KEY` (+ optional `LLM_MODEL`, default `gpt-4.1`) or `AZURE_OPENAI_ENDPOINT` / `AZURE_OPENAI_KEY` / `AZURE_OPENAI_DEPLOYMENT` (+ optional `AZURE_OPENAI_API_VERSION`, default `2024-10-21`)
+## 前置条件
 
-## The concept
+- 已完成[第 13 章 · 并发编排](../13-concurrent-orchestration/)
+- 仓库根目录的 `.env` 中配置一个 LLM 提供方：`OPENAI_API_KEY`（可选 `LLM_MODEL`，默认 `gpt-4.1`），或 `AZURE_OPENAI_ENDPOINT` / `AZURE_OPENAI_KEY` / `AZURE_OPENAI_DEPLOYMENT`（可选 `AZURE_OPENAI_API_VERSION`，默认 `2024-10-21`）
 
-`HandoffBuilder` wires a set of agents into a mesh and, for every declared edge, synthesizes a `handoff_to_<name>` tool on the source agent. The current speaker decides — using its own reasoning over the conversation so far — whether to answer directly or call that tool and pass control to a target. Nothing external routes the conversation; the routing decision lives entirely inside each agent's own LLM call.
+## 核心概念
 
-That autonomy is also the risk. A mesh with no exit condition can bounce a conversation between two agents indefinitely, each one legitimately deciding to hand back. `with_autonomous_mode(agents=..., turn_limits={...})` bounds that: it keeps the loop running without waiting for a human turn between hops, but caps how many turns each named agent gets before the workflow is forced to stop.
+`HandoffBuilder` 把一组智能体连成网状，并为每一条声明的边在源智能体上合成一个 `handoff_to_<name>` 工具。当前发言者依据自身对既有对话的推理，决定是直接作答，还是调用该工具把控制权交给目标。**没有任何外部组件在路由对话**——路由决策完全存在于每个智能体自己的 LLM 调用之内。
+
+这种自主性同时也是风险所在。一个没有退出条件的网状结构会让两个智能体无限来回：每一跳单独看都合理，但没有全局视角。`with_autonomous_mode(agents=..., turn_limits={...})` 对此加以约束：它让循环在无需人工介入的情况下持续运行，同时限制每个具名智能体在流程被强制停止前可获得的轮次上限。
 
 ```mermaid
 %%{init: {'theme':'base', 'themeVariables': {
@@ -27,17 +29,17 @@ flowchart LR
   classDef external fill:#f59e0b,stroke:#b45309,color:#000000
   classDef success  fill:#10b981,stroke:#047857,color:#ffffff
 
-  user([User question])
-  triage[Triage agent]
-  math[Math specialist]
-  history[History specialist]
-  answer([Final answer])
+  user([用户提问])
+  triage[分诊智能体]
+  math[数学专家]
+  history[历史专家]
+  answer([最终答案])
 
   user --> triage
   triage -- "handoff_to_math" --> math
   triage -- "handoff_to_history" --> history
-  math -- "handoff_to_triage (follow-up)" --> triage
-  history -- "handoff_to_triage (follow-up)" --> triage
+  math -- "handoff_to_triage（追问）" --> triage
+  history -- "handoff_to_triage（追问）" --> triage
   math --> answer
   history --> answer
 
@@ -47,11 +49,11 @@ flowchart LR
   class answer success
 ```
 
-Each specialist decides for itself whether to hand back — the mesh has no central router; every edge is a tool call one agent chooses to make.
+每个专家自行决定是否交回——网状结构中没有中心路由器，每一条边都是某个智能体选择发起的工具调用。
 
 ## Python
 
-Run from the repo root using the shared `tutorials/` uv project (one `uv sync` covers every chapter):
+在仓库根目录运行，使用共享的 `tutorials/` uv 项目（一次 `uv sync` 覆盖全部章节）：
 
 ```bash
 uv sync --project tutorials
@@ -59,7 +61,7 @@ uv run --project tutorials python tutorials/14-handoff-orchestration/python/main
 uv run --project tutorials pytest tutorials/14-handoff-orchestration/python/tests -v
 ```
 
-Source: [`python/main.py`](./python/main.py). The mesh is built in `build_workflow()`:
+源码：[`python/main.py`](./python/main.py)。网状结构在 `build_workflow()` 中构建：
 
 ```python
 def build_workflow():
@@ -70,16 +72,16 @@ def build_workflow():
         HandoffBuilder(participants=[t, m, h])
         .with_start_agent(t)
         .add_handoff(t, [m, h])
-        .add_handoff(m, [t])  # specialists can hand back to triage for follow-ups
+        .add_handoff(m, [t])  # 专家可交回分诊智能体以处理追问
         .add_handoff(h, [t])
         .with_autonomous_mode(agents=[t, m, h], turn_limits={"triage": 3, "math": 2, "history": 2})
         .build()
     )
 ```
 
-Every participant Agent is constructed with `require_per_service_call_history_persistence=True` — as of `agent-framework-orchestrations>=1.0.1`, `HandoffBuilder.build()` requires this on every participant because its middleware short-circuits tool calls during a handoff, so local history has to stay in sync with what the service actually saw.
+每个参与者 `Agent` 都以 `require_per_service_call_history_persistence=True` 构造——自 `agent-framework-orchestrations>=1.0.1` 起，`HandoffBuilder.build()` 要求每个参与者都设置该参数，因为其中间件会在移交期间短路工具调用，本地历史必须与服务端实际看到的内容保持一致。
 
-`ask()` drives the workflow with `stream=True` and reconstructs each agent's turn from the event stream:
+`ask()` 以 `stream=True` 驱动流程，并从事件流中重建每个智能体的发言：
 
 ```python
 async for event in _workflow_events(workflow, question):
@@ -100,77 +102,39 @@ async for event in _workflow_events(workflow, question):
             handoffs.append(target)
 ```
 
-Running `"What's 37 * 42?"` routes `triage → math` and prints the numeric answer; running `"When did WWII end?"` routes `triage → history` and prints `1945`.
+运行 `"37 * 42 等于多少？"` 会走 `triage → math` 并打印数值答案；运行 `"二战是哪一年结束的？"` 会走 `triage → history` 并打印 `1945`。
 
-## .NET
+## 常见坑
 
-```bash
-cd tutorials/14-handoff-orchestration/dotnet
-dotnet run -- "What is 37 * 42?"
-```
+- **每个参与者都必须有显式的移交边。** 如果你把某个智能体声明为参与者，却从未对它调用 `add_handoff(agent, [...])`，该智能体就无法调用任何移交工具——它能接收控制权，却永远无法移交或交回。
+- **轮次上限用于防止无限循环。** 如果 Python 的 `with_autonomous_mode(...)` 中没有为每个智能体设置 `turn_limits={}`，分诊智能体与专家之间合理的来回往返可能无限循环，因为每一跳都是局部合理的决策，没有任何一方掌握对话的全局视图。
+- **当前 Python 版本中 `require_per_service_call_history_persistence=True` 是强制项。** `agent-framework-orchestrations>=1.0.1` 的 `HandoffBuilder.build()` 在任何参与者 `Agent` 遗漏该参数时会直接抛错——其中间件会在移交期间短路工具调用，因此每个智能体的本地历史必须跟踪服务端实际看到的内容。
+- **`HandoffBuilder` 的网状构建对 `PYTHONHASHSEED` 敏感。** 本章发现 MAF 内部使用类集合结构来构建参与者网状图，因此写入专家追问轮次的精确文本——进而这些轮次的回放夹具哈希——会随 Python 的逐进程哈希随机化而变化。其他编排章节（12/13/15/16）都没有触发这一点，它们的参与者列表按列表顺序消费。`python/tests/fixtures/replay/` 下的回放夹具是在 `PYTHONHASHSEED=0` 下录制的，回放测试在同一固定值未设置时会跳过自身，而 CI（`.github/workflows/tutorials.yml`）正是在作业级别设置 `PYTHONHASHSEED: "0"`，原因就是本章。
 
-[`dotnet/Program.cs`](./dotnet/Program.cs) uses the convenience builder to wire the same mesh shape:
+## 测试
 
-```csharp
-Workflow workflow = AgentWorkflowBuilder.CreateHandoffBuilderWith(triage)
-    .WithHandoffs(triage, new[] { mathTutor, historyTutor })
-    .WithHandoffs(new[] { mathTutor, historyTutor }, triage)
-    .Build();
-```
+`python/tests/test_handoff.py` 侧重集成——网状结构需要真实 LLM 才能做路由决策，因此大部分用例在无凭据时会被跳过：
 
-The run loop watches `AgentResponseUpdateEvent` for streamed text (printing the executor id the first time each agent speaks) and pulls the final transcript off the `WorkflowOutputEvent` whose `Data` is a `List<ChatMessage>`. `description` on each `AsAIAgent(...)` call shows up as the default handoff reason the builder stamps into that agent's synthesized `handoff_to_<name>` tool schema.
-
-## Side-by-side differences
-
-| Aspect | Python | .NET |
-|--------|--------|------|
-| Declare mesh | `HandoffBuilder(participants=[...]).add_handoff(source, [targets])` | `AgentWorkflowBuilder.CreateHandoffBuilderWith(start).WithHandoffs(source, targets)` |
-| Autonomy | `.with_autonomous_mode(agents=[...], turn_limits={...})` | Interactive loop via `RunStreamingAsync` + `TrySendMessageAsync(new TurnToken(...))` |
-| Observe handoffs | `handoff_sent` event, `event.data.target` | Inferred from `AgentResponseUpdateEvent.ExecutorId` changing |
-| Streamed text | `output` event, `event.data.text` (an `AgentResponseUpdate`) | `AgentResponseUpdateEvent.Update.Text` |
-| Per-participant history requirement | `require_per_service_call_history_persistence=True` on every `Agent` | Not required — handled by the .NET builder internally |
-
-## Gotchas
-
-- **Every participant needs an explicit handoff edge.** If you declare an agent as a participant but never call `add_handoff(agent, [...])` / `WithHandoffs(agent, ...)` for it, that agent can't invoke any handoff tool — it can receive control but never hand off or hand back.
-- **Turn limits prevent infinite loops.** Without `turn_limits={}` per agent in Python's `with_autonomous_mode(...)`, a legitimate back-and-forth between triage and a specialist can cycle indefinitely, since each hop is a locally reasonable decision with no global view of the conversation.
-- **`require_per_service_call_history_persistence=True` is mandatory in current Python.** `HandoffBuilder.build()` in `agent-framework-orchestrations>=1.0.1` raises if any participant Agent omits it — its middleware short-circuits tool calls during a handoff, so each agent's local history has to track what the service actually saw.
-- **The MAF v1.0 empty-`__init__.py` packaging bug is fixed, but the fix wasn't a new tutorial file.** `agents/python/patch_maf.py` still exists as a documented no-op — the bug it patched (`agent-framework-core==1.0.0` shipping an empty `__init__.py` with no public re-exports) was fixed upstream by `agent-framework` 1.14.0, which this repo now pins, so `patch()` only writes when the target file is empty (never, on a current install). The bootstrap tutorials actually rely on today is `tutorials/_shared/maf_bootstrap.py`, called at the top of `main.py` before any `agent_framework` import.
-- **`HandoffBuilder`'s mesh construction is sensitive to `PYTHONHASHSEED`.** This chapter discovered that MAF builds its participant mesh from a set-like collection internally, so the exact text baked into a specialist's follow-up turns — and therefore the replay-fixture hash for those turns — varies with Python's per-process hash randomization. None of the other orchestration chapters (12/13/15/16) hit this; their participant lists are consumed in list order. The replay fixtures under `python/tests/fixtures/replay/` were recorded with `PYTHONHASHSEED=0`, the replay test skips itself unless that same pin is set, and CI (`.github/workflows/tutorials.yml`) sets `PYTHONHASHSEED: "0"` at the job level specifically because of this chapter.
-
-## Tests
-
-
-`python/tests/test_handoff.py` is integration-focused — the mesh needs a real LLM to make routing decisions, so most of it is skipped without credentials:
-
-- A wiring test (`test_workflow_builds`) that always runs.
-- A keyless replay test (`test_replay_routes_math_to_math_agent`) that plays back a committed fixture via `LLM_PROVIDER=replay` — this is what CI exercises on every PR, gated on `PYTHONHASHSEED=0` per the gotcha above.
-- Three `@pytest.mark.integration` tests against a real LLM: routing math to the math agent, routing history to the history agent, and asserting math/history questions diverge in which specialists they reach.
+- 一个接线测试（`test_workflow_builds`），始终运行。
+- 一个无需密钥的回放测试（`test_replay_routes_math_to_math_agent`），通过 `LLM_PROVIDER=replay` 回放已提交的夹具——这正是 CI 在每个 PR 上执行的内容，并按上述「常见坑」以 `PYTHONHASHSEED=0` 为前置条件。
+- 三个针对真实 LLM 的 `@pytest.mark.integration` 测试：把数学问题路由到数学智能体、把历史问题路由到历史智能体，以及断言数学与历史问题最终到达的专家不同。
 
 ```bash
 uv run --project tutorials pytest tutorials/14-handoff-orchestration/python/tests -v
-# Deterministic replay run (matches how CI runs it):
+# 确定性回放（与 CI 的执行方式一致）：
 PYTHONHASHSEED=0 uv run --project tutorials pytest tutorials/14-handoff-orchestration/python/tests -v
 ```
 
-The .NET side ships [`dotnet/tests/HandoffTests.cs`](./dotnet/tests/HandoffTests.cs) — nine tests, no key, no network:
+## 在完整项目中的落点
 
-```bash
-cd tutorials/14-handoff-orchestration/dotnet && dotnet test tests/Handoff.Tests.csproj
-```
+本章的网状结构不只是教学示例——它是完整项目中一个线上编排模式的参考实现：
 
-They pin the naming surprise described above: `Handoff_Tools_Are_Named_Positionally_Not_By_Agent` fails the day MAF starts emitting `handoff_to_<name>`, which is exactly when this chapter's prose would need rewriting.
+- `agents/python/orchestrator/handoff.py:49` —— `build_orchestrator_handoff_workflow()` 构建生产用的 `HandoffBuilder` 网状图：编排器作为起始智能体，到每个远程专家各有一条边（`agents/python/orchestrator/handoff.py:80`），并且每个专家都有一条交回编排器的边（`agents/python/orchestrator/handoff.py:81`）。每个专家都是被 `Agent` 包装的 `RemoteSpecialistChatClient`（`shared/remote_agent.py`），因此移交在链路上依然走 A2A HTTP——机制是移交，传输仍是 A2A。
+- `agents/python/orchestrator/modes/handoff_mode.py:1` —— `HandoffMode` 让该网状图可以从线上请求触达（`/api/chat` 的 `mode="handoff"`，或以 `ORCHESTRATION_MODE=handoff` 作为部署默认值）。其模块文档字符串明确指出，本章 `python/main.py::ask()` 是「读取移交式工作流事件流的已验证参考」——上面展示的 `output` 事件与按执行器 id 聚合文本的方式，正是 `HandoffMode.run()`（`agents/python/orchestrator/modes/handoff_mode.py:60`）对真实专家智能体所做的处理。
+- 默认编排仍为 `tool` 模式（`call_specialist_agent` 路由）；`handoff` 是可选的增量能力，除非请求或部署配置选择它，默认运行时行为不变。
 
-## How this shows up in the capstone
+## 下一步
 
-This chapter's mesh is not just a teaching example — it's the reference implementation for a live orchestration mode in the capstone app:
-
-- `agents/python/orchestrator/handoff.py:49` — `build_orchestrator_handoff_workflow()` builds the production `HandoffBuilder` mesh: the orchestrator as start agent, one edge to each remote specialist (`agents/python/orchestrator/handoff.py:80`), and a handoff back to the orchestrator from each specialist (`agents/python/orchestrator/handoff.py:81-82`). Every specialist is a `RemoteSpecialistChatClient` (`shared/remote_agent.py`) wrapped in an `Agent`, so handoffs still traverse A2A HTTP on the wire — the mechanism is Handoff, the transport stays A2A.
-- `agents/python/orchestrator/modes/handoff_mode.py:1` — `HandoffMode` is what makes the mesh reachable from a live request (`mode="handoff"` on `/api/chat`, or `ORCHESTRATION_MODE=handoff` as the deployment default). Its module docstring says outright that this tutorial's `python/main.py::ask()` is "the verified reference for how to read a handoff workflow's event stream" — the same `output`-event, per-executor-id text assembly shown above is what `HandoffMode.run()` (`agents/python/orchestrator/modes/handoff_mode.py:61`) does against real specialist agents.
-- Default orchestration stays `tool` mode (the `call_specialist_agent` router); `handoff` is additive and opt-in, so nothing about the default runtime changes unless a request or deployment config selects it.
-
-## What's next
-
-- Next chapter: [Chapter 15 — Group Chat Orchestration](../15-group-chat-orchestration/)
-- Full source: [`python/`](./python/) · [`dotnet/`](./dotnet/)
-- [MAF docs — Handoff Orchestration](https://learn.microsoft.com/en-us/agent-framework/workflows/orchestrations/handoff/)
+- 下一章：[第 15 章 · 群聊编排](../15-group-chat-orchestration/)
+- 完整源码：[`python/`](./python/)
+- [MAF 文档 —— 移交式编排](https://learn.microsoft.com/en-us/agent-framework/workflows/orchestrations/handoff/)

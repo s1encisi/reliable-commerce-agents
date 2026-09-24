@@ -1,18 +1,8 @@
-"""``/api/chat/stream``'s ``chat_stream()`` branches on the resolved mode.
+"""聊天流按解析后的编排模式分派。
 
-``tool`` mode keeps its original direct-agent SSE path (covered
-elsewhere); this file proves the *other* branch — non-``tool`` modes
-streamed through ``get_mode(...).run()`` — actually reaches a real
-``HandoffBuilder`` workflow end to end (real A2A HTTP call against a
-stubbed transport, same as ``test_handoff_orchestration.py``) and emits
-the new structured SSE frames (``event: node``, ``event: handoff``,
-``event: metadata``) alongside real streamed display text extracted from
-workflow "delta" events, not a single end-of-run dump.
-
-Calls ``chat_stream()`` directly (bypassing FastAPI's dependency
-injection, same pattern as ``test_chat_route_mode_dispatch.py``) so a
-duck-typed fake ``Request`` (no ASGI receive channel) is enough — no
-TestClient, no live server.
+本文件覆盖非 tool 分支，经真实 HandoffBuilder 和模拟传输执行，
+确认输出节点、交接、元数据帧及真实增量文本，而非结束后统一输出。
+直接调用 chat_stream，使用最小请求对象，无需启动 HTTP 服务器。
 """
 
 from __future__ import annotations
@@ -31,7 +21,7 @@ ANON_USER = {"sub": "", "role": "anonymous", "user_id": "", "anonymous": True}
 
 
 class _FakeRequest:
-    """Duck-types Starlette's ``Request.is_disconnected()`` — never disconnects."""
+    """模拟 Starlette 的 is_disconnected，始终保持连接。"""
 
     async def is_disconnected(self) -> bool:
         return False
@@ -43,7 +33,7 @@ async def _drain(chat_stream_response) -> str:
 
 
 def _parse_sse(raw: str) -> list[tuple[str, str]]:
-    """Return ``(event_name, data)`` pairs, defaulting event_name to "" for plain ``data:`` frames."""
+    """返回事件名与数据对；只有 data 字段时事件名为空。"""
     frames = []
     for block in raw.split("\n\n"):
         if not block.strip():
@@ -114,8 +104,8 @@ async def test_chat_stream_handoff_mode_emits_structured_frames_and_real_text(
     metadata = json.loads(metadata_frames[0])
     assert "math" in metadata["agents_involved"]
 
-    # Real streamed display text — extracted from the workflow's "delta"
-    # events, not a synthesized end-of-run dump.
+    # 展示文本来自工作流真实 delta 事件，
+    # 不是运行结束时拼出的替代输出。
     text_chunks = [d for name, d in frames if name == ""]
     assert any("1554" in chunk for chunk in text_chunks)
 
@@ -124,11 +114,9 @@ async def test_chat_stream_handoff_mode_emits_structured_frames_and_real_text(
 async def test_chat_stream_falls_back_to_end_of_run_dump_for_non_streaming_modes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """workflow:pre-purchase never emits a delta with readable .contents (its
-    one ctx.yield_output() carries the raw ResearchState dataclass, not
-    AgentResponseUpdate content — verified empirically, see chat.py's module
-    docstring). Without the run_completed fallback this regresses to an
-    empty chat bubble; this proves the fallback actually fires.
+    """购前工作流产出 ResearchState，不提供可读 delta。
+
+    确认 run_completed 兜底实际触发，避免聊天气泡为空。
     """
     import orchestrator.modes as modes_module
     from orchestrator.modes.workflow_mode import PrePurchaseMode

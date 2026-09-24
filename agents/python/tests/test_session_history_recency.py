@@ -1,18 +1,7 @@
-"""Issue #9 — a follow-up question about something just discussed must
-still see it in rehydrated history.
+"""长会话必须保留最近历史的真实数据库回归测试。
 
-`PostgresSessionHistoryProvider.get_messages()` (shared/session.py) and
-`_rehydrate_history_from_session()` (shared/agent_host.py) both capped
-history with ``ORDER BY created_at ASC LIMIT $2`` directly on the base
-table — for any conversation longer than the limit, that returns the
-OLDEST rows, silently dropping the most recent messages instead of the
-oldest ones. A follow-up question referencing something just said would
-lose exactly the context it needs once a conversation crossed the limit.
-
-Real Postgres (clean_db), not the fake-pool unit tests in
-test_session_roundtrip.py / test_agent_host_native.py, which only check
-SQL parameters — they can't catch a wrong ORDER BY/LIMIT combination since
-their fake pool returns canned rows regardless of the query.
+直接 ASC LIMIT 会取最早记录，遗漏追问所需上下文。模拟池只返回
+预设行无法发现排序错误，因此这里使用真实 PostgreSQL。
 """
 
 from __future__ import annotations
@@ -73,8 +62,8 @@ async def test_rehydrate_history_keeps_most_recent_messages_when_over_limit(
     monkeypatch.setattr("shared.agent_host._SESSION_HISTORY_LIMIT", 4)
 
     conversation_id, email = await _seed_conversation(clean_db, total_messages=10)
-    # Rehydration is scoped to the caller's own conversation (#9); on a
-    # specialist this ContextVar is set from the forwarded x-user-email header.
+    # 历史读取按当前用户归属隔离，
+    # 专业智能体从 x-user-email 设置该 ContextVar。
     current_user_email.set(email)
 
     history = await _rehydrate_history_from_session(conversation_id)

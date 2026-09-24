@@ -1,13 +1,12 @@
 """
-MAF v1 — Chapter 19: Declarative Workflows (Python)
+MAF v1 —— 第 19 章：声明式工作流（Python）
 
-Load a workflow from a YAML file at runtime instead of hand-writing the
-graph in Python. Demonstrates the principle of declarative orchestration
-with a minimal, purpose-built schema.
+在运行时从 YAML 文件加载工作流，而不是用 Python 手写图结构。用一个
+最小化的、专门为此构建的 schema 来演示声明式编排的原理。
 
-Run:
+运行：
     python tutorials/19-declarative-workflows/python/main.py "hello"
-    python tutorials/19-declarative-workflows/python/main.py ""     # short-circuit
+    python tutorials/19-declarative-workflows/python/main.py ""     # 短路
 """
 
 import asyncio
@@ -30,13 +29,13 @@ from agent_framework._workflows._workflow_context import WorkflowContext  # noqa
 SPEC_PATH = pathlib.Path(__file__).resolve().parent / "workflow.yaml"
 
 
-# ─────────────── Built-in "ops" the YAML can reference ───────────────
+# ─────────────── YAML 可引用的内置「算子」 ───────────────
 
 def _build_op(op: str, config: dict[str, Any]) -> Callable[[str], tuple[str | None, str | None]]:
-    """Returns a pure function: input_text -> (forwarded_text, terminal_text).
+    """返回一个纯函数：input_text -> (forwarded_text, terminal_text)。
 
-    If forwarded_text is not None → ctx.send_message it.
-    If terminal_text is not None → ctx.yield_output it.
+    若 forwarded_text 不为 None → 用 ctx.send_message 转发它。
+    若 terminal_text 不为 None → 用 ctx.yield_output 产出它。
     """
     if op == "upper":
         return lambda s: (s.upper(), None)
@@ -48,16 +47,16 @@ def _build_op(op: str, config: dict[str, Any]) -> Callable[[str], tuple[str | No
         return lambda s: (s[::-1], None)
     if op == "non_empty":
         def _non_empty(s: str) -> tuple[str | None, str | None]:
-            return (s, None) if s.strip() else (None, "[skipped: empty input]")
+            return (s, None) if s.strip() else (None, "[已跳过：输入为空]")
         return _non_empty
     if op == "prefix":
         prefix = config.get("prefix", "")
         return lambda s: (None, f"{prefix}{s}")
-    raise ValueError(f"unknown op: {op!r}")
+    raise ValueError(f"未知算子：{op!r}")
 
 
 class DeclarativeExecutor(Executor):
-    """An executor whose behavior is defined by a YAML 'op' string."""
+    """行为由 YAML 中的 'op' 字符串定义的执行器。"""
 
     def __init__(self, executor_id: str, op: str, config: dict[str, Any]) -> None:
         super().__init__(id=executor_id)
@@ -73,7 +72,7 @@ class DeclarativeExecutor(Executor):
             await ctx.send_message(forward)
 
 
-# ─────────────── Loader ───────────────
+# ─────────────── 加载器 ───────────────
 
 def load_workflow(spec_path: pathlib.Path = SPEC_PATH) -> Workflow:
     spec = yaml.safe_load(spec_path.read_text())
@@ -102,10 +101,10 @@ async def run(text: str) -> list[object]:
 
 async def main() -> None:
     text = sys.argv[1] if len(sys.argv) > 1 else "hello world"
-    print(f"spec: {SPEC_PATH.name}")
-    print(f"input: {text!r}")
+    print(f"规格：{SPEC_PATH.name}")
+    print(f"输入：{text!r}")
     for output in await run(text):
-        print(f"output: {output!r}")
+        print(f"输出：{output!r}")
 
 
 if __name__ == "__main__":

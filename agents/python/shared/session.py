@@ -1,22 +1,9 @@
-"""MAF ``AgentSession`` support — pluggable history backends.
+"""MAF 会话与可替换历史存储后端。
 
-Phase 7 step 06 replaces the ad-hoc last-10-messages forwarding in
-``orchestrator/routes.py`` with a MAF-idiomatic session/history pattern:
-
-* ``AgentSession`` is a lightweight state holder (session_id + state).
-* ``HistoryProvider`` subclasses read/write the conversation history; the
-  agent invokes them automatically via ``before_run``/``after_run``.
-
-This module provides three storage backends selected by
-``settings.MAF_SESSION_BACKEND``:
-
-* ``postgres`` — the existing ``messages`` + ``conversations`` tables.
-* ``file``     — JSONL files under ``settings.MAF_SESSION_DIR`` (dev only).
-* ``memory``   — in-process dict (tests).
-
-Factory entry-point: ``get_history_provider()``. Callers typically use
-``session_from_id(session_id)`` to construct an ``AgentSession`` bound to
-a conversation row and then pass it to ``agent.run(messages, session=...)``.
+AgentSession 保存会话标识与状态；HistoryProvider 负责历史读写。
+postgres 复用 conversations/messages，file 在 MAF_SESSION_DIR
+保存 JSONL，memory 使用进程内字典。通过 get_history_provider 选择，
+并用 session_from_id 构建与业务会话关联的 AgentSession。
 """
 
 import json
@@ -34,12 +21,10 @@ logger = logging.getLogger(__name__)
 
 
 def _settings():
-    """Late-bound settings accessor.
+    """延迟读取当前 settings 绑定。
 
-    Some test harnesses (``test_env_aliases``) rebind ``shared.config.settings``
-    via ``importlib.reload``. A top-level ``from shared.config import settings``
-    would orphan our reference. Re-fetching through the module keeps us in
-    sync with whatever the current ``settings`` binding is.
+    测试可能通过 importlib.reload 重建 shared.config；每次从模块获取
+    配置，避免持有旧对象。
     """
     return _config.settings
 
@@ -48,7 +33,7 @@ def _settings():
 
 
 class InMemorySessionHistoryProvider(HistoryProvider):
-    """Ephemeral per-process storage — useful in tests."""
+    """进程内临时会话存储，主要用于测试。"""
 
     def __init__(self, source_id: str = "memory-history") -> None:
         super().__init__(source_id)
@@ -80,7 +65,7 @@ class InMemorySessionHistoryProvider(HistoryProvider):
 
 
 class FileSessionHistoryProvider(HistoryProvider):
-    """Per-session JSONL files — handy for dev without a DB."""
+    """每会话一个 JSONL 文件，适合无数据库的开发环境。"""
 
     def __init__(self, directory: str | Path, source_id: str = "file-history") -> None:
         super().__init__(source_id)
@@ -129,16 +114,10 @@ class FileSessionHistoryProvider(HistoryProvider):
 
 
 class PostgresSessionHistoryProvider(HistoryProvider):
-    """Adapter over the existing ``conversations``/``messages`` tables.
+    """既有 conversations/messages 表的历史适配器。
 
-    Messages are stored with ``conversation_id = session_id`` (the caller
-    is expected to supply the conversation UUID as the session id). Only
-    the ``role`` and first text-content string are persisted — that's
-    what the existing UI reads and the canonical A2A wire format.
-
-    For the out-of-process specialist case the ``asyncpg`` connection
-    pool is passed in at construction time so tests can sub in their own
-    fake pool. In production the pool comes from ``shared.db.get_pool()``.
+    conversation_id 等于调用方传入的会话 UUID；保存角色与首个文本内容，
+    兼容界面及 A2A 消息格式。连接池由构造函数注入，便于测试替换。
     """
 
     def __init__(self, pool, *, source_id: str = "postgres-history", max_history: int = 50) -> None:
@@ -156,12 +135,12 @@ class PostgresSessionHistoryProvider(HistoryProvider):
         if not session_id:
             return []
         async with self._pool.acquire() as conn:
-            # ORDER BY ... ASC LIMIT $2 on the base table would take the
-            # OLDEST max_history rows, not the most recent — for any
-            # conversation longer than max_history, that silently drops
-            # exactly the messages a follow-up question needs (see #9).
-            # Take the most recent max_history rows first, then restore
-            # chronological order for the caller.
+            # 在原表直接按时间正序加 LIMIT，
+            # 取到的是最早 max_history 条记录，
+            # 会在长会话中丢失近期上下文，
+            # 使追问无法获得需要的信息。
+            # 应先取最近 max_history 条，
+            # 再恢复为调用方所需的时间正序。
             rows = await conn.fetch(
                 """
                 SELECT role, content FROM (
@@ -208,11 +187,9 @@ class PostgresSessionHistoryProvider(HistoryProvider):
 
 
 def get_history_provider(*, pool: Any = None) -> HistoryProvider:
-    """Return a ``HistoryProvider`` per ``settings.MAF_SESSION_BACKEND``.
+    """按 MAF_SESSION_BACKEND 返回历史提供器。
 
-    - ``postgres`` requires a caller-provided asyncpg pool.
-    - ``file`` uses ``settings.MAF_SESSION_DIR``.
-    - ``memory`` is ephemeral — typically only in tests.
+    postgres 需要连接池，file 使用 MAF_SESSION_DIR，memory 仅临时保存。
     """
     settings = _settings()
     backend = (settings.MAF_SESSION_BACKEND or "postgres").lower()
@@ -231,29 +208,16 @@ def get_history_provider(*, pool: Any = None) -> HistoryProvider:
 
 
 def session_from_id(session_id: str | None) -> AgentSession:
-    """Build an ``AgentSession`` bound to an existing conversation id.
-
-    If ``session_id`` is empty a fresh session id is generated.
-    """
+    """按已有会话标识构建 AgentSession；为空则生成新标识。"""
     return AgentSession(session_id=session_id) if session_id else AgentSession()
 
 
 async def get_history_as_dicts(provider: HistoryProvider, session_id: str | None) -> list[dict[str, str]]:
-    """Fetch session history and flatten to the plain ``{role, content}``
-    dict shape this app forwards history in everywhere — MAF ``Message``
-    objects don't cross the ``RunContext``/``_history_as_maf_messages``
-    boundary (``shared/agent_host.py``), plain dicts do.
+    """读取历史并展平为 role/content 字典，供应用各路径传递。
 
-    Not wired as an automatic ``context_providers=[...]`` hook on the
-    orchestrator agent: verified directly (a real ``Agent`` + a
-    ``HistoryProvider`` in ``context_providers``, called via
-    ``agent.run(message, session=...)``) that attaching one this way
-    auto-persists on every turn through ``save_messages`` — which would
-    double up rows in the ``messages`` table alongside this app's own
-    richer insert (``agent_name``, ``agents_involved``, ``metadata`` for
-    the timeline UI, none of which a generic ``HistoryProvider`` write
-    carries). This function only replaces the *read* side; writes stay
-    exactly as every route already does them.
+    这里只替换读取逻辑，不把历史提供器自动挂到编排器 context_providers。
+    自动挂载会在每轮额外保存消息，与路由现有的含智能体、元数据和执行
+    时间线的写入重复。
     """
     messages = await provider.get_messages(session_id)
     return [{"role": str(m.role), "content": m.text} for m in messages if m.text]
