@@ -1,8 +1,8 @@
-"""Product Discovery agent definition.
+"""商品发现（product discovery）智能体定义。
 
-When ``settings.MCP_ENABLED`` is True the agent connects to the Product MCP
-server (``ecommerce_mcp_product.server``) via ``MCPStreamableHTTPTool`` instead
-of calling asyncpg directly. Both modes expose the same capabilities.
+当 ``settings.MCP_ENABLED`` 为 True 时，智能体通过 ``MCPStreamableHTTPTool``
+连接到商品 MCP 服务（``ecommerce_mcp_product.server``），而不是直接调用
+asyncpg。两种模式对外暴露的能力相同。
 """
 
 from agent_framework import Agent
@@ -28,10 +28,9 @@ from shared.tools.memory_tools import recall_memories, store_memory
 from shared.tools.pricing_tools import get_price_history
 from shared.tools.user_tools import get_purchase_history, get_user_profile
 
-# Set once by create_product_discovery_agent() when MCP_ENABLED+MCP_AUTH_ENABLED;
-# refresh_mcp_auth() (called from the async startup hook in main.py) sets its
-# Authorization header once a token is acquired — agent construction itself
-# is synchronous and can't await the client-credentials grant.
+# 由 create_product_discovery_agent() 在 MCP_ENABLED+MCP_AUTH_ENABLED 时设置一次；
+# refresh_mcp_auth()（由 main.py 中的异步启动钩子调用）在取得令牌后设置其
+# Authorization 头 —— 智能体构造本身是同步的，无法等待客户端凭证授予流程。
 _mcp_product_http_client = None
 
 AGENT_TOOLS = [
@@ -52,18 +51,17 @@ AGENT_TOOLS = [
 
 
 def create_product_discovery_agent() -> Agent:
-    """Create the Product Discovery ChatAgent.
+    """创建商品发现 ChatAgent。
 
-    Uses the MCP server when ``MCP_ENABLED=true``, direct asyncpg tools otherwise.
+    当 ``MCP_ENABLED=true`` 时使用 MCP 服务，否则使用直接的 asyncpg 工具。
     """
     global _mcp_product_http_client
     if settings.MCP_ENABLED:
-        # MCP path: core product tools (including price history) come from
-        # the MCP server. Semantic search and user-context tools still run
-        # locally since they depend on pgvector / ContextVars not exposed by
-        # the MCP server — get_price_history is NOT one of these (the MCP
-        # server already has its own version; registering both under the
-        # same name raises "Duplicate tool name" at agent-construction time).
+        # MCP 路径：核心商品工具（含价格历史）来自 MCP 服务。
+        # 语义搜索和用户上下文工具仍在本地运行，因为它们依赖 MCP 服务
+        # 未暴露的 pgvector / ContextVars —— get_price_history 不在此列
+        # （MCP 服务已有自己的版本；以同名注册两者会在智能体构造时
+        # 抛出 "Duplicate tool name"）。
         if settings.MCP_AUTH_ENABLED:
             _mcp_product_http_client = build_mcp_http_client()
         mcp_product = MCPStreamableHTTPTool(
@@ -95,10 +93,9 @@ def create_product_discovery_agent() -> Agent:
 
 
 async def refresh_mcp_auth() -> None:
-    """Acquire (or refresh) the ``mcp:product`` service token and set it as
-    the default Authorization header on the shared MCP http client. Called
-    once from the async startup hook in ``main.py`` — agent construction
-    itself is synchronous and can't await the client-credentials grant."""
+    """获取（或刷新）``mcp:product`` 服务令牌，并将其设为共享 MCP http 客户端
+    上的默认 Authorization 头。由 ``main.py`` 中的异步启动钩子调用一次 ——
+    智能体构造本身是同步的，无法等待客户端凭证授予流程。"""
     if _mcp_product_http_client is None:
         return
     token = await acquire_service_token(settings.MCP_PRODUCT_REQUIRED_SCOPE, settings.MCP_PRODUCT_AUDIENCE)

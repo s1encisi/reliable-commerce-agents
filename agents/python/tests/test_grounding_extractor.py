@@ -1,4 +1,4 @@
-"""Claim extraction from an agent's composed text — pure logic, no DB, no LLM."""
+"""最终回答声明提取的纯逻辑测试。"""
 
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ def test_extracts_order_card() -> None:
     assert claims.orders[0].id == _ORDER_ID
     assert claims.orders[0].total == 1068.43
     assert claims.orders[0].tracking == "TRK277303722"
-    # Tracking already captured on the order card must not double-count as a prose claim.
+    # 订单卡片已记录的物流号不能重复作为正文声明。
     assert claims.trackings == []
 
 
@@ -58,8 +58,8 @@ def test_bare_uuid_in_prose_extracted_and_not_double_counted_with_card() -> None
         f'```product\n{{"name": "X", "id": "{_PRODUCT_ID}", "price": 5.0}}\n```'
     )
     claims = extract_claims(text)
-    # The id appears both in prose and in the card; the card claim captures it,
-    # so it must not also appear as a separate bare_id claim.
+    # 标识同时出现在卡片和正文时，
+    # 不得再产生重复 bare_id 声明。
     assert claims.bare_ids == []
     assert len(claims.products) == 1
 
@@ -91,7 +91,7 @@ def test_total_count_sums_every_claim_kind() -> None:
         "Also costs about $12.00 and tracks as TRK999."
     )
     claims = extract_claims(text)
-    assert claims.total_count == 3  # 1 product + 1 amount + 1 tracking
+    assert claims.total_count == 3  # 一个商品、一个金额和一个物流号。
 
 
 # ─────────────────────── rewrite_cards ───────────────────────

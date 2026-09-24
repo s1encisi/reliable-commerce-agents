@@ -1,16 +1,13 @@
-"""OAuth 2.1 resource-server mode for the product MCP server (Phase D).
+"""商品 MCP 服务的 OAuth 2.1 资源服务器模式（阶段 D）。
 
-Two tiers:
-- Pure ``JwksTokenVerifier`` unit tests (no ASGI, no FastMCP) — accept/
-  reject shapes, mirroring the main app's ``test_rs256_verifier.py``
-  convention: per-test RSA keypair, JWKS fetch monkeypatched (no real
-  network call).
-- Server-level tests against an independently-built ``FastMCP`` instance
-  (not the module-level singleton in ``server.py``) so these don't depend
-  on ``MCP_AUTH_ENABLED`` being set before ``ecommerce_mcp_product.server``
-  is first imported anywhere in the test session — import order would
-  otherwise make these tests order-dependent, since that module reads the
-  flag once at import time.
+分两个层次：
+- 纯 ``JwksTokenVerifier`` 单元测试（不涉及 ASGI、不涉及 FastMCP）—— 接受/
+  拒绝的各种形态，与主应用的 ``test_rs256_verifier.py`` 约定保持一致：
+  每个测试单独的 RSA 密钥对，JWKS 获取被 monkeypatch（不发起真实网络调用）。
+- 针对独立构建的 ``FastMCP`` 实例（而非 ``server.py`` 中的模块级单例）的
+  服务级测试，这样它们就不依赖 ``MCP_AUTH_ENABLED`` 在测试会话中任何地方
+  首次导入 ``ecommerce_mcp_product.server`` 之前被设置 —— 否则导入顺序会
+  让这些测试变成顺序相关的，因为该模块在导入时只读取一次该标志。
 """
 
 from __future__ import annotations
@@ -66,7 +63,7 @@ def _make_token(keypair, *, aud=AUDIENCE, iss=ISSUER, scope=REQUIRED_SCOPE, exp_
     return pyjwt.encode(payload, keypair.as_pem(private=True), algorithm="RS256", headers={"kid": keypair.kid})
 
 
-# ─────────────────────── JwksTokenVerifier (pure unit) ───────────────────
+# ─────────────────────── JwksTokenVerifier（纯单元测试） ───────────────────
 
 
 async def test_verifier_accepts_valid_token(keypair, verifier):
@@ -115,7 +112,7 @@ async def test_verifier_rejects_malformed_token(verifier):
     assert await verifier.verify_token("not-a-jwt") is None
 
 
-# ─────────────────────── Server-level (FastMCP + auth) ───────────────────
+# ─────────────────────── 服务级（FastMCP + auth） ───────────────────
 
 
 @asynccontextmanager
@@ -127,9 +124,9 @@ def _build_app(verifier: JwksTokenVerifier) -> FastMCP:
     mcp = FastMCP(
         "test-product-mcp",
         lifespan=_noop_lifespan,
-        # Avoid FastMCP's default-host DNS-rebinding auto-protection, which
-        # only allowlists localhost/127.0.0.1/::1 (see the same fix applied
-        # in server.py) — TestClient's default Host header matches neither.
+        # 避开 FastMCP 默认 host 下的 DNS 重绑定自动保护 —— 它只把
+        # localhost/127.0.0.1/::1 加入白名单（参见在 server.py 中应用的同一
+        # 修复）—— 而 TestClient 默认的 Host 头与之都不匹配。
         host="0.0.0.0",
         token_verifier=verifier,
         auth=AuthSettings(

@@ -1,38 +1,17 @@
-"""Bounded retries + a per-host:port circuit breaker for outbound A2A calls.
+"""为出站 A2A 调用提供有界重试和按主机、端口隔离的熔断器。
 
-Every A2A call in this repo's Python side (``orchestrator/agent.py``'s
-``call_specialist_agent``, ``shared/remote_agent.py``'s
-``RemoteSpecialistChatClient``) previously had a bare ``httpx.AsyncClient
-(timeout=...)`` and nothing else — a single flaky response from a specialist
-surfaced immediately as a user-facing failure, with no retry, no backoff, no
-protection against hammering an already-struggling specialist with more
-traffic. .NET's ``Shared/A2A/A2AClient.cs`` has a real Polly v8 pipeline (3
-retries with jittered exponential backoff, a 50%-failure-ratio circuit
-breaker over a rolling window) — the *lead* stack was the weaker one. This
-module closes that gap on the Python side.
+编排器的 call_specialist_agent 与 RemoteSpecialistChatClient 共用此传输层。
+专业智能体出现短暂故障时，带抖动的指数退避减少瞬时失败；滚动窗口内
+失败率过高时，熔断器暂时拒绝新请求，避免继续压垮目标服务。
 
-Hand-rolled rather than a third-party dependency (``tenacity``, ``stamina``)
-on purpose: this repo's governing principle is that every concept it uses is
-explained in the repo itself, not just imported from a library whose
-internals a reader can't see. A retry-with-jittered-backoff loop and a
-failure-ratio circuit breaker are both short enough to write and read in
-full here — see the A2A protocol chapter (tutorials/23-a2a-protocol/) for
-the worked-through version of exactly this mechanism, and this module's own
-docstrings for the production shape.
-
-Drop-in usage — construct an ``httpx.AsyncClient`` with this as its
-transport, no other call-site changes needed::
+实现保留在本模块，便于完整阅读重试和熔断机制；教程第 23 章解释同一思路。
+调用方只需给 httpx.AsyncClient 指定 transport，不必修改请求逻辑：
 
     async with httpx.AsyncClient(timeout=30, transport=ResilientAsyncTransport()) as client:
         resp = await client.post(url, json=body)
 
-Also works transparently under SSE streaming (``client.stream(...)``): this
-only wraps the "establish the connection and get the response headers" step
-inside ``handle_async_request`` — never a response body already being
-iterated by the caller. A stream that's already forwarding chunks to a
-browser is never silently retried mid-flight and duplicated; only the
-initial connection attempt, before any data has been read, is subject to
-retry.
+SSE 流式调用只在建立连接、接收响应头阶段重试。一旦调用方开始消费
+响应体，就不再重新发送请求，以免重复向浏览器输出已有分块。
 """
 
 from __future__ import annotations
@@ -47,22 +26,21 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-# Retry: bounded attempts, exponential backoff with jitter — mirrors
-# A2AClient.cs's AddRetry() (3 attempts, 200ms base, exponential, jitter on).
+# 有界重试：最多尝试 3 次，基础延迟 200 毫秒，采用带抖动的指数退避。
 DEFAULT_MAX_ATTEMPTS = 3
 DEFAULT_BASE_DELAY_S = 0.2
 DEFAULT_BACKOFF_MULTIPLIER = 2.0
 DEFAULT_JITTER_FRACTION = 0.2
 
-# HTTP status codes worth retrying: request timeout, rate limited, and
-# server-side errors — a 4xx client error (other than 408/429) means retrying
-# with the identical request would just fail identically, so those are left
-# alone. Mirrors A2AClient.cs's transient-response predicate (5xx, 408, 429).
+# 仅重试请求超时、限流和服务端错误，
+# 即 408、429 与 5xx。其他 4xx 通常是请求自身错误，
+# 原样重发仍会失败，
+# 因此直接返回。
 RETRYABLE_STATUS_CODES = frozenset({408, 429, 500, 502, 503, 504})
 
-# Circuit breaker: a rolling failure-ratio window — mirrors A2AClient.cs's
-# AddCircuitBreaker() (50% failure ratio, minimum throughput 5, 30s sampling
-# window, 30s break duration).
+# 熔断器按滚动窗口计算失败率，
+# 默认阈值 50%、最小请求数 5、采样窗口 30 秒，
+# 打开后冷却 30 秒。
 DEFAULT_FAILURE_RATIO_THRESHOLD = 0.5
 DEFAULT_MIN_THROUGHPUT = 5
 DEFAULT_SAMPLING_WINDOW_S = 30.0
@@ -70,28 +48,19 @@ DEFAULT_BREAK_DURATION_S = 30.0
 
 
 class CircuitBreakerOpenError(httpx.TransportError):
-    """Raised instead of attempting a network call while a host's breaker is open.
+    """目标主机处于熔断状态时抛出，不发起网络请求。
 
-    Distinguishing this from a timeout/connection error matters to callers:
-    a timeout means "we tried and it was slow/unreachable"; this means "we
-    didn't even try, because recent history says this host is down" — a much
-    cheaper failure for both this process and the already-struggling host.
+    超时表示已经尝试但不可达或过慢；此异常表示依据近期失败记录主动
+    拒绝尝试，减轻本进程和目标服务的压力。
     """
 
 
 class _HostBreaker:
-    """Per-host rolling-window failure-ratio breaker with a half-open probe.
+    """按主机维护滚动失败率，并支持半开探测的熔断器。
 
-    States, though not tracked as an explicit enum (the two booleans below
-    are sufficient to derive them):
-    - **Closed** (``_open_until is None``): requests flow normally; each
-      outcome is recorded into a rolling window.
-    - **Open** (``_open_until`` is in the future): every request is refused
-      immediately via ``CircuitBreakerOpenError``, no network call attempted.
-    - **Half-open** (cooldown elapsed, one probe in flight): exactly one
-      request is let through to test whether the host has recovered. Success
-      closes the breaker and clears the window; failure re-opens it for
-      another full break duration.
+    关闭状态正常放行并记录结果；打开状态立即拒绝请求。冷却结束后
+    仅放行一个半开探测：成功则关闭并清空窗口，失败则重新打开一个周期。
+    状态由现有字段推导，不另设枚举。
     """
 
     def __init__(
@@ -106,7 +75,7 @@ class _HostBreaker:
         self._min_throughput = min_throughput
         self._sampling_window_s = sampling_window_s
         self._break_duration_s = break_duration_s
-        self._outcomes: deque[tuple[float, bool]] = deque()  # (monotonic_ts, success)
+        self._outcomes: deque[tuple[float, bool]] = deque()  # 记录（单调时钟时间，是否成功）。
         self._open_until: float | None = None
         self._half_open_probe_in_flight = False
 
@@ -122,9 +91,9 @@ class _HostBreaker:
         if now < self._open_until:
             return False
         if self._half_open_probe_in_flight:
-            # Cooldown elapsed and a probe is already out — refuse further
-            # requests until that probe resolves (success/failure), rather
-            # than letting a burst of concurrent callers all become probes.
+            # 冷却结束后若已有探测在途，继续拒绝其他请求。
+            # 等待该探测成功或失败后再决定是否放行，
+            # 避免并发请求全部变成探测。
             return False
         self._half_open_probe_in_flight = True
         return True
@@ -158,11 +127,9 @@ class _HostBreaker:
 
 
 class ResilientAsyncTransport(httpx.AsyncHTTPTransport):
-    """An ``httpx`` transport adding bounded retries and a per-host:port circuit breaker.
+    """为 httpx 增加有界重试及按主机、端口隔离的熔断器。
 
-    See the module docstring for the full rationale and the .NET analog this
-    mirrors. Every config knob has a Polly-matching default; override via
-    the constructor if a specific call site needs different tuning.
+    默认参数见模块常量；具体调用可通过构造函数覆盖。
     """
 
     def __init__(
@@ -192,14 +159,11 @@ class ResilientAsyncTransport(httpx.AsyncHTTPTransport):
         }
 
     def _breaker_for(self, authority: str) -> _HostBreaker:
-        """One breaker per host *and port*.
+        """每个主机和端口组合使用独立熔断器。
 
-        Keying on hostname alone conflates services that merely share a host:
-        every specialist runs on ``localhost:8081``-``8085`` in local dev, CI
-        and the eval harness, so one failing specialist would trip the breaker
-        for all five and turn a single agent's outage into a total one. Under
-        Docker each specialist has its own hostname, which is why this only
-        ever bit outside production — including while diagnosing issue #25.
+        本地多个专业智能体共享 localhost，但端口为 8081–8085；若仅按
+        主机隔离，一个服务故障会使全部服务被熔断。Docker 中主机名不同，
+        因此这种错误主要在本地和评测环境暴露。
         """
         breaker = self._breakers.get(authority)
         if breaker is None:
@@ -208,7 +172,7 @@ class ResilientAsyncTransport(httpx.AsyncHTTPTransport):
         return breaker
 
     def _delay_for_attempt(self, attempt: int) -> float:
-        """Exponential backoff (attempt 1 -> base_delay) with +/- jitter_fraction jitter."""
+        """指数退避：第一次使用基础延迟，并叠加正负 jitter_fraction 抖动。"""
         base = self._base_delay_s * (self._backoff_multiplier ** (attempt - 1))
         jitter = base * self._jitter_fraction
         return max(0.0, base + random.uniform(-jitter, jitter))
@@ -223,14 +187,17 @@ class ResilientAsyncTransport(httpx.AsyncHTTPTransport):
                 request=request,
             )
 
+        safe = request.method in {"GET", "HEAD", "OPTIONS"} or request.extensions.get("safe_to_retry") is True
+        safe = safe or request.headers.get("x-execution-policy") == "read_only"
+        max_attempts = self._max_attempts if safe else 1
         last_exc: Exception | None = None
-        for attempt in range(1, self._max_attempts + 1):
+        for attempt in range(1, max_attempts + 1):
             try:
                 response = await super().handle_async_request(request)
             except (httpx.TimeoutException, httpx.ConnectError) as exc:
                 last_exc = exc
                 breaker.record_failure()
-                if attempt == self._max_attempts:
+                if attempt == max_attempts:
                     raise
                 delay = self._delay_for_attempt(attempt)
                 logger.warning(
@@ -249,7 +216,7 @@ class ResilientAsyncTransport(httpx.AsyncHTTPTransport):
                 return response
 
             breaker.record_failure()
-            if attempt == self._max_attempts:
+            if attempt == max_attempts:
                 return response
 
             await response.aclose()
@@ -264,8 +231,8 @@ class ResilientAsyncTransport(httpx.AsyncHTTPTransport):
             )
             await asyncio.sleep(delay)
 
-        # Unreachable when max_attempts >= 1 (every branch above either
-        # returns or raises by the final attempt) — defensive fallback only.
+        # max_attempts 至少为 1 时，所有分支都会在最后一次返回或抛错。
+        # 此处仅保留防御性兜底。
         if last_exc is not None:
             raise last_exc
         raise RuntimeError("ResilientAsyncTransport: exhausted retries with no captured exception")

@@ -1,21 +1,8 @@
-"""Issue #10 — a client disconnecting mid-stream must not silently drop the
-assistant's already-generated response.
+"""客户端中途断开后，已经生成的助手文本仍需持久化。
 
-Root cause: Starlette's own ASGI-level disconnect handling cancels the SSE
-generator's task directly — a race against chat.py's own
-``request.is_disconnected()`` poll that it can win, propagating
-``asyncio.CancelledError`` straight past the persistence code at the end of
-``event_generator()`` without ever reaching it. Fixed by catching that
-cancellation and persisting whatever was accumulated so far via a detached
-task (``_spawn_persist_task``) immune to the same cancellation.
-
-Simulates the race directly: pulls one real chunk off the generator (proving
-the agent had already produced text), then injects
-``asyncio.CancelledError`` at that exact suspension point via
-``agen.athrow(...)`` — precisely what Starlette's disconnect handling does —
-and asserts the assistant's partial response still lands in Postgres.
-
-Real Postgres (clean_db), same pattern as test_chat_stream_delta_dedup.py.
+Starlette 可能直接取消 SSE 生成器，早于应用自己的断连轮询，导致
+末尾持久化代码未执行。测试先读取真实分块，再在暂停点注入
+CancelledError，验证独立保存任务仍把部分答案写入真实 PostgreSQL。
 """
 
 from __future__ import annotations
@@ -30,8 +17,7 @@ from orchestrator.routes.chat import ChatRequest, chat_stream
 
 
 class _NeverDisconnectsRequest:
-    """Duck-types Request.is_disconnected() — the test injects cancellation
-    directly instead, so this must never fire on its own."""
+    """只模拟 is_disconnected 接口；取消由测试直接注入，不自行触发断连。"""
 
     async def is_disconnected(self) -> bool:
         return False
@@ -64,9 +50,9 @@ async def test_partial_response_is_persisted_after_mid_stream_cancellation(
 
     async def _fake_run_agent_native_stream(agent, message, history=None, metadata_box=None):
         yield partial_text
-        # A real disconnect would cancel this task via agent_task.cancel()
-        # in chat.py's finally block before it ever resumes past here — the
-        # test injects the cancellation itself instead of waiting on this.
+        # 真实断连由 finally 中的 agent_task.cancel() 取消任务，
+        # 通常不会继续执行到此后，
+        # 测试直接注入取消以稳定复现。
         await asyncio.sleep(30)
         yield "the rest of the answer, never generated because we disconnected first"
 
@@ -85,9 +71,9 @@ async def test_partial_response_is_persisted_after_mid_stream_cancellation(
     first_chunk = await agen.__anext__()
     assert partial_text in first_chunk, f"expected the first real chunk on the wire, got: {first_chunk!r}"
 
-    # Simulate Starlette's own disconnect-driven cancellation firing at this
-    # exact suspension point — the race chat.py's own is_disconnected() poll
-    # can lose.
+    # 在这个精确暂停点模拟 Starlette 取消，
+    # 覆盖应用自身断连轮询
+    # 可能来不及处理的竞态。
     with pytest.raises(asyncio.CancelledError):
         await agen.athrow(asyncio.CancelledError())
 

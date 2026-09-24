@@ -1,8 +1,7 @@
-"""Grant classes — happy/sad paths against real Postgres.
+"""真实 PostgreSQL 上的授权流程成功与失败路径。
 
-Exercises the callbacks the way authlib actually calls them: synchronously,
-from a worker thread, bridged back to the event loop via ``_bridge`` (see
-its module docstring). Never mocks the DB or an LLM.
+按 authlib 实际方式在线程中同步执行回调，再桥接回事件循环；
+不模拟数据库，不调用模型。
 """
 
 from __future__ import annotations
@@ -24,8 +23,7 @@ pytestmark = pytest.mark.integration
 
 @pytest_asyncio.fixture(autouse=True)
 async def _db_pool(clean_db: asyncpg.Pool, monkeypatch: pytest.MonkeyPatch) -> asyncpg.Pool:
-    """Inject clean_db into shared.db so the grants' get_pool() calls work
-    (they use the repo-standard global pool, same as every other tool)."""
+    """将 clean_db 注入 shared.db，支持授权流程使用全局 get_pool。"""
     monkeypatch.setattr(shared_db, "_pool", clean_db)
     return clean_db
 
@@ -66,10 +64,9 @@ async def _seed_client(pool, client_id="test-client", secret="s3cr3t", scopes=No
 
 @pytest.fixture(autouse=True)
 async def _bind_loop():
-    """authlib's callbacks run in a worker thread and bridge back here.
+    """回调从工作线程桥接回此事件循环。
 
-    Must be async so it runs inside pytest-asyncio's active event loop —
-    a plain sync fixture executes before that loop exists.
+    夹具必须为异步，确保 pytest-asyncio 的循环已经启动。
     """
     _bridge.bind_main_loop()
 
@@ -200,9 +197,9 @@ class TestRefreshTokenGrant:
         assert record is None
 
     async def test_authenticate_user_for_client_credentials_refresh_is_none(self, clean_db):
-        """A refresh record with no subject (shouldn't exist in practice —
-        client_credentials never issues refresh tokens — but must not
-        explode if it ever did) maps to no user, not an error."""
+        """没有主体的刷新记录应映射为无用户，而非抛错。
+
+        正常客户端凭据授权不生成刷新令牌，此处覆盖异常数据的兼容性。"""
         from auth_server.grants import RefreshTokenRecord
 
         grant = RefreshTokenGrant.__new__(RefreshTokenGrant)
@@ -211,7 +208,7 @@ class TestRefreshTokenGrant:
         assert user is None
 
     async def test_revoke_old_credential_is_a_noop(self):
-        """Non-rotating grant: the existing refresh token must stay valid."""
+        """不轮换的刷新授权必须保持原令牌有效。"""
         from auth_server.grants import RefreshTokenRecord
 
         grant = RefreshTokenGrant.__new__(RefreshTokenGrant)

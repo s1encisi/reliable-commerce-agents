@@ -1,4 +1,4 @@
-"""Unit tests for shared.schema_context (Track D). Pure module constants."""
+"""共享数据模式上下文常量测试。"""
 
 from __future__ import annotations
 

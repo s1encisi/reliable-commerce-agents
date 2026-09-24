@@ -1,17 +1,7 @@
-"""Phase 4 — streaming timeline tests.
+"""流式执行时间线测试。
 
-Three behaviours verified here:
-
-1. ``/message:stream`` emits ``event: step`` frames (before ``[DONE]``) for
-   every tool call captured by StepRecorderMiddleware during the specialist run.
-
-2. ``call_specialist_agent`` streaming path parses those ``event: step`` frames
-   from the specialist SSE and merges them into the orchestrator's
-   ``current_steps`` ContextVar — the fix for the root bug where specialist
-   steps were silently dropped in streaming mode.
-
-3. ``GET /api/runs`` returns the authenticated user's usage_logs with
-   execution steps joined, scoped to their user_id.
+专业智能体在 DONE 前发送工具步骤；编排器解析并合并步骤帧；
+运行列表按认证用户隔离，并关联真实执行步骤。
 """
 
 from __future__ import annotations
@@ -54,7 +44,7 @@ def _set_request_ctx(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 1. /message:stream emits event: step frames
+# 1. 专业智能体流输出步骤帧。
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -63,15 +53,14 @@ async def test_message_stream_emits_step_frames_before_done(
     monkeypatch: pytest.MonkeyPatch,
     sample_env: dict,
 ) -> None:
-    """Specialist /message:stream should emit captured tool steps as
-    ``event: step`` SSE frames *before* the ``data: [DONE]`` terminator."""
+    """捕获的工具步骤必须在 DONE 终止标记之前输出。"""
 
     from httpx import ASGITransport, AsyncClient
 
     from shared.agent_host import create_agent_app
 
-    # Fake streaming agent: yields one text chunk and populates current_steps
-    # to simulate StepRecorderMiddleware capturing a tool call mid-run.
+    # 流式替身输出文本并填充步骤列表，
+    # 模拟中间件在运行中完成工具记录。
     async def _fake_stream(agent, message, history=None):
         steps = current_steps.get()
         if steps is not None:
@@ -87,7 +76,7 @@ async def test_message_stream_emits_step_frames_before_done(
         yield "headphones found"
 
     monkeypatch.setattr("shared.agent_host._run_agent_native_stream", _fake_stream)
-    # agent_run_span is imported locally inside the handler; patch via the module
+    # 跨度函数在处理器内局部导入，应通过所属模块替换。
     monkeypatch.setattr(
         "shared.telemetry.agent_run_span",
         lambda *a, **kw: contextlib.nullcontext(),
@@ -117,7 +106,7 @@ async def test_message_stream_emits_step_frames_before_done(
     step_pos = body.index("event: step")
     assert step_pos < done_pos, "step frame must appear before [DONE]"
 
-    # Step JSON carries the tool name and the agent tag added by agent_host
+    # 步骤 JSON 包含工具名与宿主追加的智能体标签。
     step_data_line = next(line for line in body.splitlines() if line.startswith("data: ") and "search_products" in line)
     step = json.loads(step_data_line[6:])
     assert step["tool_name"] == "search_products"
@@ -130,14 +119,9 @@ async def test_message_stream_emits_a_step_before_the_text_that_follows_it(
     monkeypatch: pytest.MonkeyPatch,
     sample_env: dict,
 ) -> None:
-    """A step must overtake the prose that describes it.
+    """步骤事件必须先于描述它的文本到达。
 
-    Every step used to be drained after the generator finished, so the timeline
-    appeared in one lump once the answer had already been written — precisely
-    when it has stopped being interesting. In a MAF tool loop the tool resolves
-    first and the narration comes second, so a step recorded mid-run has real
-    text still to come; this pins that it goes out ahead of that text rather
-    than behind all of it.
+    工具先完成，模型随后叙述；不能等答案全部输出后才一次性展示时间线。
     """
 
     from httpx import ASGITransport, AsyncClient
@@ -180,8 +164,8 @@ async def test_message_stream_emits_a_step_before_the_text_that_follows_it(
     step_pos = body.index("event: step")
     assert step_pos < body.index("They are all in stock."), "the step arrived after the answer had finished writing"
     assert step_pos > body.index("Let me check."), "the step was reported before the tool that produced it had run"
-    # Emitted exactly once — the end-of-run drain must not repeat what the
-    # in-loop drain already sent.
+    # 每步只发送一次，结束时补发不能重复
+    # 循环中已经发送的步骤。
     assert body.count("event: step") == 1
 
 
@@ -190,7 +174,7 @@ async def test_message_stream_no_steps_skips_step_frames(
     monkeypatch: pytest.MonkeyPatch,
     sample_env: dict,
 ) -> None:
-    """When no tool calls are made the stream should contain no event: step frames."""
+    """没有工具调用时不应输出步骤帧。"""
 
     from httpx import ASGITransport, AsyncClient
 
@@ -224,12 +208,12 @@ async def test_message_stream_no_steps_skips_step_frames(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 2. call_specialist_agent streaming path merges steps from specialist SSE
+# 2. 编排器合并专业智能体 SSE 步骤。
 # ─────────────────────────────────────────────────────────────────────────────
 
 
 def _build_streaming_mock(sse_lines: list[str]):
-    """Return a mock httpx.AsyncClient class whose stream() yields the given lines."""
+    """构造 stream 返回指定文本行的 HTTP 客户端替身。"""
 
     async def _aiter():
         for line in sse_lines:
@@ -255,8 +239,7 @@ def _build_streaming_mock(sse_lines: list[str]):
 async def test_streaming_path_merges_specialist_steps(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """When the specialist SSE stream contains event: step frames, the
-    orchestrator merges them into current_steps for the live timeline."""
+    """专业智能体步骤帧应合并到 current_steps 供实时展示。"""
 
     specialist_step = {
         "tool_name": "search_products",
@@ -279,11 +262,11 @@ async def test_streaming_path_merges_specialist_steps(
     monkeypatch.setattr(settings, "AGENT_SHARED_SECRET", "test-secret", raising=False)
     _set_request_ctx()
 
-    # Activate streaming mode (non-None queue triggers the streaming path)
+    # 非空队列启用流式路径。
     queue: asyncio.Queue = asyncio.Queue()
     current_stream_queue.set(queue)
 
-    # Provide a fresh steps bucket
+    # 为本请求创建新步骤列表。
     steps_bucket: list[dict] = []
     current_steps.set(steps_bucket)
 
@@ -308,7 +291,7 @@ async def test_streaming_path_merges_specialist_steps(
 async def test_streaming_path_ignores_malformed_step_json(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Malformed step JSON must not raise — the orchestrator discards it silently."""
+    """非法步骤 JSON 被丢弃，不应使编排器崩溃。"""
 
     sse_lines = [
         "data: some answer",
@@ -339,7 +322,7 @@ async def test_streaming_path_ignores_malformed_step_json(
         )
 
     assert "some answer" in result
-    # Bad JSON is dropped; no steps were merged
+    # 非法 JSON 未合并为步骤。
     assert steps_bucket == []
 
 
@@ -347,7 +330,7 @@ async def test_streaming_path_ignores_malformed_step_json(
 async def test_streaming_path_text_chunks_still_forwarded(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Text chunks must reach the stream_queue even when step frames are mixed in."""
+    """混合步骤帧时，文本仍必须进入流式队列。"""
 
     specialist_step = {"tool_name": "check_stock", "status": "success", "duration_ms": 5}
     sse_lines = [
@@ -380,19 +363,19 @@ async def test_streaming_path_text_chunks_still_forwarded(
             message="check stock",
         )
 
-    # Both text chunks are in the assembled response
+    # 两个文本分块都进入最终组装文本。
     assert "chunk one" in result
     assert "chunk two" in result
 
-    # Step frame was merged, not forwarded as a text chunk
+    # 步骤帧按结构合并，不作为文本输出。
     assert len(steps_bucket) == 1
     assert steps_bucket[0]["tool_name"] == "check_stock"
 
-    # Text chunks and the step frame all reach the queue, each on its own
-    # channel and in the order the specialist produced them. The step used to
-    # be merged into the bucket and go no further, which meant the browser only
-    # learned about it in the post-stream drain — the whole timeline arriving
-    # at once, after the answer had finished writing.
+    # 文本和步骤按各自通道进入队列，
+    # 保留专业智能体生成顺序。
+    # 不能只保存步骤却不即时转发，
+    # 否则浏览器只能等流结束后
+    # 一次性收到整条时间线。
     queue_items = []
     while not queue.empty():
         queue_items.append(await queue.get())
@@ -403,12 +386,12 @@ async def test_streaming_path_text_chunks_still_forwarded(
     frame = next(item for item in queue_items if item[0] == "frame")
     assert frame[1] == "step"
     assert frame[2]["tool_name"] == "check_stock"
-    # Marked as already delivered so chat.py's drain does not send it twice.
+    # 标记已投递，防止路由再次补发。
     assert frame[2]["_live"] is True
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3. GET /api/runs — user-scoped runs endpoint
+# 3. 按用户隔离的运行列表。
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -418,7 +401,7 @@ async def test_runs_endpoint_returns_user_runs(
     monkeypatch: pytest.MonkeyPatch,
     sample_env: dict,
 ) -> None:
-    """Authenticated users should see their own runs with execution steps joined."""
+    """用户只能看到自己的运行及关联步骤。"""
 
     from fastapi import FastAPI
     from httpx import ASGITransport, AsyncClient
@@ -426,7 +409,7 @@ async def test_runs_endpoint_returns_user_runs(
     from orchestrator.routes import require_auth, router
     from shared.usage_db import log_agent_usage, log_execution_step
 
-    # ── seed a user + run in the real test DB ──────────────────────────────
+    # 在真实测试库插入用户和运行。
     user_id = uuid.uuid4()
     await clean_db.execute(
         """INSERT INTO users (id, email, password_hash, name, role)
@@ -466,9 +449,9 @@ async def test_runs_endpoint_returns_user_runs(
         duration_ms=89,
     )
 
-    # ── build a minimal app with auth overridden ───────────────────────────
-    # Must be async: sync FastAPI deps run in a threadpool where ContextVar
-    # assignments don't propagate back to the async route handler.
+    # 构建替换认证依赖的最小应用。
+    # 依赖必须为异步；同步依赖在线程池设置 ContextVar，
+    # 不会自动传播回异步路由。
     async def _fake_auth():
         current_user_email.set("testuser@example.com")
         current_user_role.set("customer")
@@ -502,7 +485,7 @@ async def test_runs_endpoint_does_not_leak_other_users(
     monkeypatch: pytest.MonkeyPatch,
     sample_env: dict,
 ) -> None:
-    """A user must not see runs belonging to a different user."""
+    """不能读取其他用户的运行。"""
 
     from fastapi import FastAPI
     from httpx import ASGITransport, AsyncClient

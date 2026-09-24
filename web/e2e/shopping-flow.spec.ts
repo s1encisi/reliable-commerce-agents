@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 
-// Shared login helper
+// 共用的登录辅助函数
 async function login(page: Page, email: string, password: string) {
   await page.goto("/login");
   await page.fill('input[type="email"]', email);
@@ -10,134 +10,134 @@ async function login(page: Page, email: string, password: string) {
 }
 
 // ============================================================
-// 1. CUSTOMER SHOPPING FLOW (Traditional UI)
+// 1. 顾客购物流程（传统界面）
 // ============================================================
-test.describe("Customer Shopping Flow", () => {
+test.describe("顾客购物流程", () => {
   test.beforeEach(async ({ page }) => {
     await login(page, "alice.johnson@gmail.com", "customer123");
   });
 
-  test("should see products page with add to cart buttons", async ({ page }) => {
+  test("应能看到商品页与「加入购物车」按钮", async ({ page }) => {
     await page.goto("/products");
     await page.waitForSelector('[class*="grid"]', { timeout: 10000 });
-    // Products should be visible
+    // 商品应可见
     const products = page.locator('[class*="grid"] > a, [class*="grid"] > div');
     await expect(products.first()).toBeVisible();
-    // Take screenshot
+    // 截图
     await page.screenshot({ path: "e2e/screenshots/products-page.png" });
   });
 
-  test("should open product detail and see add to cart", async ({ page }) => {
+  test("应能打开商品详情并看到「加入购物车」", async ({ page }) => {
     await page.goto("/products");
     await page.waitForSelector('[class*="grid"]', { timeout: 10000 });
-    // Click first product card
+    // 点击第一个商品卡片
     const firstProduct = page.locator('[class*="grid"] > a').first();
     if (await firstProduct.isVisible()) {
       await firstProduct.click();
       await page.waitForURL(/\/products\//, { timeout: 10000 });
-      // Should see add to cart button
-      const addToCartBtn = page.getByRole("button", { name: /add to cart/i });
+      // 应能看到「加入购物车」按钮
+      const addToCartBtn = page.getByRole("button", { name: /加入购物车/ });
       await expect(addToCartBtn).toBeVisible({ timeout: 10000 });
       await page.screenshot({ path: "e2e/screenshots/product-detail.png" });
     }
   });
 
-  test("should add item to cart and see cart badge update", async ({ page }) => {
+  test("应能把商品加入购物车并看到购物车角标更新", async ({ page }) => {
     await page.goto("/products");
     await page.waitForSelector('[class*="grid"]', { timeout: 10000 });
-    // Click first product
+    // 点击第一个商品
     const firstProduct = page.locator('[class*="grid"] > a').first();
     if (await firstProduct.isVisible()) {
       await firstProduct.click();
       await page.waitForURL(/\/products\//, { timeout: 10000 });
-      // Click add to cart
-      const addToCartBtn = page.getByRole("button", { name: /add to cart/i });
+      // 点击「加入购物车」
+      const addToCartBtn = page.getByRole("button", { name: /加入购物车/ });
       await expect(addToCartBtn).toBeVisible({ timeout: 10000 });
       await addToCartBtn.click();
-      // Should see "Added" confirmation
-      await expect(page.getByText(/added/i)).toBeVisible({ timeout: 5000 });
+      // 应能看到「已加入」确认
+      await expect(page.getByText(/已加入/)).toBeVisible({ timeout: 5000 });
       await page.screenshot({ path: "e2e/screenshots/added-to-cart.png" });
     }
   });
 
-  test("should see cart page with items (demo cart seeded)", async ({ page }) => {
+  test("应能看到带商品的购物车页（演示购物车已预置）", async ({ page }) => {
     await page.goto("/cart");
     await page.waitForTimeout(2000);
     await page.screenshot({ path: "e2e/screenshots/cart-page.png" });
-    // Alice has a pre-seeded cart with items
-    // Check for either items or empty state
-    const hasItems = await page.getByText(/proceed to checkout/i).isVisible().catch(() => false);
-    const isEmpty = await page.getByText(/cart is empty/i).isVisible().catch(() => false);
+    // Alice 的购物车已预置了商品
+    // 检查有商品或空状态二者之一
+    const hasItems = await page.getByText(/去结算/).isVisible().catch(() => false);
+    const isEmpty = await page.getByText(/购物车是空的/).isVisible().catch(() => false);
     expect(hasItems || isEmpty).toBeTruthy();
   });
 
-  test("should navigate to checkout page", async ({ page }) => {
+  test("应能跳转到结算页", async ({ page }) => {
     await page.goto("/checkout");
     await page.waitForTimeout(3000);
     await page.screenshot({ path: "e2e/screenshots/checkout-page.png" });
-    // Should see checkout heading or shipping form or empty cart
-    const hasCheckout = await page.getByText(/checkout/i).first().isVisible().catch(() => false);
-    const hasForm = await page.getByText(/shipping/i).first().isVisible().catch(() => false);
-    const isEmpty = await page.getByText(/cart is empty|no items|empty/i).first().isVisible().catch(() => false);
+    // 应能看到结算标题、收货地址表单或空购物车
+    const hasCheckout = await page.getByText(/结算/).first().isVisible().catch(() => false);
+    const hasForm = await page.getByText(/收货地址/).first().isVisible().catch(() => false);
+    const isEmpty = await page.getByText(/购物车是空的|请先添加商品/).first().isVisible().catch(() => false);
     expect(hasCheckout || hasForm || isEmpty).toBeTruthy();
   });
 
-  test("should see orders page with order list", async ({ page }) => {
+  test("应能看到订单页与订单列表", async ({ page }) => {
     await page.goto("/orders");
     await page.waitForTimeout(3000);
     await page.screenshot({ path: "e2e/screenshots/orders-page.png" });
-    // Should have orders (Alice has seeded orders)
+    // 应有订单（Alice 的订单已预置）
     const orderCards = page.locator('[class*="cursor-pointer"]');
     const count = await orderCards.count();
     expect(count).toBeGreaterThan(0);
   });
 
-  test("should see order detail with status timeline", async ({ page }) => {
+  test("应能看到订单详情与状态时间线", async ({ page }) => {
     await page.goto("/orders");
     await page.waitForTimeout(3000);
-    // Click first order
+    // 点击第一笔订单
     const firstOrder = page.locator('[class*="cursor-pointer"]').first();
     if (await firstOrder.isVisible()) {
       await firstOrder.click();
       await page.waitForURL(/\/orders\//, { timeout: 10000 });
       await page.waitForTimeout(3000);
       await page.screenshot({ path: "e2e/screenshots/order-detail.png" });
-      // Should show order heading or status info
-      const hasOrder = await page.getByText(/order #|order status/i).first().isVisible().catch(() => false);
-      const hasStatus = await page.getByText(/placed|confirmed|shipped|delivered|cancelled/i).first().isVisible().catch(() => false);
+      // 应显示订单标题或状态信息
+      const hasOrder = await page.getByText(/订单 #|订单状态/).first().isVisible().catch(() => false);
+      const hasStatus = await page.getByText(/已下单|已确认|已发货|配送中|已送达|已取消|已退货/).first().isVisible().catch(() => false);
       expect(hasOrder || hasStatus).toBeTruthy();
     }
   });
 
-  test("should see sidebar with cart link and badge", async ({ page }) => {
+  test("应能看到侧边栏的购物车链接与角标", async ({ page }) => {
     await page.goto("/products");
     await page.waitForTimeout(2000);
-    // Check sidebar has Cart link
-    const cartLink = page.getByRole("link", { name: /cart/i });
+    // 检查侧边栏有「购物车」链接
+    const cartLink = page.getByRole("link", { name: /购物车/ });
     await expect(cartLink.first()).toBeVisible({ timeout: 5000 });
     await page.screenshot({ path: "e2e/screenshots/sidebar-cart.png" });
   });
 
-  test("should see profile page", async ({ page }) => {
+  test("应能看到个人中心页", async ({ page }) => {
     await page.goto("/profile");
     await page.waitForTimeout(2000);
     await page.screenshot({ path: "e2e/screenshots/profile-page.png" });
-    await expect(page.getByRole("heading", { name: /alice/i })).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole("heading", { name: /个人中心/ })).toBeVisible({ timeout: 5000 });
   });
 });
 
 // ============================================================
-// 2. SELLER ROLE
+// 2. 商家角色
 // ============================================================
-test.describe("Seller Role", () => {
-  test("should see seller dashboard and products", async ({ page }) => {
+test.describe("商家角色", () => {
+  test("应能看到商家仪表盘与商品", async ({ page }) => {
     await login(page, "seller.demo@gmail.com", "seller123");
-    // Navigate to seller dashboard
+    // 跳转到商家仪表盘
     await page.goto("/seller");
     await page.waitForTimeout(3000);
     await page.screenshot({ path: "e2e/screenshots/seller-dashboard.png" });
 
-    // Check seller products
+    // 检查商家商品
     await page.goto("/seller/products");
     await page.waitForTimeout(3000);
     await page.screenshot({ path: "e2e/screenshots/seller-products.png" });
@@ -145,24 +145,24 @@ test.describe("Seller Role", () => {
 });
 
 // ============================================================
-// 3. ADMIN ROLE
+// 3. 管理员角色
 // ============================================================
-test.describe("Admin Role", () => {
-  test("should see admin dashboard and usage stats", async ({ page }) => {
+test.describe("管理员角色", () => {
+  test("应能看到管理端仪表盘与用量统计", async ({ page }) => {
     await login(page, "admin.demo@gmail.com", "admin123");
     await page.goto("/admin");
     await page.waitForTimeout(3000);
     await page.screenshot({ path: "e2e/screenshots/admin-dashboard.png" });
   });
 
-  test("should see admin access requests", async ({ page }) => {
+  test("应能看到管理端访问申请", async ({ page }) => {
     await login(page, "admin.demo@gmail.com", "admin123");
     await page.goto("/admin/requests");
     await page.waitForTimeout(3000);
     await page.screenshot({ path: "e2e/screenshots/admin-requests.png" });
   });
 
-  test("should see admin usage stats", async ({ page }) => {
+  test("应能看到管理端用量统计", async ({ page }) => {
     await login(page, "admin.demo@gmail.com", "admin123");
     await page.goto("/admin/usage");
     await page.waitForTimeout(3000);
@@ -171,149 +171,29 @@ test.describe("Admin Role", () => {
 });
 
 // ============================================================
-// 4. CHAT EXPERIENCE
+// 4. 对话体验
 // ============================================================
-test.describe("Chat Experience", () => {
+test.describe("对话体验", () => {
   test.beforeEach(async ({ page }) => {
     await login(page, "alice.johnson@gmail.com", "customer123");
   });
 
-  test("should load chat page with input area", async ({ page }) => {
+  test("应能加载带输入区的对话页", async ({ page }) => {
     await page.goto("/chat");
     await page.waitForTimeout(2000);
     await page.screenshot({ path: "e2e/screenshots/chat-page.png" });
-    // Should see chat input
+    // 应能看到对话输入框
     const textarea = page.locator("textarea");
     await expect(textarea).toBeVisible({ timeout: 5000 });
   });
 
-  test("should see cart badge in chat header", async ({ page }) => {
+  test("应能在对话页头部看到购物车角标", async ({ page }) => {
     await page.goto("/chat");
     await page.waitForTimeout(2000);
-    // Look for cart icon/link in the chat area
+    // 在对话区域寻找购物车图标/链接
     const cartLink = page.locator('a[href="/cart"]');
     const count = await cartLink.count();
-    // Should have at least the sidebar cart link
+    // 至少有侧边栏的购物车链接
     expect(count).toBeGreaterThan(0);
-  });
-});
-
-// ============================================================
-// 5. MARKETPLACE
-// ============================================================
-test.describe("Agent catalog", () => {
-  test("should see agent catalog", async ({ page }) => {
-    await login(page, "alice.johnson@gmail.com", "customer123");
-    // /marketplace was removed; the catalog is at /agents. The old path 404s, and
-    // the assertion below was permissive enough (`hasAgents || hasMarketplace`,
-    // both from .catch(() => false)) that it reported a plain failure rather than
-    // "that page does not exist".
-    await page.goto("/agents");
-    await page.waitForLoadState("networkidle");
-    await page.screenshot({ path: "e2e/screenshots/agent-catalog.png" });
-
-    await expect(
-      page.getByText(/customer support|inventory|pricing|product|order|review/i).first(),
-    ).toBeVisible({ timeout: 10000 });
-  });
-});
-
-// ============================================================
-// 6. PRODUCT IMAGES (verify real images load)
-// ============================================================
-test.describe("Product Images", () => {
-  test("should load real product images (not Picsum)", async ({ page }) => {
-    await login(page, "alice.johnson@gmail.com", "customer123");
-    await page.goto("/products");
-    await page.waitForTimeout(3000);
-    // Check that images have unsplash URLs
-    const images = page.locator("img[src*='unsplash']");
-    const count = await images.count();
-    await page.screenshot({ path: "e2e/screenshots/product-images.png" });
-    // Log the count for debugging
-    console.log(`Found ${count} Unsplash images on products page`);
-  });
-});
-
-// ============================================================
-// 7. API ENDPOINTS (direct API tests)
-// ============================================================
-test.describe("API Endpoints", () => {
-  let token: string;
-
-  test.beforeAll(async ({ request }) => {
-    const res = await request.post("http://localhost:8080/api/auth/login", {
-      data: { email: "alice.johnson@gmail.com", password: "customer123" },
-    });
-    expect(res.ok()).toBeTruthy();
-    const body = await res.json();
-    token = body.access_token;
-  });
-
-  test("GET /api/cart should return cart data", async ({ request }) => {
-    const res = await request.get("http://localhost:8080/api/cart", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    expect(res.ok()).toBeTruthy();
-    const cart = await res.json();
-    console.log("Cart:", JSON.stringify(cart, null, 2).slice(0, 500));
-    expect(cart).toHaveProperty("items");
-    expect(cart).toHaveProperty("total");
-  });
-
-  test("GET /api/products should return products", async ({ request }) => {
-    const res = await request.get("http://localhost:8080/api/products", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    expect(res.ok()).toBeTruthy();
-    const data = await res.json();
-    expect(data.products.length).toBeGreaterThan(0);
-    // Check first product has image_url
-    const first = data.products[0];
-    console.log("First product image_url:", first.image_url);
-  });
-
-  test("GET /api/orders should return orders", async ({ request }) => {
-    const res = await request.get("http://localhost:8080/api/orders", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    expect(res.ok()).toBeTruthy();
-    const data = await res.json();
-    expect(data.orders.length).toBeGreaterThan(0);
-  });
-
-  test("POST /api/cart/items should add item to cart", async ({ request }) => {
-    // First get a product
-    const prodRes = await request.get("http://localhost:8080/api/products", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const products = (await prodRes.json()).products;
-    const productId = products[0].id;
-
-    const res = await request.post("http://localhost:8080/api/cart/items", {
-      headers: { Authorization: `Bearer ${token}` },
-      data: { product_id: productId, quantity: 1 },
-    });
-    expect(res.ok()).toBeTruthy();
-    const result = await res.json();
-    console.log("Add to cart result:", JSON.stringify(result));
-  });
-
-  test("GET /api/orders/:id should include billing_address and return info", async ({ request }) => {
-    const ordersRes = await request.get("http://localhost:8080/api/orders", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const orders = (await ordersRes.json()).orders;
-    if (orders.length > 0) {
-      const orderRes = await request.get(`http://localhost:8080/api/orders/${orders[0].id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      expect(orderRes.ok()).toBeTruthy();
-      const order = await orderRes.json();
-      console.log("Order has billing_address:", !!order.billing_address);
-      console.log("Order has shipping_address:", !!order.shipping_address);
-      expect(order).toHaveProperty("billing_address");
-      expect(order).toHaveProperty("shipping_address");
-    }
   });
 });

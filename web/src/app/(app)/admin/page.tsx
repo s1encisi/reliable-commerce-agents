@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
-// Types
+// 类型
 // ---------------------------------------------------------------------------
 
 interface AgentUsage {
@@ -61,25 +61,25 @@ interface UsageStats {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// 辅助函数
 // ---------------------------------------------------------------------------
 
 function formatNumber(n: number | undefined | null): string {
   if (n == null) return "0";
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return n.toLocaleString();
+  if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1)} 亿`;
+  if (n >= 10_000) return `${(n / 10_000).toFixed(1)} 万`;
+  return n.toLocaleString("zh-CN");
 }
 
 function formatDuration(ms: number | undefined | null): string {
-  if (ms == null) return "0ms";
-  if (ms < 1000) return `${Math.round(ms)}ms`;
-  return `${(ms / 1000).toFixed(2)}s`;
+  if (ms == null) return "0 ms";
+  if (ms < 1000) return `${Math.round(ms)} ms`;
+  return `${(ms / 1000).toFixed(2)} s`;
 }
 
 function formatDate(dateStr: string): string {
   try {
-    return new Date(dateStr).toLocaleDateString("en-US", {
+    return new Date(dateStr).toLocaleDateString("zh-CN", {
       month: "short",
       day: "numeric",
     });
@@ -89,7 +89,7 @@ function formatDate(dateStr: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Page
+// 页面
 // ---------------------------------------------------------------------------
 
 export default function AdminDashboardPage() {
@@ -111,7 +111,7 @@ export default function AdminDashboardPage() {
       setLoading(true);
       setError(null);
       const raw = await api.getUsageStats();
-      // Map API response to frontend UsageStats shape
+      // 将 API 响应映射为前端 UsageStats 结构
       const overall = raw.overall || {};
       setStats({
         total_invocations: overall.total_requests ?? 0,
@@ -136,7 +136,7 @@ export default function AdminDashboardPage() {
         })),
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load stats");
+      setError(err instanceof Error ? err.message : "统计数据加载失败");
     } finally {
       setLoading(false);
     }
@@ -148,7 +148,7 @@ export default function AdminDashboardPage() {
 
   if (authLoading) return null;
 
-  // Access denied for non-admins
+  // 非管理员拒绝访问
   if (!isAdmin) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -157,10 +157,10 @@ export default function AdminDashboardPage() {
             <ShieldAlert className="size-8 text-destructive" />
           </div>
           <h2 className="mt-4 text-lg font-semibold text-foreground">
-            Access Denied
+            无权访问
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            You do not have admin privileges to view this page.
+            您没有查看该页面的管理员权限。
           </p>
         </div>
       </div>
@@ -169,7 +169,7 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
+      {/* 页头 */}
       <div className="border-b border-border bg-card">
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
@@ -178,23 +178,23 @@ export default function AdminDashboardPage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-foreground">
-                Admin Dashboard
+                管理看板
               </h1>
               <p className="text-sm text-muted-foreground">
-                Platform overview and agent usage metrics
+                平台概览与智能体用量指标
               </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Content */}
+      {/* 内容区 */}
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {loading && (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="size-6 animate-spin text-primary" />
             <span className="ml-2 text-sm text-muted-foreground">
-              Loading dashboard...
+              正在加载看板…
             </span>
           </div>
         )}
@@ -207,12 +207,12 @@ export default function AdminDashboardPage() {
 
         {!loading && !error && stats && (
           <div className="space-y-8">
-            {/* Overview cards */}
+            {/* 概览卡片 */}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Total Invocations
+                    总调用次数
                   </CardTitle>
                   <Activity className="size-4 text-primary" />
                 </CardHeader>
@@ -226,7 +226,7 @@ export default function AdminDashboardPage() {
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Total Tokens
+                    总 Token 数
                   </CardTitle>
                   <Zap className="size-4 text-amber-500" />
                 </CardHeader>
@@ -235,8 +235,8 @@ export default function AdminDashboardPage() {
                     {formatNumber(stats.total_tokens_in + stats.total_tokens_out)}
                   </div>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    {formatNumber(stats.total_tokens_in)} in /{" "}
-                    {formatNumber(stats.total_tokens_out)} out
+                    输入 {formatNumber(stats.total_tokens_in)} /{" "}
+                    输出 {formatNumber(stats.total_tokens_out)}
                   </p>
                 </CardContent>
               </Card>
@@ -244,7 +244,7 @@ export default function AdminDashboardPage() {
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Active Agents
+                    活跃智能体
                   </CardTitle>
                   <Bot className="size-4 text-sky-500" />
                 </CardHeader>
@@ -258,7 +258,7 @@ export default function AdminDashboardPage() {
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Pending Requests
+                    待处理请求
                   </CardTitle>
                   <Clock className="size-4 text-orange-500" />
                 </CardHeader>
@@ -270,27 +270,27 @@ export default function AdminDashboardPage() {
               </Card>
             </div>
 
-            {/* Per-agent usage */}
+            {/* 各智能体用量 */}
             <div className="rounded-xl bg-card ring-1 ring-foreground/10">
               <div className="px-4 py-3">
                 <h2 className="text-sm font-semibold text-muted-foreground">
-                  Per-Agent Usage Breakdown
+                  各智能体用量明细
                 </h2>
               </div>
               <Separator />
               {stats.per_agent.length === 0 ? (
                 <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-                  No agent usage data available.
+                  暂无智能体用量数据。
                 </div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
-                      <TableHead>Agent</TableHead>
-                      <TableHead className="text-right">Invocations</TableHead>
-                      <TableHead className="text-right">Tokens In</TableHead>
-                      <TableHead className="text-right">Tokens Out</TableHead>
-                      <TableHead className="text-right">Avg Duration</TableHead>
+                      <TableHead>智能体</TableHead>
+                      <TableHead className="text-right">调用次数</TableHead>
+                      <TableHead className="text-right">输入 Token</TableHead>
+                      <TableHead className="text-right">输出 Token</TableHead>
+                      <TableHead className="text-right">平均耗时</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -318,17 +318,17 @@ export default function AdminDashboardPage() {
               )}
             </div>
 
-            {/* 7-day trend */}
+            {/* 近 7 日趋势 */}
             <div className="rounded-xl bg-card ring-1 ring-foreground/10">
               <div className="px-4 py-3">
                 <h2 className="text-sm font-semibold text-muted-foreground">
-                  7-Day Trend
+                  近 7 日趋势
                 </h2>
               </div>
               <Separator />
               {stats.daily_trend.length === 0 ? (
                 <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-                  No trend data available.
+                  暂无趋势数据。
                 </div>
               ) : (
                 <div className="divide-y divide-border">
@@ -345,13 +345,13 @@ export default function AdminDashboardPage() {
                           <span className="font-medium text-muted-foreground">
                             {formatNumber(day.invocations)}
                           </span>{" "}
-                          calls
+                          次调用
                         </span>
                         <span>
                           <span className="font-medium text-muted-foreground">
                             {formatNumber(day.tokens_in + day.tokens_out)}
                           </span>{" "}
-                          tokens
+                          Token
                         </span>
                       </div>
                     </div>

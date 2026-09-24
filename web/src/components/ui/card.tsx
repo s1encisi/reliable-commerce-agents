@@ -1,3 +1,5 @@
+// 卡片基础原语：卡片容器及其标题、描述、内容、页脚等分区。
+
 import * as React from "react"
 
 import { cn } from "@/lib/utils"

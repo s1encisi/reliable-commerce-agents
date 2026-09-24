@@ -1,35 +1,13 @@
-"""Idempotency-key infrastructure for money-moving tool calls and routes.
+"""数据库写操作的通用幂等键机制。
 
-Problem this closes: nothing in this codebase detects "this exact request
-already succeeded" — a client that times out waiting for a response and
-retries (or a user double-clicking "issue refund") re-executes the
-underlying DB mutation a second time. `initiate_return`/`process_refund`
-(``shared/tools/return_tools.py``) already guard against two *concurrent*
-calls racing each other (row locks + status checks), which is a different
-problem: it stops two simultaneous attempts from both succeeding, but a
-*sequential* retry after the first attempt already committed just hits an
-"already refunded" error today instead of replaying the original success.
+并发锁阻止同时重复提交，幂等缓存则让成功后的顺序重试重放原结果。
+协议使用 idempotency_keys 表：先 INSERT ON CONFLICT 预留；已有
+completed 记录则重放，年轻的 in_progress 记录则报冲突，超过
+_STALE_AFTER 的预留按现有规则尝试接管。成功后缓存结果，异常时
+释放预留，允许后续重试。
 
-The protocol, backed by the ``idempotency_keys`` table
-(``docker/postgres/init.sql``):
-
-1. **Reserve.** ``INSERT ... ON CONFLICT (key) DO NOTHING RETURNING key``.
-   If a row comes back, this caller won the race and should proceed.
-2. **Conflict.** If no row comes back, a request with this exact key
-   already exists. If its status is ``completed``, replay the cached
-   ``result`` instead of re-executing. If it's still ``in_progress`` and
-   young, refuse — a concurrent duplicate is already running. If it's
-   ``in_progress`` and older than ``_STALE_AFTER``, the process that
-   reserved it most likely crashed before completing or releasing it —
-   take over the reservation rather than deadlocking forever.
-3. **Complete or release.** On success, mark the row ``completed`` with
-   the result cached. On failure, delete the reservation so a genuine
-   retry after a real error isn't permanently blocked.
-
-Every call site in this codebase returns a JSON-serializable ``dict`` on
-every path already (see the ``{"error": ...}`` convention used throughout
-``shared/tools/``) — this decorator keeps that shape rather than raising,
-so a caller doesn't need special-case exception handling to use it.
+调用方保持 JSON 字典结果契约。退货可靠执行另由 after_sales 的原子
+操作记录处理；超时接管并不能证明旧执行者已经停止。
 """
 
 from __future__ import annotations
@@ -45,9 +23,9 @@ from typing import Any, ParamSpec, TypeVar
 
 logger = logging.getLogger(__name__)
 
-# An "in_progress" reservation older than this is treated as abandoned
-# (the process that made it crashed, or the DB write for the result never
-# landed) rather than a live concurrent duplicate — see docstring above.
+# 超过此时长的 in_progress 预留按现有规则视为遗留记录，
+# 可能来自进程中断或结果未写入。
+# 这是一种恢复策略，不是旧进程必然停止的证据。
 _STALE_AFTER = timedelta(seconds=60)
 
 _CONFLICT_MESSAGE = "A request for this action is already being processed. Please wait a moment and try again."
@@ -63,7 +41,7 @@ def _canonical_key(scope: str, identity: str, bound_args: dict[str, Any]) -> str
 
 
 def _bound_args(fn: Callable[..., Any], args: tuple[Any, ...], kwargs: dict[str, Any]) -> dict[str, Any]:
-    """Canonical name->value mapping regardless of whether the call used positional or keyword args."""
+    """将位置参数和关键字参数归一为相同的名称到值映射。"""
     sig = inspect.signature(fn)
     bound = sig.bind(*args, **kwargs)
     bound.apply_defaults()
@@ -71,7 +49,7 @@ def _bound_args(fn: Callable[..., Any], args: tuple[Any, ...], kwargs: dict[str,
 
 
 async def _reserve(pool: Any, key: str, scope: str) -> tuple[bool, dict[str, Any] | None]:
-    """Try to claim `key`. Returns (reserved, conflict_or_cached_result)."""
+    """尝试认领 key，返回（是否预留，冲突或缓存结果）。"""
     row = await pool.fetchrow(
         """INSERT INTO idempotency_keys (key, scope, status)
            VALUES ($1, $2, 'in_progress')
@@ -88,16 +66,16 @@ async def _reserve(pool: Any, key: str, scope: str) -> tuple[bool, dict[str, Any
         key,
     )
     if existing is None:
-        # Raced with a concurrent release (failed attempt cleaning up) —
-        # the key is free again now, retry the reservation once.
+        # 若并发失败请求恰好释放了该键，
+        # 再次尝试预留一次。
         return await _reserve(pool, key, scope)
 
     if existing["status"] == "completed":
-        # asyncpg returns JSONB columns as raw JSON text by default (no
-        # codec registered on this pool) — decode explicitly. `dict(...)`
-        # on a JSON string silently "succeeds" at iterating its characters
-        # and raises a confusing ValueError instead of a clear decode
-        # error; see shared/hitl.py's _decode_jsonb for the same fix.
+        # 未注册编解码器时，asyncpg 的 JSONB 返回原始 JSON 文本。
+        # 必须显式解码；直接 dict(...) 会按字符迭代，
+        # 无法得到预期字典，
+        # 还会产生难以理解的 ValueError。
+        # 处理方式与 hitl.py 的 _decode_jsonb 一致。
         raw = existing["result"]
         cached = json.loads(raw) if isinstance(raw, str) else (dict(raw) if raw else {})
         logger.info("idempotency.replay scope=%s key=%s", scope, key)
@@ -115,9 +93,9 @@ async def _reserve(pool: Any, key: str, scope: str) -> tuple[bool, dict[str, Any
         if taken is not None:
             logger.warning("idempotency.reclaimed_stale scope=%s key=%s age_s=%.1f", scope, key, age.total_seconds())
             return True, None
-        # Someone else reclaimed it first (or completed it) between our
-        # SELECT and this UPDATE — fall through to the conflict response;
-        # a subsequent retry will see whatever state they left it in.
+        # 若查询后、更新前被其他调用方接管或完成，
+        # 返回冲突，
+        # 后续重试再读取最新状态。
 
     logger.info("idempotency.conflict scope=%s key=%s status=%s", scope, key, existing["status"])
     return False, {"error": _CONFLICT_MESSAGE}
@@ -132,7 +110,7 @@ async def _complete(pool: Any, key: str, result: dict[str, Any]) -> None:
 
 
 async def _release(pool: Any, key: str) -> None:
-    """Undo a reservation after the wrapped call raised, so a real retry isn't blocked forever."""
+    """包装调用抛错后释放预留，避免永久阻止合法重试。"""
     await pool.execute(
         "DELETE FROM idempotency_keys WHERE key = $1 AND status = 'in_progress'",
         key,
@@ -145,17 +123,10 @@ def idempotent(
     identity_fn: Callable[..., str] | None = None,
     cache_result: Callable[[dict[str, Any]], bool] | None = None,
 ) -> Callable[[Callable[P, Awaitable[R]]], Callable[P, Awaitable[R]]]:
-    """Make an async, dict-returning DB-mutating function idempotent per (identity, scope, args).
+    """按身份、范围和参数为返回字典的异步写函数提供幂等包装。
 
-    ``identity_fn`` receives the same ``*args, **kwargs`` the wrapped
-    function was called with and should return a stable identity string
-    (e.g. a user email) — defaults to ``current_user_email.get()``, which
-    is correct for every current call site (all are invoked inside a
-    request whose identity ContextVars are already populated).
-
-    The wrapped function must return a ``dict`` on every path — the same
-    convention every tool function and ``execute_approved_action`` branch
-    in this codebase already follows.
+    identity_fn 接收原调用参数并返回稳定身份，默认读取 current_user_email。
+    所有执行路径必须返回字典，保持工具与审批执行接口的现有约定。
     """
 
     def decorator(fn: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
@@ -165,13 +136,13 @@ def idempotent(
 
             identity = identity_fn(*args, **kwargs) if identity_fn else current_user_email.get()
             if not identity:
-                # No stable identity to scope a key to. Every current call
-                # site already has its own "no user context" guard clause
-                # inside the wrapped function — let that run and produce its
-                # normal error, rather than this decorator reaching for the
-                # DB pool before the function has even validated its own
-                # preconditions. There is also no legitimate anonymous
-                # money-moving path in this codebase to protect here.
+                # 没有稳定身份时无法构造隔离的幂等键。
+                # 现有调用方在函数体内已有缺少用户上下文的守卫，
+                # 让该守卫返回正常错误，
+                # 而非在前置条件校验之前
+                # 抢先访问数据库连接池。
+                # 当前项目也没有合法的匿名资金写入路径，
+                # 因此这里不为匿名请求建立缓存。
                 return await fn(*args, **kwargs)
 
             from shared.db import get_pool
@@ -189,16 +160,16 @@ def idempotent(
                 raise
 
             if isinstance(result, dict) and cache_result is not None and not cache_result(result):
-                # Some business results need fresh evidence or approval on retry.
-                # Callers opt in; existing non-return tools retain their protocol.
+                # 某些业务结果重试时需要重新获取证据或审批。
+                # 由调用方显式选择；其他工具保持原有协议。
                 await _release(pool, key)
             elif isinstance(result, dict):
                 await _complete(pool, key, result)
             else:
-                # Every current call site returns a dict; a non-dict result
-                # can't be replayed the same way. Complete with an empty
-                # cache rather than leaving the reservation dangling — a
-                # retry will re-execute (safer default than a silent no-op).
+                # 当前调用方都返回字典；非字典结果不能按相同方式重放。
+                # 使用空缓存结束预留，
+                # 避免一直保持处理中；
+                # 后续重试按现有逻辑重新执行。
                 await _complete(pool, key, {})
             return result
 

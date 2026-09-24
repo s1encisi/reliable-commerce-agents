@@ -1,56 +1,45 @@
 # ============================================================
-# E-Commerce Agents — Demo stack (pulls prebuilt images)
+# 可靠电商多智能体平台 — 演示栈（拉取预构建镜像）
 #
-#   cp .env.minimal .env       then set OPENAI_API_KEY
+#   cp .env.minimal .env       然后设置 OPENAI_API_KEY
 #   docker compose -f docker-compose.demo.yml up
 #
-# Then open http://localhost:3000 and sign in as
-# alice.johnson@gmail.com / customer123.
+# 随后打开 http://localhost:3000，使用
+# alice.johnson@gmail.com / customer123 登录。
 #
-# ── How this differs from docker-compose.yml ────────────────────────────────
+# ── 与 docker-compose.yml 的区别 ────────────────────────────────────────────
 #
-# 1. Every application service uses `image:` from GHCR instead of `build:`.
-#    Nothing is compiled locally, so a first run is a pull rather than a build
-#    of ten images.
-# 2. No profiles on the core path. docker-compose.yml gates services behind
-#    agents / frontend / seed profiles, which is right for development and
-#    wrong for a demo -- this file starts everything a first-time visitor
-#    needs from one command with no flags. The two MCP servers keep their
-#    `mcp` profile, because MCP_ENABLED is false by default and starting them
-#    would be two containers nothing talks to.
-# 3. The seeder is ordered explicitly. Every service that reads the database
-#    waits for it to finish, rather than dev.sh sequencing it.
+# 1. 所有应用服务使用 GHCR 上的 `image:`，而非本地 `build:`。
+#    无需本地编译，首次运行是拉取镜像而非构建十个镜像。
+# 2. 核心链路上不设 profile。docker-compose.yml 把服务放在
+#    agents / frontend / seed profile 之后，这适合开发，但不适合演示 ——
+#    本文件让首次访问者一条命令、零参数即可启动全部所需服务。
+#    两个 MCP 服务仍保留 `mcp` profile，因为 MCP_ENABLED 默认为 false，
+#    启动它们只会多出两个无人调用的容器。
+# 3. 种子数据的执行顺序显式声明。所有读取数据库的服务都等待其完成，
+#    而不是依赖 dev.sh 的调度顺序。
 #
-# ── Which images you get ────────────────────────────────────────────────────
+# ── 你会拿到哪个镜像 ────────────────────────────────────────────────────────
 #
-#   :latest  (default)  the newest tagged RELEASE -- gated by the full test
-#                       suite and a human approval. This is what a visitor
-#                       should land on.
-#   :main               tip of main, tests green but not released
-#   :v1.1.0             a specific release
+#   :latest  （默认）  最新的正式发布版 —— 通过完整测试套件并经过人工批准，
+#                      首次访问者应当使用这一版。
+#   :main               main 分支最新提交，测试通过但尚未发布
+#   :v1.1.0             指定的某个发布版本
 #
-# Override without editing this file:
+# 无需修改本文件即可覆盖：
 #
 #   IMAGE_TAG=main docker compose -f docker-compose.demo.yml up
 #
-# Contributors building from source want docker-compose.yml and ./scripts/dev.sh.
-# See docs/releasing.md for the tag policy and docs/configuration.md for how
-# .env reaches these containers.
+# 从源码构建的贡献者请使用 docker-compose.yml 与 ./scripts/dev.sh。
+# 镜像标签策略见 docs/releasing.md，.env 如何传入容器见 docs/configuration.md。
 # ============================================================
 
-# Compose project name, set explicitly.
+# Compose 项目名，显式指定。
 #
-# Without it, every compose file in this directory resolves to the same
-# project (`e-commerce-agents`, from the folder name) — so the Python and .NET
-# stacks shared container names, and `docker compose down` with one file would
-# leave the other's containers running as orphans. That is not a hypothetical:
-# it is what happens, and the recovery is `docker rm -f`.
-#
-# Distinct names make each stack independently addressable. They still cannot
-# run simultaneously — both publish the same host ports, deliberately — but now
-# the failure is a clear port conflict rather than two stacks quietly wearing
-# each other's container names. See plan 16 F4.
-name: e-commerce-agents-demo
+# 若不指定，本目录下的每个 compose 文件都会解析为同一个项目（取目录名），
+# 导致不同环境共用容器名，`docker compose down` 只关掉其中一组、另一组变成
+# 孤儿容器残留。显式命名后，各环境互相独立、可单独寻址。
+name: reliable-commerce-agents-demo
 
 x-image-tag: &image-tag ${IMAGE_TAG:-latest}
 
@@ -83,15 +72,16 @@ services:
       timeout: 3s
       retries: 5
 
-  aspire:
-    image: mcr.microsoft.com/dotnet/aspire-dashboard:latest
+  # ── Jaeger（OpenTelemetry 追踪可视化）──────────────────────────────────────
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
     ports:
-      - "18888:18888" # Dashboard UI
-      - "18890:18889" # OTLP receiver
+      - "16686:16686" # Jaeger 查询界面
+      - "4317:4317"   # OTLP gRPC 接收端
+      - "4318:4318"   # OTLP HTTP 接收端
     environment:
-      DASHBOARD__FRONTEND__AUTHMODE: Unsecured
-    # The dashboard image has no shell; probe the published HTTP port from
-    # the host instead of using an always-failing CMD-SHELL healthcheck.
+      COLLECTOR_OTLP_ENABLED: "true"
 
   # ── Seed (runs once, exits) ───────────────────────────────────────────────
   #
@@ -104,7 +94,7 @@ services:
   # returns unrelated products at similarity 0.000 -- a real production bug
   # this repo already hit once.
   seeder:
-    image: ghcr.io/nitin27may/e-commerce-agents/orchestrator:${IMAGE_TAG:-latest}
+    image: ghcr.io/s1encisi/reliable-commerce-agents/orchestrator:${IMAGE_TAG:-latest}
     working_dir: /app
     command: uv run --no-project python -m scripts.seed
     volumes:
@@ -122,7 +112,7 @@ services:
   # Idle unless AUTH_MODE=oauth. Started anyway so flipping that one variable
   # works without also learning which profile to add.
   auth-server:
-    image: ghcr.io/nitin27may/e-commerce-agents/auth-server:${IMAGE_TAG:-latest}
+    image: ghcr.io/s1encisi/reliable-commerce-agents/auth-server:${IMAGE_TAG:-latest}
     ports: ["8090:8090"]
     depends_on:
       db: { condition: service_healthy }
@@ -142,7 +132,7 @@ services:
   # ── Orchestrator ──────────────────────────────────────────────────────────
 
   orchestrator:
-    image: ghcr.io/nitin27may/e-commerce-agents/orchestrator:${IMAGE_TAG:-latest}
+    image: ghcr.io/s1encisi/reliable-commerce-agents/orchestrator:${IMAGE_TAG:-latest}
     ports: ["8080:8080"]
     depends_on:
       db: { condition: service_healthy }
@@ -175,7 +165,7 @@ services:
       OAUTH_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET:-}
       OAUTH_SEED_KEY: ${OAUTH_SEED_KEY:-dev-oauth-seed-change-me}
       OTEL_ENABLED: "true"
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://aspire:18889
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
       OTEL_SERVICE_NAME: ecommerce.orchestrator
       OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: ${OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT:-true}
       MAF_SESSION_BACKEND: ${MAF_SESSION_BACKEND:-postgres}
@@ -195,7 +185,7 @@ services:
   # ── Specialist agents ─────────────────────────────────────────────────────
 
   product-discovery:
-    image: ghcr.io/nitin27may/e-commerce-agents/product-discovery:${IMAGE_TAG:-latest}
+    image: ghcr.io/s1encisi/reliable-commerce-agents/product-discovery:${IMAGE_TAG:-latest}
     ports: ["8081:8081"]
     depends_on:
       db: { condition: service_healthy }
@@ -211,7 +201,7 @@ services:
       MCP_PRODUCT_REQUIRED_SCOPE: ${MCP_PRODUCT_REQUIRED_SCOPE:-mcp:product}
 
   order-management:
-    image: ghcr.io/nitin27may/e-commerce-agents/order-management:${IMAGE_TAG:-latest}
+    image: ghcr.io/s1encisi/reliable-commerce-agents/order-management:${IMAGE_TAG:-latest}
     ports: ["8082:8082"]
     depends_on:
       db: { condition: service_healthy }
@@ -222,7 +212,7 @@ services:
       OAUTH_CLIENT_ID: order-management
 
   pricing-promotions:
-    image: ghcr.io/nitin27may/e-commerce-agents/pricing-promotions:${IMAGE_TAG:-latest}
+    image: ghcr.io/s1encisi/reliable-commerce-agents/pricing-promotions:${IMAGE_TAG:-latest}
     ports: ["8083:8083"]
     depends_on:
       db: { condition: service_healthy }
@@ -233,7 +223,7 @@ services:
       OAUTH_CLIENT_ID: pricing-promotions
 
   review-sentiment:
-    image: ghcr.io/nitin27may/e-commerce-agents/review-sentiment:${IMAGE_TAG:-latest}
+    image: ghcr.io/s1encisi/reliable-commerce-agents/review-sentiment:${IMAGE_TAG:-latest}
     ports: ["8084:8084"]
     depends_on:
       db: { condition: service_healthy }
@@ -244,7 +234,7 @@ services:
       OAUTH_CLIENT_ID: review-sentiment
 
   inventory-fulfillment:
-    image: ghcr.io/nitin27may/e-commerce-agents/inventory-fulfillment:${IMAGE_TAG:-latest}
+    image: ghcr.io/s1encisi/reliable-commerce-agents/inventory-fulfillment:${IMAGE_TAG:-latest}
     ports: ["8085:8085"]
     depends_on:
       db: { condition: service_healthy }
@@ -267,7 +257,7 @@ services:
   #   MCP_ENABLED=true docker compose -f docker-compose.demo.yml --profile mcp up
 
   mcp-product:
-    image: ghcr.io/nitin27may/e-commerce-agents/mcp-product:${IMAGE_TAG:-latest}
+    image: ghcr.io/s1encisi/reliable-commerce-agents/mcp-product:${IMAGE_TAG:-latest}
     ports: ["9000:9000"]
     depends_on:
       db: { condition: service_healthy }
@@ -292,7 +282,7 @@ services:
     profiles: ["mcp"]
 
   mcp-inventory:
-    image: ghcr.io/nitin27may/e-commerce-agents/mcp-inventory:${IMAGE_TAG:-latest}
+    image: ghcr.io/s1encisi/reliable-commerce-agents/mcp-inventory:${IMAGE_TAG:-latest}
     ports: ["9001:9001"]
     depends_on:
       db: { condition: service_healthy }
@@ -323,7 +313,7 @@ services:
   # runtime. The same image runs here and on Container Apps -- only this
   # variable changes. See docs/configuration.md.
   frontend:
-    image: ghcr.io/nitin27may/e-commerce-agents/frontend:${IMAGE_TAG:-latest}
+    image: ghcr.io/s1encisi/reliable-commerce-agents/frontend:${IMAGE_TAG:-latest}
     ports: ["3000:3000"]
     environment:
       ORCHESTRATOR_URL: http://orchestrator:8080

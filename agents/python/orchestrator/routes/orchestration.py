@@ -1,22 +1,18 @@
-"""Orchestration introspection routes — mode listing, graphs, comparison, resume.
+"""编排内省路由 —— 模式清单、图、对比、恢复。
 
-``GET /modes`` and ``GET /modes/{name}/graph`` read the real mode
-registry (``orchestrator/modes/``) — Phase 1.2 wired five modes into it;
-this route just has to ask, not hardcode a list that drifts out of sync
-with what ``/api/chat`` can actually run (a stale hardcoded list is
-exactly the kind of doc/code gap the rest of this project exists to
-fix). ``POST /compare`` is real as of Phase 1.6c: it runs one prompt
-through several modes, sequentially (a fair latency comparison and no
-resource contention beats a faster but muddier concurrent run), and
-returns per-mode text/latency/steps/graph — the artifact meant to be
-screenshotted showing tool vs. workflow vs. handoff side by side on the
-same prompt. ``tokens``/``est_cost_usd``/``grounding`` from the plan's
-original sketch are deliberately not in the response yet — they need
-Phase 3.5's ``shared/cost.py`` and Phase 2's grounding verifier, neither
-of which exists yet; returning fabricated numbers would be worse than
-not returning them. ``POST /{run_id}/resume`` is real as of Phase 1.5:
-it resumes a paused ``workflow:return-replace`` run from the
-``hitl_requests`` row Phase 1.5's ``chat.py`` linkage wrote.
+``GET /modes`` 与 ``GET /modes/{name}/graph`` 读取真实的模式注册表
+（``orchestrator/modes/``）—— Phase 1.2 把五个模式接入了它；这条路由只需
+去问，而不必硬编码一份会与 ``/api/chat`` 实际能运行的东西逐渐脱节的列表
+（一份过时的硬编码列表，正是本项目其余部分存在所要修复的那类文档/代码
+鸿沟）。``POST /compare`` 自 Phase 1.6c 起是真实的：它让一个提示词依次
+穿过多个模式（顺序执行 —— 公平的延迟对比且无资源争用，胜过更快但更浑浊的
+并发运行），并返回每个模式的文本/延迟/步骤/图 —— 这个产物就是用来截图展示
+同一提示词下工具 vs. 工作流 vs. 处理权交接并排对比的。计划原始草图中的
+``tokens``/``est_cost_usd``/``grounding`` 刻意还没有出现在响应里 —— 它们
+需要 Phase 3.5 的 ``shared/cost.py`` 与 Phase 2 的事实核验器，两者都尚不存在；
+返回编造的数字会比不返回更糟。``POST /{run_id}/resume`` 自 Phase 1.5 起是
+真实的：它从 Phase 1.5 的 ``chat.py`` 关联逻辑所写入的 ``hitl_requests`` 行，
+恢复一次暂停的 ``workflow:return-replace`` 运行。
 """
 
 from __future__ import annotations
@@ -43,7 +39,7 @@ MAX_COMPARE_MODES = 5
 
 @router.get("/modes")
 async def list_modes() -> list[dict[str, object]]:
-    """Every mode ``/api/chat`` can be asked to run, and what each supports."""
+    """``/api/chat`` 可以被要求运行的每个模式，以及各自支持什么。"""
     from orchestrator.modes import list_modes as registry_list_modes
 
     return registry_list_modes()
@@ -51,9 +47,9 @@ async def list_modes() -> list[dict[str, object]]:
 
 @router.get("/modes/{name}/graph")
 async def get_mode_graph(name: str) -> dict[str, object]:
-    """A mode's static Mermaid graph, or ``None`` for a mode that routes
-    per-turn instead of along a fixed topology (``tool``, ``handoff``) —
-    see each mode's own ``graph_mermaid()``."""
+    """某个模式的静态 Mermaid 图；对于按轮路由而非沿固定拓扑的模式
+    （``tool``、``handoff``）则为 ``None`` —— 见各模式自己的
+    ``graph_mermaid()``。"""
     from orchestrator.modes import UnknownModeError, get_mode
 
     try:
@@ -86,16 +82,14 @@ class CompareResponse(BaseModel):
 
 @router.post("/compare", response_model=CompareResponse)
 async def compare_modes(body: CompareRequest, user: dict[str, Any] = Depends(require_auth)) -> CompareResponse:
-    """Run one prompt through several modes and report per-mode results.
+    """让一个提示词依次穿过多个模式，并报告各模式的结果。
 
-    Standalone — no conversation, no persisted history (``RunContext(history=[])``
-    for every mode) — this compares modes on one prompt in isolation, not a
-    turn inside an ongoing chat. Runs sequentially: modes share the same
-    Postgres pool and specialist services, so running them concurrently
-    would contend for the same resources and produce muddier latency
-    numbers, not faster or more meaningful ones. A mode that raises doesn't
-    abort the whole comparison — it's reported with its own ``error`` field
-    so one broken mode doesn't hide the others' results.
+    独立运行 —— 无会话、无持久化历史（每个模式都用
+    ``RunContext(history=[])``）—— 这是在孤立场景下用一个提示词对比各模式，
+    而不是进行中聊天里的一轮。顺序执行：各模式共享同一个 Postgres 连接池与
+    专业智能体服务，并发运行会争用相同资源并产生更浑浊的延迟数字，而不会
+    更快或更有意义。某个模式抛错不会中止整个对比 —— 它会在自己的 ``error``
+    字段中报告，这样一个坏掉的模式不会掩盖其他模式的结果。
     """
     from orchestrator.modes import UnknownModeError, get_mode
     from orchestrator.modes import list_modes as registry_list_modes
@@ -155,9 +149,9 @@ async def compare_modes(body: CompareRequest, user: dict[str, Any] = Depends(req
                 text=text,
                 latency_ms=latency_ms,
                 agents_involved=agents_involved,
-                # tool_call events only fire for "tool" mode (adapt_step());
-                # node_enter is the workflow-graph modes' equivalent "how
-                # much happened" signal — see orchestrator/events.py.
+                # tool_call 事件只在 "tool" 模式下触发（adapt_step()）；
+                # node_enter 是工作流图模式对应的「发生了多少事」信号 ——
+                # 见 orchestrator/events.py。
                 step_count=tool_call_count or node_enter_count,
                 graph_mermaid=mode.graph_mermaid(),
                 error=error,
@@ -184,16 +178,14 @@ async def resume_run(run_id: str, body: ResumeRequest, user: dict[str, Any] = De
 async def _resume_run_locked(
     run_id: str, body: ResumeRequest, user: dict[str, Any] = Depends(require_auth)
 ) -> dict[str, Any]:
-    """Resume a workflow paused on in-workflow HITL, from committed checkpoint state.
+    """从已提交的检查点状态恢复一个因工作流内人工参与而暂停的工作流。
 
-    Looks up the most recent *pending* ``hitl_requests`` row for
-    ``run_id`` (scoped to the caller unless admin — the same ownership
-    check ``GET /api/runs/{id}/checkpoints`` uses), resumes via
-    ``ReturnReplaceMode.resume()`` (currently the only mode with anything
-    to resume), and marks the request resolved. A request with no
-    ``request_id``/``checkpoint_id`` predates Phase 1.5's checkpoint
-    wiring and can't be resumed this way — surfaced as 409, not silently
-    treated as "not found".
+    为 ``run_id`` 查找最近一条*待处理*的 ``hitl_requests`` 行（除非是管理员，
+    否则限定为调用者 —— 与 ``GET /api/runs/{id}/checkpoints`` 使用的是同一套
+    归属校验），经由 ``ReturnReplaceMode.resume()`` 恢复（目前这是唯一有东西
+    可恢复的模式），并把该请求标记为已解决。没有 ``request_id``/``checkpoint_id``
+    的请求早于 Phase 1.5 的检查点接线，无法以这种方式恢复 —— 会以 409 暴露
+    出来，而不是被静默地当作「未找到」。
     """
     pool = get_pool()
     email = current_user_email.get()

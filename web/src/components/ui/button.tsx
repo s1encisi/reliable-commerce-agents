@@ -1,3 +1,5 @@
+// 按钮基础原语：基于 base-ui Button，提供多种变体（variant）与尺寸（size）。
+
 "use client"
 
 import { Button as ButtonPrimitive } from "@base-ui/react/button"

@@ -1,4 +1,4 @@
-"""Internal authorization snapshots; never accepted as tool or HTTP arguments."""
+"""内部授权快照；绝不作为工具或 HTTP 参数被接受。"""
 
 import hashlib
 import json

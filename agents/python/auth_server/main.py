@@ -1,14 +1,14 @@
-"""Self-hosted OAuth2 Authorization Server — entry point.
+"""自托管 OAuth2 授权服务器入口。
 
-Run as HTTP service:
+启动 HTTP 服务：
     uvicorn auth_server.main:app --host 0.0.0.0 --port 8090
 
-Endpoints:
+端点：
     GET  /health
     GET  /.well-known/jwks.json
-    GET  /.well-known/oauth-authorization-server   (RFC 8414 metadata)
+    GET  /.well-known/oauth-authorization-server（RFC 8414 元数据）
     POST /oauth/token
-    POST /oauth/register    (RFC 7591 — optional, AUTH_ALLOW_DYNAMIC_REGISTRATION)
+    POST /oauth/register（RFC 7591；由 AUTH_ALLOW_DYNAMIC_REGISTRATION 开关控制）
 """
 
 from __future__ import annotations
@@ -69,27 +69,19 @@ async def lifespan(app: Starlette):
 
 
 class _RegistrationTokenError(Exception):
-    """Raised by ``_verify_registration_token`` on any validation failure."""
+    """_verify_registration_token 校验失败时抛出的异常。"""
 
 
 def _verify_registration_token(token: str) -> None:
-    """Validate a bearer token presented to ``/oauth/register`` — entirely
-    in-process, using the signing key this AS already holds in memory.
+    """使用本进程内存中的签名密钥校验 /oauth/register 的持有者令牌。
 
-    Deliberately does NOT reuse ``shared/oauth/verifier.py::RS256Verifier``
-    (the JWKS-over-HTTP verifier every *other* resource server uses): that
-    verifier fetches JWKS via a blocking HTTP call, which live-testing
-    against the real running server showed deadlocks here specifically —
-    the AS is a single-worker asyncio process, and a request handler
-    synchronously calling back into the very same event loop to fetch its
-    own JWKS blocks forever (times out) waiting for a response the process
-    can never produce while it's stuck waiting. No other resource server
-    hits this because it isn't handling a request itself while its
-    JwksTokenVerifier fetches from the AS's *separate* process. The fix
-    that generalizes: the AS should never verify its own tokens over the
-    network — it already holds the signing key, so this is just local
-    signature verification plus manual claim checks (joserfc's ``decode``
-    only verifies the signature; it does not check iss/aud/scope/exp).
+    不能复用 shared/oauth/verifier.py 的 RS256Verifier：它通过阻塞 HTTP
+    请求获取 JWKS。授权服务器是单工作进程的 asyncio 服务，在请求处理中
+    同步访问自身 JWKS 会阻塞事件循环，直到超时。其他资源服务器不会遇到
+    这个问题，因为它们访问的是独立的授权服务器进程。
+
+    授权服务器应直接使用已有密钥验签，并自行检查 iss、aud、scope、exp；
+    joserfc.decode 只检查签名，不会完成这些声明校验。
     """
     if _signing_key is None:
         raise _RegistrationTokenError("auth-server not initialized")
@@ -120,7 +112,7 @@ async def jwks(request: Request) -> JSONResponse:
 
 
 async def metadata(request: Request) -> JSONResponse:
-    """RFC 8414 authorization server metadata."""
+    """RFC 8414 授权服务器元数据。"""
     issuer = settings.AUTH_SERVER_ISSUER
     return JSONResponse(
         {
@@ -144,11 +136,11 @@ async def metadata(request: Request) -> JSONResponse:
 async def token_endpoint(request: Request) -> JSONResponse:
     form = await request.form()
     form_dict = {k: v for k, v in form.items()}
-    # ASGI headers arrive lowercase; authlib's client-auth extraction looks
-    # up "Authorization" with that exact case, so a plain dict here would
-    # silently never match. httpx.Headers is case-insensitive both ways
-    # and is a plain mapping the sync bridge can safely read from a
-    # worker thread.
+    # ASGI 将请求头名称转为小写，而 authlib 按精确的 Authorization 名称取值。
+    # 如果使用普通 dict，两者大小写不同会导致认证信息无法匹配。
+    # httpx.Headers 的读写都不区分大小写，
+    # 并提供同步桥接层需要的映射接口，
+    # 可在工作线程中安全读取。
     headers = httpx.Headers(dict(request.headers))
 
     assert _server is not None, "auth-server not initialized"
@@ -167,12 +159,10 @@ def _unauthorized(error: str, description: str) -> JSONResponse:
 
 
 async def register_endpoint(request: Request) -> JSONResponse:
-    """RFC 7591 dynamic client registration — off by default.
+    """RFC 7591 动态客户端注册，默认关闭。
 
-    Requires a bearer token scoped ``client:register``, verified entirely
-    in-process (see ``_verify_registration_token``) — never over the
-    network. ``auth_server/register.py`` holds the validation/persistence
-    logic for the request body itself.
+    调用方必须提供含 client:register 范围的令牌，并在本进程内校验，
+    不能通过网络访问自身。请求体校验与持久化见 auth_server/register.py。
     """
     if not settings.AUTH_ALLOW_DYNAMIC_REGISTRATION:
         return JSONResponse(
@@ -238,7 +228,7 @@ app = Starlette(
 
 
 def main() -> None:
-    """Console entry-point, mirrors the other agents' Dockerfile CMD."""
+    """命令行入口，与其他智能体 Dockerfile 的 CMD 保持一致。"""
     import uvicorn
 
     uvicorn.run("auth_server.main:app", host="0.0.0.0", port=8090)

@@ -1,23 +1,10 @@
-"""Verify extracted claims against real data — the ledger first, then Postgres.
+"""根据真实数据核验声明，先查台账，再批量查询 PostgreSQL。
 
-Three tiers, cheapest first:
+本轮台账已有事实无需查询；其余按实体类型执行 ANY(uuid[]) 批量查询。
+两层都检查金额一致性：存在标识但金额错误时返回 price_mismatch。
 
-1. **Ledger match** (free) — the id was seen in a tool result this same turn.
-2. **Batched DB match** — anything the ledger didn't cover gets one batched
-   ``WHERE id = ANY($1::uuid[])`` query per entity type, not one query per claim.
-3. **Consistency** — folded into both tiers above: a real id with a wrong
-   price/total is ``price_mismatch``, not ``verified``.
-
-Known limitation: DB lookups check existence and field consistency, not
-ownership — a real order id belonging to a different user still verifies.
-Grounding answers "is this a fabrication," not "is this authorized"; the
-latter is the guardrail/identity layer's job (``shared/context.py``,
-``shared/hitl.py``), not this module's.
-
-The ``products`` table has no ``stock``/``quantity`` column (inventory lives in
-``warehouse_inventory``, surfaced only by the separate ``check_stock`` tool),
-and the card contract in ``grounding-rules.yaml`` never emits a stock claim —
-so, deliberately, there is no stock verification tier here.
+订单的数据库兜底查询始终按当前用户隔离；事实核验不能泄露其他用户的订单存在性。商品表不含库存列，当前卡片契约也不声明库存，因此不在这里
+执行库存核验。
 """
 
 from __future__ import annotations
@@ -35,13 +22,13 @@ _PRICE_TOLERANCE = 0.01
 
 @dataclass(frozen=True)
 class ClaimVerdict:
-    claim_type: str  # "product" | "order" | "bare_id" | "amount" | "tracking"
+    claim_type: str  # 声明类型：product、order、bare_id、amount、tracking。
     identifier: str
-    status: str  # "verified" | "price_mismatch" | "not_found" | "unverifiable"
+    status: str  # 状态：verified、price_mismatch、not_found、unverifiable。
     detail: str | None = None
-    source: str | None = None  # "ledger" | "db" | None
-    # The real price/total, populated only when status == "price_mismatch" — lets
-    # enforce mode correct a card in place instead of only being able to strip it.
+    source: str | None = None  # 证据来源：ledger、db 或 None。
+    # 仅 price_mismatch 时填入真实价格或总额，
+    # 供 enforce 模式原地修正卡片。
     corrected_value: float | None = None
 
 
@@ -193,10 +180,14 @@ async def _verify_orders_via_db(claims: list[OrderClaim], pool: asyncpg.Pool) ->
     if not valid:
         return verdicts
 
+    from shared.context import current_user_email
+
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT id, total FROM orders WHERE id = ANY($1::uuid[])",
+            "SELECT o.id, o.total FROM orders o JOIN users u ON u.id = o.user_id "
+            "WHERE o.id = ANY($1::uuid[]) AND u.email = $2",
             [c.id for c in valid],
+            current_user_email.get(""),
         )
     by_id = {str(r["id"]): r for r in rows}
     for claim in valid:
@@ -232,7 +223,13 @@ async def _verify_bare_ids_via_db(claims: list, pool: asyncpg.Pool) -> list[Clai
     ids = [c.id for c in valid]
     async with pool.acquire() as conn:
         product_rows = await conn.fetch("SELECT id FROM products WHERE id = ANY($1::uuid[])", ids)
-        order_rows = await conn.fetch("SELECT id FROM orders WHERE id = ANY($1::uuid[])", ids)
+        from shared.context import current_user_email
+
+        order_rows = await conn.fetch(
+            "SELECT o.id FROM orders o JOIN users u ON u.id = o.user_id WHERE o.id = ANY($1::uuid[]) AND u.email = $2",
+            ids,
+            current_user_email.get(""),
+        )
     found = {str(r["id"]) for r in product_rows} | {str(r["id"]) for r in order_rows}
     for claim in valid:
         if claim.id in found:

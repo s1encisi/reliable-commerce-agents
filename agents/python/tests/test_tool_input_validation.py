@@ -1,10 +1,6 @@
-"""
-Audit fix #10 — Pydantic input-model tests for the destructive tools.
+"""敏感工具输入模型测试。
 
-The strict shapes in ``shared.tool_inputs`` are the second line of
-defence after the ``approval_mode='always_require'`` gate: even if a
-human reviewer waves through a tool call, malformed input must bounce
-back as a structured error rather than running an UPDATE with garbage.
+即使人工批准，非法参数也必须返回结构化错误，不能进入数据库更新。
 """
 
 from __future__ import annotations
@@ -66,9 +62,9 @@ def test_modify_order_accepts_clean_address() -> None:
 @pytest.mark.parametrize(
     "field,bad_value",
     [
-        ("zip", "AAAA"),  # non-numeric placeholder
+        ("zip", "AAAA"),  # 非数字占位值。
         ("zip", ""),
-        ("state", "California"),  # full name, not a code
+        ("state", "California"),  # 完整名称，不是代码。
         ("country", "United States"),
         ("street", ""),
     ],
@@ -80,7 +76,7 @@ def test_modify_order_rejects_bad_address_fields(field: str, bad_value: str) -> 
 
 
 def test_modify_order_drops_unknown_address_keys() -> None:
-    """`extra='forbid'` must reject unknown keys outright — no silent drop."""
+    """extra=forbid 必须拒绝未知键，不能静默丢弃。"""
     bad_addr = {**_GOOD_ADDR, "<script>": "alert(1)"}
     with pytest.raises(ValidationError):
         ModifyOrderInput(order_id=_GOOD_UUID, new_address=bad_addr)
@@ -120,7 +116,7 @@ def test_validation_error_payload_lists_all_field_errors() -> None:
 
     assert payload["error"] == "Invalid input to modify_order"
     assert isinstance(payload["field_errors"], list)
-    assert payload["field_errors"]  # at least one error
+    assert payload["field_errors"]  # 至少包含一项错误。
     fields = {fe["field"] for fe in payload["field_errors"]}
     assert "order_id" in fields
 

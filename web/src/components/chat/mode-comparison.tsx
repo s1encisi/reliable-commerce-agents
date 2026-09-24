@@ -17,16 +17,15 @@ import { OrchestrationGraph } from "@/components/chat/orchestration-graph";
 import { Scale, Loader2 } from "lucide-react";
 
 interface ModeComparisonProps {
-  /** Prefills the comparison prompt — typically whatever's in the composer. */
+  /** 预填对比用的提示词——通常是输入框里已有的内容。 */
   initialPrompt?: string;
 }
 
 /**
- * The differentiator (plan Phase 1.6c): run one prompt through several
- * orchestration modes side by side — tool vs. handoff vs. a workflow
- * graph — and see the actual latency/step-count/answer difference, not
- * just read about it. Standalone from the chat conversation (POST
- * /api/orchestration/compare doesn't persist anything or touch history).
+ * 差异化亮点（计划 Phase 1.6c）：把同一条提示词并排跑过多种编排模式
+ * ——工具路由 vs. 处理权交接 vs. 工作流图——直观看到延迟/步数/回答上
+ * 的真实差异，而不是只读到相关描述。它独立于对话会话（POST
+ * /api/orchestration/compare 不持久化任何内容，也不触及历史记录）。
  */
 export function ModeComparison({ initialPrompt = "" }: ModeComparisonProps) {
   const [open, setOpen] = useState(false);
@@ -65,7 +64,7 @@ export function ModeComparison({ initialPrompt = "" }: ModeComparisonProps) {
       const res = await api.compareModes(prompt.trim(), selected);
       setResults(res.results);
     } catch (err) {
-      setRunError(err instanceof Error ? err.message : "Comparison failed.");
+      setRunError(err instanceof Error ? err.message : "对比失败。");
     } finally {
       setRunning(false);
     }
@@ -75,22 +74,22 @@ export function ModeComparison({ initialPrompt = "" }: ModeComparisonProps) {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
         render={
-          <Button variant="outline" size="sm" title="Compare orchestration modes on one prompt">
+          <Button variant="outline" size="sm" title="在同一条提示词上对比各编排模式">
             <Scale className="mr-1.5 size-3.5" />
-            Compare
+            对比
           </Button>
         }
       />
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-4xl">
         <DialogHeader>
-          <DialogTitle>Compare orchestration modes</DialogTitle>
+          <DialogTitle>对比编排模式</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 pt-2">
           <Textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            placeholder="e.g. Should I buy these headphones?"
+            placeholder="例如：这副耳机值得买吗？"
             rows={2}
           />
 
@@ -109,7 +108,7 @@ export function ModeComparison({ initialPrompt = "" }: ModeComparisonProps) {
 
           <Button onClick={runComparison} disabled={running || !prompt.trim() || selected.length < 2}>
             {running && <Loader2 className="mr-2 size-4 animate-spin" />}
-            Run comparison{selected.length < 2 ? " (pick at least 2 modes)" : ""}
+            开始对比{selected.length < 2 ? "（至少选择 2 种模式）" : ""}
           </Button>
 
           {runError && <p className="text-sm text-destructive">{runError}</p>}
@@ -131,9 +130,9 @@ export function ModeComparison({ initialPrompt = "" }: ModeComparisonProps) {
                       <p className="text-destructive">{result.error}</p>
                     ) : (
                       <>
-                        <p className="whitespace-pre-wrap text-foreground/90">{result.text || "(no answer)"}</p>
+                        <p className="whitespace-pre-wrap text-foreground/90">{result.text || "（无回答）"}</p>
                         <div className="flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground">
-                          <span>{result.step_count} step{result.step_count === 1 ? "" : "s"}</span>
+                          <span>{result.step_count} 步</span>
                           {result.agents_involved.map((agent) => (
                             <Badge key={agent} variant="outline" className="text-[10px] font-normal">
                               {agent}

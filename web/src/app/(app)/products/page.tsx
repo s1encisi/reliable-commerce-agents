@@ -28,7 +28,7 @@ import { Search, Star, Package, Loader2, ShoppingCart, Check } from "lucide-reac
 import { productImageUrl } from "@/lib/images";
 
 // ---------------------------------------------------------------------------
-// Types
+// 类型
 // ---------------------------------------------------------------------------
 
 interface Product {
@@ -45,13 +45,13 @@ interface Product {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// 辅助函数
 // ---------------------------------------------------------------------------
 
 function formatPrice(price: number): string {
-  return new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat("zh-CN", {
     style: "currency",
-    currency: "USD",
+    currency: "CNY",
   }).format(price);
 }
 
@@ -82,7 +82,7 @@ function StarRating({ rating, count }: { rating: number; count: number }) {
         ))}
       </div>
       <span className="text-xs text-muted-foreground">
-        {rating.toFixed(1)} ({count} reviews)
+        {rating.toFixed(1)}（{count} 条评价）
       </span>
     </div>
   );
@@ -105,7 +105,7 @@ function getCategoryColor(category: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Skeleton loader
+// 骨架屏
 // ---------------------------------------------------------------------------
 
 function ProductCardSkeleton() {
@@ -134,18 +134,18 @@ function ProductCardSkeleton() {
 }
 
 // ---------------------------------------------------------------------------
-// Sort options
+// 排序选项
 // ---------------------------------------------------------------------------
 
 const SORT_OPTIONS = [
-  { value: "rating", label: "Rating" },
-  { value: "price_asc", label: "Price: Low to High" },
-  { value: "price_desc", label: "Price: High to Low" },
-  { value: "newest", label: "Newest" },
+  { value: "rating", label: "评分最高" },
+  { value: "price_asc", label: "价格从低到高" },
+  { value: "price_desc", label: "价格从高到低" },
+  { value: "newest", label: "最新上架" },
 ];
 
 // ---------------------------------------------------------------------------
-// Page
+// 页面
 // ---------------------------------------------------------------------------
 
 export default function ProductsPage() {
@@ -164,7 +164,7 @@ export default function ProductsPage() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState("rating");
 
-  // Debounced search
+  // 防抖搜索
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
   useEffect(() => {
@@ -186,7 +186,7 @@ export default function ProductsPage() {
       setCategories(data.categories);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to load products"
+        err instanceof Error ? err.message : "商品加载失败"
       );
     } finally {
       setLoading(false);
@@ -201,7 +201,7 @@ export default function ProductsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
+      {/* 页头 */}
       <div className="border-b border-border bg-card">
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
@@ -210,20 +210,20 @@ export default function ProductsPage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-foreground">
-                Product Catalog
+                商品目录
               </h1>
               <p className="text-sm text-muted-foreground">
-                Browse and discover products across all categories
+                浏览并发现各个品类的商品
               </p>
             </div>
           </div>
 
-          {/* Search + Sort row */}
+          {/* 搜索与排序行 */}
           <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="relative max-w-md flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search products..."
+                placeholder="搜索商品…"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"
@@ -232,7 +232,7 @@ export default function ProductsPage() {
 
             <Select value={sortBy} onValueChange={(v) => v && setSortBy(v)}>
               <SelectTrigger className="w-48">
-                <SelectValue placeholder="Sort by" />
+                <SelectValue placeholder="排序方式" />
               </SelectTrigger>
               <SelectContent>
                 {SORT_OPTIONS.map((opt) => (
@@ -244,7 +244,7 @@ export default function ProductsPage() {
             </Select>
           </div>
 
-          {/* Category filter pills */}
+          {/* 品类筛选标签 */}
           {categories.length > 0 && (
             <div className="mt-4 flex flex-wrap gap-2">
               <Button
@@ -257,7 +257,7 @@ export default function ProductsPage() {
                 }
                 onClick={() => setActiveCategory(null)}
               >
-                All
+                全部
               </Button>
               {categories.map((cat) => (
                 <Button
@@ -279,16 +279,16 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      {/* Content */}
+      {/* 内容区 */}
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Result count */}
+        {/* 结果数量 */}
         {!loading && !error && products.length > 0 && (
           <p className="mb-6 text-sm text-muted-foreground">
-            Showing {products.length} of {total} products
+            共 {total} 件商品，当前显示 {products.length} 件
           </p>
         )}
 
-        {/* Loading skeletons */}
+        {/* 加载骨架屏 */}
         {loading && (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 6 }).map((_, i) => (
@@ -297,21 +297,21 @@ export default function ProductsPage() {
           </div>
         )}
 
-        {/* Error */}
+        {/* 错误提示 */}
         {error && (
           <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             {error}
           </div>
         )}
 
-        {/* Empty state */}
+        {/* 空状态 */}
         {!loading && !error && products.length === 0 && (
           <div className="py-20 text-center">
             <Package className="mx-auto size-10 text-muted-foreground" />
             <p className="mt-3 text-sm text-muted-foreground">
               {debouncedSearch || activeCategory
-                ? "No products match your filters."
-                : "No products available."}
+                ? "没有符合筛选条件的商品。"
+                : "暂无可售商品。"}
             </p>
             {(debouncedSearch || activeCategory) && (
               <Button
@@ -323,13 +323,13 @@ export default function ProductsPage() {
                   setActiveCategory(null);
                 }}
               >
-                Clear filters
+                清除筛选
               </Button>
             )}
           </div>
         )}
 
-        {/* Product grid */}
+        {/* 商品网格 */}
         {!loading && !error && products.length > 0 && (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {products.map((product) => {
@@ -352,7 +352,7 @@ export default function ProductsPage() {
                     />
                     {product.original_price && product.original_price > product.price && (
                       <span className="absolute top-2 left-2 rounded-md bg-red-500 px-2 py-0.5 text-xs font-semibold text-white">
-                        {Math.round((1 - product.price / product.original_price) * 100)}% OFF
+                        直降 {Math.round((1 - product.price / product.original_price) * 100)}%
                       </span>
                     )}
                   </div>

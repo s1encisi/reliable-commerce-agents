@@ -1,0 +1,40 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 256
+    spike_limit_mib: 64
+  batch:
+    timeout: 2s
+exporters:
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+  prometheus:
+    endpoint: 0.0.0.0:9464
+  file:
+    path: /var/lib/otel/logs.json
+    rotation:
+      max_megabytes: 20
+      max_backups: 3
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/jaeger]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [file]

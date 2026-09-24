@@ -1,3 +1,5 @@
+// 分隔线基础原语：基于 base-ui Separator，用于水平或垂直分隔内容。
+
 "use client"
 
 import { Separator as SeparatorPrimitive } from "@base-ui/react/separator"

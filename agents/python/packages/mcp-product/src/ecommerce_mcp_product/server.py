@@ -1,15 +1,15 @@
-"""MCP Server — Product Discovery domain.
+"""MCP 服务 —— 商品发现领域。
 
-Exposes product search (keyword + filter), product details, comparison,
-trending products, and price history via the MCP streamable HTTP transport.
+通过 MCP streamable HTTP 传输暴露商品搜索（关键词 + 过滤）、商品详情、
+对比、热门商品以及价格历史。
 
-Run standalone (stdio for MCP Inspector):
+独立运行（供 MCP Inspector 使用的 stdio）：
     uv run python -m ecommerce_mcp_product.server
 
-Run as HTTP service:
+作为 HTTP 服务运行：
     uvicorn ecommerce_mcp_product.server:app --host 0.0.0.0 --port 9000
 
-Run via console script (installed):
+通过已安装的 console script 运行：
     ecommerce-mcp-product
 """
 
@@ -29,26 +29,24 @@ DATABASE_URL = os.environ.get(
     "DATABASE_URL",
     "postgresql://ecommerce:ecommerce_secret@localhost:5432/ecommerce_agents",
 )
-# Embedding model dimension — must match the vectors stored in product_embeddings.
+# 嵌入模型维度 —— 必须与 product_embeddings 中存储的向量一致。
 EMBEDDING_DIM = 1536
 
-# OAuth 2.1 resource-server mode (optional — off by default, unchanged quick-start).
+# OAuth 2.1 资源服务器模式（可选 —— 默认关闭，快速上手流程不变）。
 MCP_AUTH_ENABLED = os.environ.get("MCP_AUTH_ENABLED", "false").lower() == "true"
 
 _pool: asyncpg.Pool | None = None
 
 
 def _or_joined_tsquery(param: str) -> str:
-    """SQL expression turning a text parameter into an OR-joined tsquery.
+    """将文本参数转换为 OR 连接的 tsquery 的 SQL 表达式。
 
-    ``plainto_tsquery`` ANDs its lexemes, so "noise cancelling headphones"
-    would match only products carrying all three terms. Rewriting the
-    operators to ``|`` makes any term a match and leaves ``ts_rank`` to sort
-    full matches above partial ones.
+    ``plainto_tsquery`` 会用 AND 连接其词元，因此 "noise cancelling
+    headphones" 只会匹配同时包含这三个词的商品。把运算符改写为 ``|``
+    后任一词命中即可，并交由 ``ts_rank`` 把完全匹配排在部分匹配之前。
 
-    Vendored from ``shared/search.py`` — this package is an isolated uv
-    workspace member and must stay installable without the shared library.
-    Keep the two in sync.
+    内置自 ``shared/search.py`` —— 本包是独立的 uv 工作区成员，
+    必须能在不依赖 shared 库的情况下安装。请保持两者同步。
     """
     return f"replace(plainto_tsquery('english', {param})::text, '&', '|')::tsquery"
 
@@ -72,13 +70,13 @@ _mcp_kwargs: dict = {
         "details, compare products side by side, and check price history."
     ),
     "lifespan": _lifespan,
-    # FastMCP auto-enables DNS-rebinding Host-header protection whenever
-    # `host` is left at its default "127.0.0.1", allowlisting only
-    # localhost/127.0.0.1/::1 — which silently 421s every real call over
-    # the Docker network (e.g. a specialist calling http://mcp-product:9000).
-    # This app is actually served via `uvicorn ... --host 0.0.0.0`
-    # (see main()/the Dockerfile CMD), so declare that explicitly here too —
-    # `host="127.0.0.1"` was never accurate for how this process really runs.
+    # 只要 `host` 保持默认的 "127.0.0.1"，FastMCP 就会自动启用
+    # DNS 重绑定 Host 头保护，且仅把 localhost/127.0.0.1/::1 加入白名单 ——
+    # 这会让经由 Docker 网络发起的每一次真实调用都被静默地返回 421
+    # （例如某个专业智能体调用 http://mcp-product:9000）。
+    # 本应用实际上是经 `uvicorn ... --host 0.0.0.0` 提供服务的
+    # （参见 main()/Dockerfile 的 CMD），所以这里也显式声明该值 ——
+    # `host="127.0.0.1"` 从来就不符合该进程真实的运行方式。
     "host": "0.0.0.0",
 }
 
@@ -109,7 +107,7 @@ def _get_pool() -> asyncpg.Pool:
     return _pool
 
 
-# ─────────────────────── Tools ──────────────────────────────────────────────
+# ─────────────────────── 工具 ──────────────────────────────────────────────
 
 
 @mcp.tool()
@@ -122,7 +120,7 @@ async def search_products(
     sort_by: Annotated[str | None, "Sort: price_asc, price_desc, rating, newest"] = None,
     limit: Annotated[int, "Max results (capped at 50)"] = 10,
 ) -> list[dict]:
-    """Search the product catalog with keyword + optional filters."""
+    """使用关键词 + 可选过滤条件搜索商品目录。"""
     safe_limit = min(limit, 50)
     conditions = ["p.is_active = TRUE"]
     args: list = []
@@ -130,14 +128,13 @@ async def search_products(
 
     tsquery: str | None = None
     if query and query.strip():
-        # Postgres full-text search over the weighted products.search_vector
-        # column (name=A, brand=B, description=C). Mirrors the native
-        # product_discovery tool so MCP_ENABLED does not change results —
-        # this used to LIKE the whole query as one %phrase%, which required an
-        # exact substring and diverged badly from the native path.
+        # 基于加权的 products.search_vector 列做 Postgres 全文检索
+        # （name=A、brand=B、description=C）。与原生 product_discovery 工具
+        # 保持一致，使 MCP_ENABLED 不改变结果 —— 这里过去是把整个查询当作
+        # 一个 %phrase% 做 LIKE，要求精确子串匹配，与原生路径严重偏离。
         tsquery = _or_joined_tsquery(f"${idx}")
-        # Stopword- or punctuation-only queries reduce to an empty tsquery,
-        # which matches nothing; fall back to the filters alone.
+        # 仅含停用词或标点的查询会归约为空 tsquery，匹配不到任何内容；
+        # 此时回退为仅使用过滤条件。
         conditions.append(f"({tsquery} = ''::tsquery OR p.search_vector @@ {tsquery})")
         args.append(query)
         idx += 1
@@ -165,7 +162,7 @@ async def search_products(
         "newest": "p.created_at DESC",
     }.get(sort_by or "", None)
     if order is None:
-        # Rank by text relevance when there is a query, else by rating.
+        # 有查询时按文本相关性排序，否则按评分排序。
         order = f"ts_rank(p.search_vector, {tsquery}) DESC, p.rating DESC" if tsquery else "p.rating DESC"
 
     where = " AND ".join(conditions)
@@ -199,7 +196,7 @@ async def search_products(
 async def get_product_details(
     product_id: Annotated[str, "UUID of the product"],
 ) -> dict:
-    """Get full product details including specs, stock status, and seller info."""
+    """获取商品的完整详情，包括规格、库存状态和商家信息。"""
     async with _get_pool().acquire() as conn:
         p = await conn.fetchrow(
             """SELECT p.id, p.name, p.category, p.brand, p.price, p.original_price,
@@ -243,7 +240,7 @@ async def get_product_details(
 async def compare_products(
     product_ids: Annotated[list[str], "List of 2–3 product UUIDs to compare"],
 ) -> list[dict]:
-    """Compare 2–3 products side by side on price, rating, specs, and stock."""
+    """按价格、评分、规格和库存对 2–3 个商品做并排对比。"""
     if not 2 <= len(product_ids) <= 3:
         return [{"error": "Provide 2 or 3 product IDs to compare"}]
 
@@ -288,7 +285,7 @@ async def get_trending_products(
     days: Annotated[int, "Trending period in days (default 30)"] = 30,
     limit: Annotated[int, "Max results"] = 10,
 ) -> list[dict]:
-    """Get trending products ranked by recent order volume."""
+    """获取按近期订单量排名的热门商品。"""
     safe_limit = min(limit, 50)
     conditions = ["p.is_active = TRUE", f"o.created_at >= NOW() - INTERVAL '{days} days'"]
     args: list = []
@@ -333,7 +330,7 @@ async def get_price_history(
     product_id: Annotated[str, "UUID of the product"],
     days: Annotated[int, "History window: 30, 60, or 90 days"] = 30,
 ) -> dict:
-    """Get price trend data with average, min, max, and a deal-quality signal."""
+    """获取价格趋势数据，包含平均值、最小值、最大值以及优惠质量信号。"""
     async with _get_pool().acquire() as conn:
         product = await conn.fetchrow("SELECT name, price FROM products WHERE id = $1", product_id)
         if not product:
@@ -372,15 +369,15 @@ async def get_price_history(
         }
 
 
-# ─────────────────────── ASGI entry-point ───────────────────────────────────
+# ─────────────────────── ASGI 入口点 ───────────────────────────────────
 
-# Starlette ASGI app — used by uvicorn in Docker Compose and local dev.
-# MAF's MCPStreamableHTTPTool connects to the /mcp endpoint exposed here.
+# Starlette ASGI 应用 —— 供 Docker Compose 中的 uvicorn 以及本地开发使用。
+# MAF 的 MCPStreamableHTTPTool 连接到此处暴露的 /mcp 端点。
 app = mcp.streamable_http_app()
 
 
 def main() -> None:
-    """Console script entry-point. Runs the HTTP server via uvicorn."""
+    """Console script 入口点。通过 uvicorn 运行 HTTP 服务。"""
     import uvicorn
 
     port = int(os.environ.get("PORT", "9000"))
@@ -388,5 +385,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    # stdio transport for local testing with MCP Inspector
+    # stdio 传输，用于配合 MCP Inspector 做本地测试
     mcp.run()

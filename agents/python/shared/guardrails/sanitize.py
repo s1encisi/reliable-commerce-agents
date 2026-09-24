@@ -1,17 +1,11 @@
-"""Neutralize stored / indirect prompt injection in untrusted text.
+"""净化不可信文本中的存储型和间接提示注入。
 
-Tool results re-enter the model as function-result messages. Content that
-originates from other users - product reviews, descriptions, order notes -
-can carry adversarial instructions ("ignore previous instructions", role
-reassignments, fake system turns, system-prompt exfiltration). This module
-*defangs* those markers (replaces them with an inert ``[neutralized]`` token
-rather than deleting them, so legitimate analysis still sees that the text
-existed) and strips control / zero-width characters used to smuggle hidden
-instructions.
+评论、描述或订单备注可能包含忽略指令、角色伪造、虚假系统轮次或
+窃取提示词的内容。用 [neutralized] 替换相关标记，保留文本曾存在的
+证据，并移除用于隐藏指令的控制字符和零宽字符。
 
-Pure functions: no I/O, no LLM, no DB. Patterns are deliberately high
-precision (low false-positive) - the prompt-layer rules and the inbound
-injection detector are the other two layers of defense.
+纯函数，无 I/O、模型或数据库访问；规则偏重低误报，与提示词规则
+及输入注入检测组成多层防护。
 """
 
 from __future__ import annotations
@@ -19,10 +13,10 @@ from __future__ import annotations
 import re
 from typing import Any
 
-# Codepoints to strip: C0 controls except TAB (0x09) / LF (0x0A) / CR (0x0D),
-# DEL, the zero-width marks, line/paragraph separators, and the BOM. Declared
-# numerically (via translate) so the source file never contains raw control
-# bytes.
+# 移除 C0 控制符，但保留 TAB、LF 和 CR；
+# 另移除 DEL、零宽字符、行段分隔符及 BOM。
+# 通过数字码点和 translate 声明，
+# 避免源码直接包含控制字节。
 _STRIP_CODEPOINTS = (
     *range(0x00, 0x09),
     0x0B,
@@ -36,9 +30,9 @@ _STRIP_CODEPOINTS = (
 )
 _CONTROL_TRANSLATION = dict.fromkeys(_STRIP_CODEPOINTS)
 
-# High-precision injection signals. Case-insensitive; the fake-turn pattern is
-# anchored to a line start so it does not fire on legitimate prose like
-# "the System: Pro model".
+# 高精度注入信号，不区分大小写；伪造轮次规则锚定行首，
+# 避免误伤普通正文，
+# 例如商品名称中的 System: Pro。
 _INJECTION_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(
         r"ignore\s+(?:all\s+|any\s+)?(?:the\s+)?(?:previous|prior|above|earlier)\s+"
@@ -67,14 +61,14 @@ _MARK = "[neutralized]"
 
 
 def contains_injection_markers(text: str) -> bool:
-    """Return True if *text* matches any high-precision injection signal."""
+    """文本命中任一高精度注入信号时返回 True。"""
     if not text:
         return False
     return any(pattern.search(text) for pattern in _INJECTION_PATTERNS)
 
 
 def neutralize_text(text: str) -> str:
-    """Defang injection markers and strip control/zero-width chars in one string."""
+    """净化单个字符串的注入标记，并移除控制与零宽字符。"""
     if not text:
         return text
     cleaned = text.translate(_CONTROL_TRANSLATION)
@@ -84,13 +78,11 @@ def neutralize_text(text: str) -> str:
 
 
 def neutralize_value(value: Any, *, fields: set[str] | None = None, _key: str | None = None) -> Any:
-    """Recursively neutralize untrusted strings inside a tool result.
+    """递归净化工具结果中的不可信字符串。
 
-    Args:
-        value: tool result - ``str`` / ``dict`` / ``list`` / scalar.
-        fields: if given, only strings whose immediate dict key is in this set
-            (at any nesting depth) are neutralized; otherwise every string is.
-        _key: internal - the dict key the current value sits under.
+    value 为字符串、字典、列表或标量。fields 指定时，只净化任意深度
+    直属字典键命中的字符串；未指定则处理全部字符串。_key 为递归内部
+    使用的当前字段名。
     """
     if isinstance(value, str):
         if fields is None or _key in fields:

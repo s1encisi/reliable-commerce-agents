@@ -1,14 +1,8 @@
-"""Tool-output sanitization middleware (Track A — stored-injection defense).
+"""工具输出净化中间件，防御存储型提示注入。
 
-Runs after each tool executes and rewrites ``context.result`` in place for the
-allowlisted tools whose results carry user-generated content, so adversarial
-instructions embedded in reviews / descriptions / order notes reach the model
-as inert data. MAF's ``FunctionInvocationContext.result`` is explicitly
-documented as settable after ``call_next()`` to override the result.
-
-No-op when guardrails or output sanitization are disabled. On an unexpected
-error it logs and (fail-open) returns the raw result, unless
-``GUARDRAILS_FAIL_OPEN`` is False, in which case it re-raises.
+工具执行后，原地改写允许列表中含用户内容的 context.result，使评论、
+商品描述或订单备注中的恶意指令作为普通数据返回。护栏关闭时不处理；
+意外失败默认记录并返回原结果，GUARDRAILS_FAIL_OPEN=False 时重新抛错。
 """
 
 from __future__ import annotations
@@ -27,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 class OutputSanitizationMiddleware(FunctionMiddleware):
-    """Neutralize stored / indirect prompt injection in tool outputs."""
+    """净化工具输出中的存储型或间接提示注入。"""
 
     def __init__(self, tools: dict[str, set[str] | None] | None = None) -> None:
         self.tools = tools if tools is not None else SANITIZE_TOOLS
@@ -52,10 +46,10 @@ class OutputSanitizationMiddleware(FunctionMiddleware):
         if original is None:
             return
 
-        # MAF wraps a tool's return value in list[Content] with the JSON in
-        # .text — see shared/function_results.py's module docstring for how
-        # this was found (this middleware silently sanitized nothing before,
-        # since neutralize_value doesn't know about Content objects).
+        # MAF 将工具结果包装为 list[Content]，JSON 存在 text 中。
+        # 需要先通过 shared/function_results.py 解包，
+        # 否则 neutralize_value 无法识别 Content，
+        # 会静默跳过真正需要净化的内容。
         unwrapped = unwrap_function_result(original)
 
         try:

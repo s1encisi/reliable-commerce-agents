@@ -37,7 +37,7 @@ import {
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
-// Skeleton loader
+// 骨架屏
 // ---------------------------------------------------------------------------
 
 function CartItemSkeleton() {
@@ -72,7 +72,7 @@ function SummarySkeleton() {
 }
 
 // ---------------------------------------------------------------------------
-// Page
+// 页面
 // ---------------------------------------------------------------------------
 
 export default function CartPage() {
@@ -88,7 +88,7 @@ export default function CartPage() {
 
   if (authLoading || !user) return null;
 
-  // -- Coupon handlers --
+  // —— 优惠券处理 ——
 
   async function handleApplyCoupon() {
     const code = couponInput.trim();
@@ -101,7 +101,7 @@ export default function CartPage() {
       setCouponInput("");
       toastCouponApplied(code);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to apply coupon";
+      const msg = err instanceof Error ? err.message : "优惠券使用失败";
       setCouponError(msg);
       toastCouponFailed(msg);
     } finally {
@@ -117,14 +117,14 @@ export default function CartPage() {
       await refreshCart();
     } catch (err) {
       setCouponError(
-        err instanceof Error ? err.message : "Failed to remove coupon"
+        err instanceof Error ? err.message : "优惠券移除失败"
       );
     } finally {
       setCouponLoading(false);
     }
   }
 
-  // -- Quantity handlers --
+  // —— 数量处理 ——
 
   async function handleUpdateQty(itemId: string, newQty: number) {
     if (newQty < 1) return;
@@ -145,7 +145,7 @@ export default function CartPage() {
     setUpdatingItems((prev) => new Set(prev).add(itemId));
     try {
       await removeItem(itemId);
-      toastCartRemoved("Item removed");
+      toastCartRemoved("商品已移除");
     } finally {
       setUpdatingItems((prev) => {
         const next = new Set(prev);
@@ -155,7 +155,7 @@ export default function CartPage() {
     }
   }
 
-  // -- Empty state --
+  // —— 空状态 ——
 
   if (!isLoading && (!cart || cart.items.length === 0)) {
     return (
@@ -168,9 +168,9 @@ export default function CartPage() {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-foreground">
-                  Shopping Cart
+                  购物车
                 </h1>
-                <p className="text-sm text-muted-foreground">0 items</p>
+                <p className="text-sm text-muted-foreground">0 件商品</p>
               </div>
             </div>
           </div>
@@ -178,16 +178,16 @@ export default function CartPage() {
         <div className="mx-auto max-w-7xl px-4 py-20 text-center sm:px-6 lg:px-8">
           <ShoppingBag className="mx-auto size-12 text-muted-foreground" />
           <h2 className="mt-4 text-lg font-semibold text-muted-foreground">
-            Your cart is empty
+            购物车是空的
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Looks like you haven&apos;t added any products yet.
+            您还没有添加任何商品。
           </p>
           <Button
             className="mt-6 bg-primary hover:opacity-90"
             onClick={() => router.push("/products")}
           >
-            Browse Products
+            浏览商品
           </Button>
         </div>
       </div>
@@ -196,7 +196,7 @@ export default function CartPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
+      {/* 页头 */}
       <div className="border-b border-border bg-card">
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
@@ -205,17 +205,17 @@ export default function CartPage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-foreground">
-                Shopping Cart
+                购物车
               </h1>
               <p className="text-sm text-muted-foreground">
-                {isLoading ? "Loading..." : `${itemCount} item${itemCount !== 1 ? "s" : ""}`}
+                {isLoading ? "加载中…" : `${itemCount} 件商品`}
               </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Content */}
+      {/* 内容区 */}
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {isLoading ? (
           <div className="grid gap-8 lg:grid-cols-3">
@@ -230,7 +230,7 @@ export default function CartPage() {
           </div>
         ) : (
           <div className="grid gap-8 lg:grid-cols-3">
-            {/* Items column */}
+            {/* 商品列表列 */}
             <div className="lg:col-span-2">
               <Card>
                 <CardContent className="divide-y divide-border p-0">
@@ -253,7 +253,7 @@ export default function CartPage() {
                           isUpdating ? "opacity-60" : ""
                         }`}
                       >
-                        {/* Product image */}
+                        {/* 商品图片 */}
                         <Link
                           href={`/products/${item.product_id}`}
                           className="shrink-0"
@@ -266,7 +266,7 @@ export default function CartPage() {
                           />
                         </Link>
 
-                        {/* Item details */}
+                        {/* 商品信息 */}
                         <div className="flex flex-1 flex-col gap-1 min-w-0">
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
@@ -288,7 +288,7 @@ export default function CartPage() {
                             </Badge>
                           </div>
 
-                          {/* Price */}
+                          {/* 价格 */}
                           <div className="flex items-baseline gap-2">
                             <span className="text-sm font-medium text-foreground">
                               {formatPrice(item.price)}
@@ -300,21 +300,21 @@ export default function CartPage() {
                             )}
                           </div>
 
-                          {/* Stock warnings */}
+                          {/* 库存提醒 */}
                           {outOfStock && (
                             <div className="flex items-center gap-1 text-xs text-red-600">
                               <AlertTriangle className="size-3" />
-                              Out of stock
+                              缺货
                             </div>
                           )}
                           {lowStock && (
                             <div className="flex items-center gap-1 text-xs text-amber-600">
                               <AlertTriangle className="size-3" />
-                              Only {item.available_qty} left
+                              仅剩 {item.available_qty} 件
                             </div>
                           )}
 
-                          {/* Quantity controls + subtotal */}
+                          {/* 数量控制与小计 */}
                           <div className="mt-auto flex items-center justify-between pt-2">
                             <div className="flex items-center gap-1">
                               <Button
@@ -366,22 +366,22 @@ export default function CartPage() {
               </Card>
             </div>
 
-            {/* Summary column */}
+            {/* 摘要列 */}
             <div className="lg:sticky lg:top-8 lg:self-start">
               <Card>
                 <CardHeader>
-                  <CardTitle>Order Summary</CardTitle>
+                  <CardTitle>订单摘要</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {/* Subtotal */}
+                  {/* 小计 */}
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="text-muted-foreground">小计</span>
                     <span className="text-muted-foreground">
                       {formatPrice(cart!.subtotal)}
                     </span>
                   </div>
 
-                  {/* Coupon section */}
+                  {/* 优惠券区域 */}
                   <div className="space-y-2">
                     {cart!.coupon_code ? (
                       <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
@@ -404,14 +404,14 @@ export default function CartPage() {
                           {couponLoading ? (
                             <Loader2 className="size-3 animate-spin" />
                           ) : (
-                            "Remove"
+                            "移除"
                           )}
                         </Button>
                       </div>
                     ) : (
                       <div className="flex gap-2">
                         <Input
-                          placeholder="Coupon code"
+                          placeholder="优惠码"
                           value={couponInput}
                           onChange={(e) => {
                             setCouponInput(e.target.value);
@@ -432,7 +432,7 @@ export default function CartPage() {
                           {couponLoading ? (
                             <Loader2 className="size-3 animate-spin" />
                           ) : (
-                            "Apply"
+                            "使用"
                           )}
                         </Button>
                       </div>
@@ -442,10 +442,10 @@ export default function CartPage() {
                     )}
                   </div>
 
-                  {/* Discount */}
+                  {/* 优惠金额 */}
                   {cart!.discount_amount > 0 && (
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Discount</span>
+                      <span className="text-muted-foreground">优惠</span>
                       <span className="text-emerald-600">
                         -{formatPrice(cart!.discount_amount)}
                       </span>
@@ -454,33 +454,33 @@ export default function CartPage() {
 
                   <Separator />
 
-                  {/* Total */}
+                  {/* 合计 */}
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-muted-foreground">
-                      Total
+                      合计
                     </span>
                     <span className="text-xl font-bold text-foreground">
                       {formatPrice(cart!.total)}
                     </span>
                   </div>
 
-                  {/* Checkout button */}
+                  {/* 结算按钮 */}
                   <Button
                     className="w-full bg-primary hover:opacity-90"
                     size="lg"
                     onClick={() => router.push("/checkout")}
                   >
-                    Proceed to Checkout
+                    去结算
                     <ArrowRight className="ml-2 size-4" />
                   </Button>
 
-                  {/* Continue shopping */}
+                  {/* 继续购物 */}
                   <div className="text-center">
                     <Link
                       href="/products"
                       className="text-sm text-muted-foreground hover:text-primary hover:underline"
                     >
-                      Continue Shopping
+                      继续购物
                     </Link>
                   </div>
                 </CardContent>

@@ -1,5 +1,5 @@
 name: text-pipeline
-description: Canonical three-stage pipeline — uppercase, validate, log.
+description: 规范的三阶段流水线——转大写、校验、记录日志。
 start: uppercase
 
 executors:

@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
-// Types
+// 类型
 // ---------------------------------------------------------------------------
 
 interface AddressForm {
@@ -49,7 +49,7 @@ const EMPTY_ADDRESS: AddressForm = {
   city: "",
   state: "",
   zip: "",
-  country: "US",
+  country: "中国",
   phone: "",
 };
 
@@ -61,13 +61,13 @@ function addressFromApi(addr: Address | null): AddressForm {
     city: addr.city ?? "",
     state: addr.state ?? "",
     zip: addr.zip ?? "",
-    country: addr.country ?? "US",
+    country: addr.country ?? "中国",
     phone: addr.phone ?? "",
   };
 }
 
 // ---------------------------------------------------------------------------
-// Address form component
+// 地址表单组件
 // ---------------------------------------------------------------------------
 
 function AddressFormFields({
@@ -86,60 +86,60 @@ function AddressFormFields({
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       <div className="sm:col-span-2">
-        <Label htmlFor={`${idPrefix}-name`}>Full Name</Label>
+        <Label htmlFor={`${idPrefix}-name`}>收件人姓名</Label>
         <Input
           id={`${idPrefix}-name`}
-          placeholder="John Doe"
+          placeholder="张伟"
           value={value.name}
           onChange={(e) => update("name", e.target.value)}
           className="mt-1.5"
         />
       </div>
       <div className="sm:col-span-2">
-        <Label htmlFor={`${idPrefix}-street`}>Street Address</Label>
+        <Label htmlFor={`${idPrefix}-street`}>街道地址</Label>
         <Input
           id={`${idPrefix}-street`}
-          placeholder="123 Main St"
+          placeholder="某某路 123 号 5 栋 601 室"
           value={value.street}
           onChange={(e) => update("street", e.target.value)}
           className="mt-1.5"
         />
       </div>
       <div>
-        <Label htmlFor={`${idPrefix}-city`}>City</Label>
+        <Label htmlFor={`${idPrefix}-city`}>城市</Label>
         <Input
           id={`${idPrefix}-city`}
-          placeholder="San Francisco"
+          placeholder="上海市"
           value={value.city}
           onChange={(e) => update("city", e.target.value)}
           className="mt-1.5"
         />
       </div>
       <div>
-        <Label htmlFor={`${idPrefix}-state`}>State</Label>
+        <Label htmlFor={`${idPrefix}-state`}>省份</Label>
         <Input
           id={`${idPrefix}-state`}
-          placeholder="CA"
+          placeholder="上海市"
           value={value.state}
           onChange={(e) => update("state", e.target.value)}
           className="mt-1.5"
         />
       </div>
       <div>
-        <Label htmlFor={`${idPrefix}-zip`}>ZIP Code</Label>
+        <Label htmlFor={`${idPrefix}-zip`}>邮政编码</Label>
         <Input
           id={`${idPrefix}-zip`}
-          placeholder="94102"
+          placeholder="200000"
           value={value.zip}
           onChange={(e) => update("zip", e.target.value)}
           className="mt-1.5"
         />
       </div>
       <div>
-        <Label htmlFor={`${idPrefix}-country`}>Country</Label>
+        <Label htmlFor={`${idPrefix}-country`}>国家/地区</Label>
         <Input
           id={`${idPrefix}-country`}
-          placeholder="US"
+          placeholder="中国"
           value={value.country}
           onChange={(e) => update("country", e.target.value)}
           className="mt-1.5"
@@ -147,11 +147,11 @@ function AddressFormFields({
       </div>
       <div className="sm:col-span-2">
         <Label htmlFor={`${idPrefix}-phone`}>
-          Phone <span className="text-muted-foreground">(optional)</span>
+          手机号 <span className="text-muted-foreground">（选填）</span>
         </Label>
         <Input
           id={`${idPrefix}-phone`}
-          placeholder="+1 (555) 123-4567"
+          placeholder="138 0000 0000"
           value={value.phone}
           onChange={(e) => update("phone", e.target.value)}
           className="mt-1.5"
@@ -162,7 +162,7 @@ function AddressFormFields({
 }
 
 // ---------------------------------------------------------------------------
-// Page
+// 页面
 // ---------------------------------------------------------------------------
 
 export default function CheckoutPage() {
@@ -174,16 +174,16 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Address state
+  // 地址状态
   const [shipping, setShipping] = useState<AddressForm>({ ...EMPTY_ADDRESS });
   const [billing, setBilling] = useState<AddressForm>({ ...EMPTY_ADDRESS });
   const [billingSame, setBillingSame] = useState(true);
 
-  // Checkout state
+  // 结算状态
   const [placing, setPlacing] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
-  // Load cart on mount
+  // 挂载时加载购物车
   const loadCart = useCallback(async () => {
     try {
       setLoading(true);
@@ -191,7 +191,7 @@ export default function CheckoutPage() {
       const data = await api.getCart();
       setCart(data);
 
-      // Pre-populate addresses if set on cart
+      // 若购物车已存地址，则预填
       if (data.shipping_address) {
         setShipping(addressFromApi(data.shipping_address));
       }
@@ -202,7 +202,7 @@ export default function CheckoutPage() {
         setBillingSame(data.billing_same_as_shipping);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load cart");
+      setError(err instanceof Error ? err.message : "购物车加载失败");
     } finally {
       setLoading(false);
     }
@@ -214,26 +214,26 @@ export default function CheckoutPage() {
 
   if (authLoading || !user) return null;
 
-  // -- Validation --
+  // —— 校验 ——
 
   function validateShipping(): string | null {
-    if (!shipping.street.trim()) return "Street address is required";
-    if (!shipping.city.trim()) return "City is required";
-    if (!shipping.state.trim()) return "State is required";
-    if (!shipping.zip.trim()) return "ZIP code is required";
+    if (!shipping.street.trim()) return "请填写街道地址";
+    if (!shipping.city.trim()) return "请填写城市";
+    if (!shipping.state.trim()) return "请填写省份";
+    if (!shipping.zip.trim()) return "请填写邮政编码";
     return null;
   }
 
   function validateBilling(): string | null {
     if (billingSame) return null;
-    if (!billing.street.trim()) return "Billing street address is required";
-    if (!billing.city.trim()) return "Billing city is required";
-    if (!billing.state.trim()) return "Billing state is required";
-    if (!billing.zip.trim()) return "Billing ZIP code is required";
+    if (!billing.street.trim()) return "请填写账单街道地址";
+    if (!billing.city.trim()) return "请填写账单城市";
+    if (!billing.state.trim()) return "请填写账单省份";
+    if (!billing.zip.trim()) return "请填写账单邮政编码";
     return null;
   }
 
-  // -- Place order --
+  // —— 提交订单 ——
 
   async function handlePlaceOrder() {
     setCheckoutError(null);
@@ -257,7 +257,7 @@ export default function CheckoutPage() {
         city: shipping.city,
         state: shipping.state,
         zip: shipping.zip,
-        country: shipping.country || "US",
+        country: shipping.country || "中国",
         phone: shipping.phone || undefined,
       };
 
@@ -269,7 +269,7 @@ export default function CheckoutPage() {
             city: billing.city,
             state: billing.state,
             zip: billing.zip,
-            country: billing.country || "US",
+            country: billing.country || "中国",
             phone: billing.phone || undefined,
           };
 
@@ -279,20 +279,20 @@ export default function CheckoutPage() {
         billing_same_as_shipping: billingSame,
       });
 
-      // Refresh the cart context (cart is now empty)
+      // 刷新购物车上下文（此时购物车已清空）
       await refreshCart();
       toastOrderPlaced(result.order_id);
       router.push(`/orders/${result.order_id}?placed=true`);
     } catch (err) {
       setCheckoutError(
-        err instanceof Error ? err.message : "Checkout failed. Please try again."
+        err instanceof Error ? err.message : "结算失败，请稍后重试。"
       );
     } finally {
       setPlacing(false);
     }
   }
 
-  // -- Loading state --
+  // —— 加载状态 ——
 
   if (loading) {
     return (
@@ -306,7 +306,7 @@ export default function CheckoutPage() {
               onClick={() => router.push("/cart")}
             >
               <ArrowLeft className="mr-1.5 size-4" />
-              Back to Cart
+              返回购物车
             </Button>
           </div>
         </div>
@@ -317,7 +317,7 @@ export default function CheckoutPage() {
     );
   }
 
-  // -- Empty cart --
+  // —— 空购物车 ——
 
   if (!cart || cart.items.length === 0) {
     return (
@@ -331,30 +331,30 @@ export default function CheckoutPage() {
               onClick={() => router.push("/cart")}
             >
               <ArrowLeft className="mr-1.5 size-4" />
-              Back to Cart
+              返回购物车
             </Button>
           </div>
         </div>
         <div className="mx-auto max-w-4xl px-4 py-20 text-center sm:px-6 lg:px-8">
           <Package className="mx-auto size-12 text-muted-foreground" />
           <h2 className="mt-4 text-lg font-semibold text-muted-foreground">
-            Your cart is empty
+            购物车是空的
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Add some products before checking out.
+            请先添加商品再进行结算。
           </p>
           <Button
             className="mt-6 bg-primary hover:opacity-90"
             onClick={() => router.push("/products")}
           >
-            Browse Products
+            浏览商品
           </Button>
         </div>
       </div>
     );
   }
 
-  // -- Error loading cart --
+  // —— 购物车加载失败 ——
 
   if (error) {
     return (
@@ -368,7 +368,7 @@ export default function CheckoutPage() {
               onClick={() => router.push("/cart")}
             >
               <ArrowLeft className="mr-1.5 size-4" />
-              Back to Cart
+              返回购物车
             </Button>
           </div>
         </div>
@@ -383,7 +383,7 @@ export default function CheckoutPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
+      {/* 页头 */}
       <div className="border-b border-border bg-card">
         <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
           <Button
@@ -393,31 +393,31 @@ export default function CheckoutPage() {
             onClick={() => router.push("/cart")}
           >
             <ArrowLeft className="mr-1.5 size-4" />
-            Back to Cart
+            返回购物车
           </Button>
           <div className="mt-4 flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-lg bg-primary">
               <CheckCircle className="size-5 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Checkout</h1>
+              <h1 className="text-2xl font-bold text-foreground">结算</h1>
               <p className="text-sm text-muted-foreground">
-                Complete your order ({cart.item_count} item{cart.item_count !== 1 ? "s" : ""})
+                完成您的订单（{cart.item_count} 件商品）
               </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Content */}
+      {/* 内容区 */}
       <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="space-y-6">
-          {/* Section 1: Shipping Address */}
+          {/* 第 1 部分：收货地址 */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <MapPin className="size-4 text-muted-foreground" />
-                Shipping Address
+                收货地址
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -429,12 +429,12 @@ export default function CheckoutPage() {
             </CardContent>
           </Card>
 
-          {/* Section 2: Billing Address */}
+          {/* 第 2 部分：账单地址 */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <CreditCard className="size-4 text-muted-foreground" />
-                Billing Address
+                账单地址
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -446,7 +446,7 @@ export default function CheckoutPage() {
                   className="size-4 rounded border-border text-primary focus:ring-primary"
                 />
                 <span className="text-sm text-muted-foreground">
-                  Same as shipping address
+                  与收货地址相同
                 </span>
               </label>
               {!billingSame && (
@@ -459,16 +459,16 @@ export default function CheckoutPage() {
             </CardContent>
           </Card>
 
-          {/* Section 3: Order Review */}
+          {/* 第 3 部分：订单确认 */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Package className="size-4 text-muted-foreground" />
-                Order Review
+                订单确认
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Item list */}
+              {/* 商品清单 */}
               <div className="divide-y divide-border">
                 {cart.items.map((item) => (
                   <div
@@ -486,7 +486,7 @@ export default function CheckoutPage() {
                         {item.name}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {item.quantity} x {formatPrice(item.price)}
+                        {item.quantity} × {formatPrice(item.price)}
                       </p>
                     </div>
                     <span className="text-sm font-medium text-foreground shrink-0">
@@ -498,10 +498,10 @@ export default function CheckoutPage() {
 
               <Separator />
 
-              {/* Totals */}
+              {/* 金额汇总 */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="text-muted-foreground">小计</span>
                   <span className="text-muted-foreground">
                     {formatPrice(cart.subtotal)}
                   </span>
@@ -510,7 +510,7 @@ export default function CheckoutPage() {
                   <div className="flex items-center justify-between text-sm">
                     <span className="flex items-center gap-1.5 text-muted-foreground">
                       <Tag className="size-3 text-emerald-500" />
-                      Coupon ({cart.coupon_code})
+                      优惠券（{cart.coupon_code}）
                     </span>
                     <span className="text-emerald-600">
                       -{formatPrice(cart.discount_amount)}
@@ -520,7 +520,7 @@ export default function CheckoutPage() {
                 <Separator />
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-muted-foreground">
-                    Total
+                    合计
                   </span>
                   <span className="text-xl font-bold text-foreground">
                     {formatPrice(cart.total)}
@@ -530,44 +530,44 @@ export default function CheckoutPage() {
             </CardContent>
           </Card>
 
-          {/* Section 4: Payment */}
+          {/* 第 4 部分：支付方式 */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <CreditCard className="size-4 text-muted-foreground" />
-                Payment
+                支付方式
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="rounded-xl border border-border bg-gradient-to-br from-slate-800 to-slate-900 p-6 text-white">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-medium uppercase tracking-wider text-slate-400">
-                    Demo Payment
+                    演示支付
                   </span>
                   <CreditCard className="size-6 text-slate-400" />
                 </div>
                 <div className="mt-6 font-mono text-lg tracking-widest">
-                  4242 4242 4242 4242
+                  6222 0202 0000 0000
                 </div>
                 <div className="mt-4 flex items-center justify-between text-xs text-slate-400">
-                  <span>DEMO CARD</span>
+                  <span>演示卡</span>
                   <span>12/99</span>
                 </div>
               </div>
               <p className="mt-3 text-center text-xs text-muted-foreground">
-                This is a demo application. No real payment will be processed.
+                这是演示应用，不会产生真实支付。
               </p>
             </CardContent>
           </Card>
 
-          {/* Error message */}
+          {/* 错误提示 */}
           {checkoutError && (
             <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
               {checkoutError}
             </div>
           )}
 
-          {/* Place Order button */}
+          {/* 提交订单按钮 */}
           <Button
             className="w-full bg-primary hover:opacity-90"
             size="lg"
@@ -577,12 +577,12 @@ export default function CheckoutPage() {
             {placing ? (
               <>
                 <Loader2 className="mr-2 size-4 animate-spin" />
-                Processing Order...
+                正在提交订单…
               </>
             ) : (
               <>
                 <Truck className="mr-2 size-4" />
-                Place Order -- {formatPrice(cart.total)}
+                提交订单 —— {formatPrice(cart.total)}
               </>
             )}
           </Button>

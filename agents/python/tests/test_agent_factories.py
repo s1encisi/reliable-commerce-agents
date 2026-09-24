@@ -1,8 +1,7 @@
-"""Track D3 — agent factory coverage.
+"""智能体工厂测试。
 
-Each `create_*_agent()` is built with a dummy key (no network call is made at
-construction time) and asserted on name + attached tool count + composed
-middleware. No live LLM, no DB.
+用测试占位密钥构建，检查名称、工具数量与中间件组合；
+构建阶段不发起网络、模型或数据库调用。
 """
 
 from __future__ import annotations
@@ -13,7 +12,7 @@ import pytest
 
 from shared.config import settings
 
-# (module, factory, expected agent.name)
+# 元组内容：模块、工厂、预期智能体名称。
 FACTORIES = [
     ("product_discovery.agent", "create_product_discovery_agent", "product-discovery"),
     ("order_management.agent", "create_order_management_agent", "order-management"),
@@ -26,7 +25,7 @@ FACTORIES = [
 
 @pytest.fixture(autouse=True)
 def _openai_dummy(monkeypatch: pytest.MonkeyPatch) -> None:
-    # create_chat_client only checks the key is non-empty; no network at build time.
+    # 创建客户端只检查密钥非空，构建时不访问网络。
     monkeypatch.setattr(settings, "LLM_PROVIDER", "openai", raising=False)
     monkeypatch.setattr(settings, "OPENAI_API_KEY", "test-key", raising=False)
 
@@ -64,4 +63,4 @@ def test_factory_attaches_full_tool_set(module: str, factory: str, expected_name
 def test_factory_composes_system_prompt(module: str, factory: str, expected_name: str) -> None:
     mod = importlib.import_module(module)
     agent = getattr(mod, factory)()
-    assert _options(agent).get("instructions")  # YAML-composed prompt is present
+    assert _options(agent).get("instructions")  # 确认 YAML 组合提示词存在。

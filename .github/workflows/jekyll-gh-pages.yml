@@ -1,16 +1,13 @@
-# Build and deploy the documentation site to GitHub Pages.
+# 构建文档站点并部署到 GitHub Pages。
 #
-# Adapted from the sibling repos (clean-architecture-docker-dotnet-angular,
-# mean-docker), which both publish `docs/` directly with just-the-docs. This one
-# differs in a single way that matters: the site is *generated* first.
+# 与直接用 just-the-docs 发布 `docs/` 的常见做法相比，本工作流有一处关键不同：
+# 站点是**先被生成**的。
 #
-# `scripts/build_docs_site.py` assembles `_site_src/` from three separate trees
-# — docs/, docs/concepts/ and the 34 tutorial chapters — injecting Jekyll front
-# matter and rewriting every cross-tree link. That keeps the repository free of
-# front matter, which would otherwise render as a metadata table on top of every
-# file when read on GitHub. The repo stays the source of truth; the site is a
-# rendering of it.
-name: Deploy docs site to GitHub Pages
+# `scripts/build_docs_site.py` 从三棵独立的树 —— docs/、docs/concepts/ 与 34 个教程
+# 章节 —— 组装出 `_site_src/`，注入 Jekyll front matter 并重写每一条跨树链接。
+# 这让仓库里不含 front matter，否则在 GitHub 上阅读时它会渲染成每个文件顶部的
+# 元数据表格。仓库仍是唯一事实来源；站点只是它的一种渲染结果。
+name: 部署文档站点到 GitHub Pages
 
 on:
   push:
@@ -33,7 +30,7 @@ permissions:
   pages: write
   id-token: write
 
-# Never cancel an in-progress production deploy.
+# 绝不取消进行中的生产部署。
 concurrency:
   group: "pages"
   cancel-in-progress: false
@@ -42,40 +39,39 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: 检出代码
         uses: actions/checkout@v4
 
-      - name: Setup Pages
+      - name: 配置 Pages
         uses: actions/configure-pages@v5
 
-      - name: Set up Python
+      - name: 配置 Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      # Runs on pull requests too, where the deploy job does not. A site whose
-      # links rot is worse than no site, and a broken cross-tree link is exactly
-      # the kind of thing that only shows up once the trees are merged into one
-      # URL space — so it has to fail the PR, not the deploy.
-      - name: Check the generated site (front matter, nav parents, links)
+      # 在 pull request 上也会运行，而 deploy job 不会。链接烂掉的站点比没有站点更糟，
+      # 而一条断掉的跨树链接正是那种只有把各棵树合并进同一个 URL 空间后才会暴露的问题 ——
+      # 所以它必须让 PR 失败，而不是让部署失败。
+      - name: 检查生成的站点（front matter、导航父级、链接）
         run: python scripts/build_docs_site.py --check
 
-      - name: Generate the site sources
+      - name: 生成站点源码
         run: python scripts/build_docs_site.py
 
-      - name: Build with Jekyll
+      - name: 用 Jekyll 构建
         uses: actions/jekyll-build-pages@v1
         with:
           source: ./_site_src
           destination: ./_site
 
-      - name: Upload artifact
+      - name: 上传产物
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./_site
 
   deploy:
-    # Pull requests build and link-check but never publish.
+    # pull request 只构建与检查链接，从不发布。
     if: github.event_name != 'pull_request'
     environment:
       name: github-pages
@@ -83,6 +79,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - name: Deploy to GitHub Pages
+      - name: 部署到 GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

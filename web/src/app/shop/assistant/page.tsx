@@ -18,10 +18,10 @@ interface Msg {
 }
 
 const STARTERS = [
-  "Find me wireless headphones under $300",
-  "What are today's best deals?",
-  "Compare the top-rated coffee makers",
-  "Recommend a gift for a runner",
+  "帮我找 300 元以内的无线耳机",
+  "今天有哪些最划算的优惠？",
+  "对比一下评分最高的咖啡机",
+  "给跑步爱好者推荐一份礼物",
 ];
 
 function Assistant() {
@@ -76,7 +76,7 @@ function Assistant() {
           const next = [...m];
           const last = next[next.length - 1];
           if (last?.role === "assistant" && !last.content) {
-            last.content = "Sorry — I couldn't reach the assistant. Please try again.";
+            last.content = "抱歉，暂时无法连接助手，请重试。";
           }
           return next;
         });
@@ -87,7 +87,7 @@ function Assistant() {
     [streaming],
   );
 
-  // Auto-send a prompt passed via ?prompt= (e.g. from a product page).
+  // 自动发送通过 ?prompt= 传入的提示词（例如来自商品详情页）。
   useEffect(() => {
     const prompt = params.get("prompt");
     if (prompt && !sentInitial.current) {
@@ -108,10 +108,10 @@ function Assistant() {
             <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-primary/10">
               <Sparkles className="size-6 text-primary" />
             </div>
-            <h1 className="mt-4 text-xl font-bold tracking-tight">Shopping assistant</h1>
+            <h1 className="mt-4 text-xl font-bold tracking-tight">购物助手</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Describe what you want and the agents will search, compare, and recommend.
-              Sign in for orders, tracking, and returns.
+              描述您的需求，智能体会完成搜索、对比与推荐。
+              登录后可查看订单、物流与退货。
             </p>
             <div className="mt-6 grid gap-2 sm:grid-cols-2">
               {STARTERS.map((s) => (
@@ -195,21 +195,21 @@ function Assistant() {
               }
             }}
             rows={1}
-            placeholder="Ask about products…"
+            placeholder="咨询商品…"
             className="max-h-32 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-muted-foreground"
           />
           <button
             type="submit"
             disabled={!input.trim() || streaming}
-            aria-label="Send"
+            aria-label="发送"
             className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
           >
             {streaming ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
           </button>
         </div>
         <p className="mt-2 text-center text-xs text-muted-foreground">
-          Discovery is open to everyone.{" "}
-          <Link href="/login" className="text-primary hover:underline">Sign in</Link> for orders & returns.
+          商品浏览对所有人开放。{" "}
+          <Link href="/login" className="text-primary hover:underline">登录</Link>后可查看订单与退货。
         </p>
       </form>
     </div>

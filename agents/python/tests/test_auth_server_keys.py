@@ -1,7 +1,6 @@
-"""Auth-server RSA signing-key bootstrap and JWKS serving.
+"""授权服务器 RSA 密钥初始化与 JWKS 测试。
 
-Real Postgres via the `clean_db` fixture (testcontainers) — never mocked,
-per repo policy. No LLM involved in this phase.
+通过 clean_db 使用真实隔离 PostgreSQL，不访问模型。
 """
 
 from __future__ import annotations
@@ -35,7 +34,7 @@ async def test_ensure_active_key_generates_on_first_boot(clean_db):
 
 async def test_ensure_active_key_is_idempotent(clean_db):
     kid1, key1 = await keys.ensure_active_key(clean_db)
-    keys.reset_cache_for_tests()  # force a re-read from the DB, bypassing the in-process cache
+    keys.reset_cache_for_tests()  # 绕过进程缓存，强制重新从数据库读取。
     kid2, key2 = await keys.ensure_active_key(clean_db)
 
     assert kid1 == kid2
@@ -55,7 +54,7 @@ async def test_get_jwks_returns_public_key_only(clean_db):
     assert jwk["kid"] == kid
     assert jwk["kty"] == "RSA"
     assert "n" in jwk and "e" in jwk
-    assert "d" not in jwk  # never leak the private exponent
+    assert "d" not in jwk  # 不得泄露私钥指数。
 
 
 async def test_unencrypted_key_at_rest_warns(clean_db, monkeypatch, caplog):

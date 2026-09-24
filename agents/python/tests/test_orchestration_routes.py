@@ -1,16 +1,7 @@
-"""Tests for orchestrator/routes/orchestration.py.
+"""编排模式、图和比较接口测试。
 
-``GET /modes`` and ``GET /modes/{name}/graph`` previously served a
-hardcoded, long-stale list containing only "tool" even though five modes
-were registered and reachable via /api/chat — a doc/code gap exactly like
-the ones this project's audit exists to catch. These tests prove they now
-read the real registry. Resume is real-DB tested separately in
-test_orchestration_resume.py (needs a genuine paused run to resume).
-
-``POST /compare`` tests run real modes (tool mode via a scripted chat
-client, workflow:pre-purchase via stub tools — no DB/LLM needed) through
-the actual route function, same real-machinery standard as the rest of
-Phase 1.
+模式列表读取真实注册表，而非过时硬编码；比较接口运行真实模式，
+用客户端和工具替身避免外部调用。恢复端点另有数据库集成测试。
 """
 
 from __future__ import annotations
@@ -36,10 +27,17 @@ ANON_USER = {"sub": "test@example.com", "role": "customer"}
 
 
 @pytest.mark.asyncio
-async def test_list_modes_reports_all_five_registered_modes() -> None:
+async def test_list_modes_reports_all_registered_modes() -> None:
     modes = await list_modes()
     names = {m["name"] for m in modes}
-    assert names == {"tool", "handoff", "workflow:pre-purchase", "workflow:return-replace", "group-chat"}
+    assert names == {
+        "tool",
+        "handoff",
+        "workflow:pre-purchase",
+        "workflow:return-replace",
+        "group-chat",
+        "decision-router",
+    }
     tool_entry = next(m for m in modes if m["name"] == "tool")
     assert tool_entry["default"] is True
 
@@ -141,17 +139,17 @@ async def test_compare_modes_runs_tool_and_workflow_side_by_side(monkeypatch: py
     assert [r.mode for r in response.results] == ["tool", "workflow:pre-purchase"]
 
     tool_result = response.results[0]
-    assert tool_result.label == "Tool Router"
+    assert tool_result.label == "工具路由"
     assert tool_result.text == "It's a great deal."
     assert tool_result.error is None
-    assert tool_result.graph_mermaid is None  # tool routes per-turn, no fixed graph
+    assert tool_result.graph_mermaid is None  # tool 模式逐轮路由，没有固定图。
     assert tool_result.latency_ms >= 0
 
     workflow_result = response.results[1]
     assert "Reviews: positive" in workflow_result.text
     assert workflow_result.error is None
     assert workflow_result.graph_mermaid is not None
-    # No tool_call events for a workflow mode — falls back to node_enter count.
+    # 工作流无 tool_call 时退回统计 node_enter。
     assert workflow_result.step_count > 0
     assert set(workflow_result.agents_involved) >= {"reviews", "stock"}
 
@@ -181,8 +179,8 @@ async def test_compare_modes_reports_a_mode_error_without_failing_the_others(
 
     fake_agent = Agent(client=_ScriptedClient(_text_response("hi")), instructions="test", name="orchestrator")
     monkeypatch.setattr("orchestrator.agent.create_orchestrator_agent", lambda: fake_agent)
-    # No UUID in the message and no real search_products/DB available in
-    # this unit test — PrePurchaseMode's ID resolution will raise.
+    # 消息没有 UUID，也未提供搜索或数据库，
+    # 因此商品标识解析应失败。
     monkeypatch.setitem(modes_module.MODES, "workflow:pre-purchase", PrePurchaseMode(tools=PRE_PURCHASE_TOOLS))
 
     body = CompareRequest(message="not a uuid and no db", modes=["tool", "workflow:pre-purchase"])

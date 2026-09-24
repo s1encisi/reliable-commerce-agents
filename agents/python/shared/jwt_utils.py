@@ -1,4 +1,4 @@
-"""JWT creation/validation and password hashing utilities."""
+"""JWT 创建、校验与密码哈希工具。"""
 
 from __future__ import annotations
 
@@ -15,12 +15,12 @@ REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 
 def hash_password(password: str) -> str:
-    """Hash a password with bcrypt."""
+    """使用 bcrypt 对密码计算哈希。"""
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
 def verify_password(password: str, password_hash: str) -> bool:
-    """Verify a password against a bcrypt hash."""
+    """用 bcrypt 哈希验证密码。"""
     return bcrypt.checkpw(password.encode(), password_hash.encode())
 
 
@@ -30,7 +30,7 @@ def create_access_token(
     user_id: str,
     expires_delta: timedelta | None = None,
 ) -> str:
-    """Create a signed JWT access token."""
+    """创建带签名的 JWT 访问令牌。"""
     expire = datetime.now(UTC) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     payload = {
         "sub": email,
@@ -43,7 +43,7 @@ def create_access_token(
 
 
 def create_refresh_token(email: str) -> str:
-    """Create a signed JWT refresh token."""
+    """创建带签名的 JWT 刷新令牌。"""
     expire = datetime.now(UTC) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     payload = {
         "sub": email,
@@ -54,5 +54,5 @@ def create_refresh_token(email: str) -> str:
 
 
 def decode_token(token: str) -> dict:
-    """Decode and validate a JWT token. Raises jwt.InvalidTokenError on failure."""
+    """解码并校验 JWT；失败时抛出 jwt.InvalidTokenError。"""
     return jwt.decode(token, settings.JWT_SECRET, algorithms=[ALGORITHM])

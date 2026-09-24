@@ -12,22 +12,21 @@ import {
 import { Badge } from "@/components/ui/badge";
 
 interface ModeSwitcherProps {
-  /** An `OrchestrationMode.name` (e.g. "tool", "workflow:pre-purchase"), or "" for the server default. */
+  /** 一个 `OrchestrationMode.name`（例如 "tool"、"workflow:pre-purchase"），或 "" 表示使用服务端默认值。 */
   value: string;
   onChange: (mode: string) => void;
   disabled?: boolean;
 }
 
 /**
- * Composer control for picking which orchestration mode runs the next
- * turn — fed by `GET /api/orchestration/modes`. This is what makes the
- * capstone's flagship claim demonstrable in the UI: the same domain, run
- * through the plain LLM tool router, MAF's HandoffBuilder mesh, or a
- * fixed workflow graph, picked per message.
+ * 输入区控件，用于选择下一轮对话由哪种编排模式执行——数据来自
+ * `GET /api/orchestration/modes`。正是它让毕业项目的旗舰主张在界面上
+ * 可被演示：同一个业务领域，分别通过普通 LLM 工具路由、MAF 的
+ * HandoffBuilder 网状结构、或固定的工作流图来运行，且可按每条消息选择。
  *
- * Fails soft: if the modes fetch errors (or returns an empty list — e.g.
- * an older backend without the registry), the control renders nothing
- * and chat keeps working through the server's default mode.
+ * 失败时优雅降级：若模式列表请求出错（或返回空列表——例如更早的、没有
+ * 注册表的后端），控件不渲染任何内容，对话仍可通过服务端的默认模式正常
+ * 工作。
  */
 export function ModeSwitcher({ value, onChange, disabled }: ModeSwitcherProps) {
   const [modes, setModes] = useState<OrchestrationMode[]>([]);
@@ -41,9 +40,8 @@ export function ModeSwitcher({ value, onChange, disabled }: ModeSwitcherProps) {
         if (!cancelled) setModes(data);
       })
       .catch(() => {
-        // Modes endpoint unreachable — chat still works via the
-        // backend's own default, so this fails silent rather than
-        // surfacing an error banner for a non-essential control.
+        // 模式接口不可达——对话仍可通过后端自身的默认模式工作，
+        // 因此这里静默失败，而不是为一个非必需控件弹出错误提示。
       })
       .finally(() => {
         if (!cancelled) setLoaded(true);
@@ -60,23 +58,22 @@ export function ModeSwitcher({ value, onChange, disabled }: ModeSwitcherProps) {
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Select
-        // Always pass a string, never undefined — verified live that
-        // toggling between the two mid-lifecycle (value="" -> undefined on
-        // first render, then a real string once selected) makes base-ui log
-        // "changing the uncontrolled value state ... to be controlled" and
-        // is the same controlled/uncontrolled footgun React warns about for
-        // plain inputs. "" reads as "no selection" fine on its own — it's
-        // the type flip-flop that broke, not the empty value.
+        // 始终传入字符串，绝不传 undefined——实测确认：在生命周期中途于
+        // 两者之间切换（首屏渲染 value="" -> undefined，选中后变成真实
+        // 字符串）会让 base-ui 打出 "changing the uncontrolled value state
+        // ... to be controlled" 的日志，也正是 React 对普通 input 警告的
+        // 那个受控/非受控陷阱。"" 本身完全可以表示「未选择」——出问题的
+        // 是类型的反复横跳，而不是空值。
         value={value}
         onValueChange={(v) => v && onChange(v)}
         disabled={disabled || modes.length === 0}
       >
-        <SelectTrigger size="sm" className="w-auto min-w-40" aria-label="Orchestration mode">
-          {/* base-ui's SelectValue ignores `placeholder` once `children` is a
-              function — verified live (an empty value rendered a blank
-              trigger, not "Mode") — so the empty case has to be handled here. */}
-          <SelectValue placeholder="Mode">
-            {(v: string) => (v ? (modes.find((m) => m.name === v)?.label ?? v) : "Mode")}
+        <SelectTrigger size="sm" className="w-auto min-w-40" aria-label="编排模式">
+          {/* base-ui 的 SelectValue 在 `children` 为函数时会忽略 `placeholder`
+              ——实测确认（空值渲染出的是空白触发器，而不是「Mode」）——
+              因此空值情况必须在这里处理。 */}
+          <SelectValue placeholder="编排模式">
+            {(v: string) => (v ? (modes.find((m) => m.name === v)?.label ?? v) : "编排模式")}
           </SelectValue>
         </SelectTrigger>
         <SelectContent>
@@ -92,7 +89,7 @@ export function ModeSwitcher({ value, onChange, disabled }: ModeSwitcherProps) {
         <div className="flex flex-wrap gap-1" title={active.description}>
           {active.capabilities.is_graph && (
             <Badge variant="outline" className="text-[10px] font-normal">
-              graph
+              图
             </Badge>
           )}
           {active.capabilities.supports_hitl && (
@@ -102,7 +99,7 @@ export function ModeSwitcher({ value, onChange, disabled }: ModeSwitcherProps) {
           )}
           {active.capabilities.supports_checkpoints && (
             <Badge variant="outline" className="text-[10px] font-normal">
-              checkpoints
+              检查点
             </Badge>
           )}
         </div>

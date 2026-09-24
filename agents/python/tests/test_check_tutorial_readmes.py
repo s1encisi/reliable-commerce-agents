@@ -1,7 +1,6 @@
-"""Tests for scripts/check_tutorial_readmes.py — the chapter contract linter.
+"""教程章节契约检查器测试。
 
-Import the script's module and exercise its check functions directly
-against synthetic README text, same pattern as test_visualize_workflows.py.
+直接导入检查脚本，用合成 README 验证各检查函数。
 """
 
 from __future__ import annotations
@@ -38,24 +37,24 @@ _LONG_CONCEPT = "x" * 250
 def test_check_concept_fails_on_missing_section() -> None:
     result = ChapterResult(chapter="t")
     check_concept("# Chapter\n\nNo concept here.", result)
-    assert result.failures and "no '## Why this chapter'" in result.failures[0]
+    assert result.failures and "未找到「## 本章动机」" in result.failures[0]
 
 
 def test_check_concept_fails_on_short_stub() -> None:
     result = ChapterResult(chapter="t")
-    check_concept("## The concept\n\nToo short.\n", result)
-    assert result.failures and "too short" in result.failures[0]
+    check_concept("## 核心概念\n\nToo short.\n", result)
+    assert result.failures and "过短" in result.failures[0]
 
 
 def test_check_concept_passes_with_enough_prose() -> None:
     result = ChapterResult(chapter="t")
-    check_concept(f"## The concept\n\n{_LONG_CONCEPT}\n\n## Next\n", result)
+    check_concept(f"## 核心概念\n\n{_LONG_CONCEPT}\n\n## Next\n", result)
     assert result.failures == []
 
 
 def test_check_concept_combines_why_and_concept_sections() -> None:
     result = ChapterResult(chapter="t")
-    text = f"## Why this chapter\n\n{'a' * 120}\n\n## The concept\n\n{'b' * 120}\n"
+    text = f"## 本章动机\n\n{'a' * 120}\n\n## 核心概念\n\n{'b' * 120}\n"
     check_concept(text, result)
     assert result.failures == []
 
@@ -87,11 +86,11 @@ def test_check_run_command_fails_for_nonexistent_script() -> None:
     result = ChapterResult(chapter="t")
     text = "```bash\nuv run --project tutorials python tutorials/nonexistent-chapter/python/main.py\n```"
     check_run_command(text, result)
-    assert result.failures and "does not exist" in result.failures[0]
+    assert result.failures and "不存在" in result.failures[0]
 
 
 def test_check_run_command_recognizes_cd_pattern() -> None:
-    # The 20b-devui-style pattern: cd into the chapter's own project dir.
+    # 覆盖第 20b 章先进入独立项目目录的命令形式。
     result = ChapterResult(chapter="t")
     text = "```bash\ncd tutorials/01-first-agent/python\nuv run python main.py\n```"
     check_run_command(text, result)
@@ -119,35 +118,35 @@ def test_check_capstone_pointer_fails_without_section() -> None:
 
 def test_check_capstone_pointer_fails_for_nonexistent_file() -> None:
     result = ChapterResult(chapter="t")
-    text = "## How this shows up in the capstone\n\nSee `agents/python/no_such_file.py:10`.\n"
+    text = "## 在完整项目中的落点\n\nSee `agents/python/no_such_file.py:10`.\n"
     check_capstone_pointer(text, result)
-    assert result.failures and "does not exist" in result.failures[0]
+    assert result.failures and "不存在" in result.failures[0]
 
 
 def test_check_capstone_pointer_fails_when_line_exceeds_file_length() -> None:
     result = ChapterResult(chapter="t")
-    # scripts/check_tutorial_readmes.py itself is real but nowhere near 999999 lines.
-    text = "## How this shows up in the capstone\n\nSee `scripts/check_tutorial_readmes.py:999999`.\n"
+    # 该脚本真实存在，但行数远小于 999999。
+    text = "## 在完整项目中的落点\n\nSee `scripts/check_tutorial_readmes.py:999999`.\n"
     check_capstone_pointer(text, result)
-    assert result.failures and "exceeds" in result.failures[0]
+    assert result.failures and "超出" in result.failures[0]
 
 
 def test_check_capstone_pointer_passes_for_a_real_pointer() -> None:
     result = ChapterResult(chapter="t")
-    text = "## How this shows up in the capstone\n\nSee `scripts/check_tutorial_readmes.py:1`.\n"
+    text = "## 在完整项目中的落点\n\nSee `scripts/check_tutorial_readmes.py:1`.\n"
     check_capstone_pointer(text, result)
     assert result.failures == []
 
 
 def test_check_gotchas_fails_without_bullets() -> None:
     result = ChapterResult(chapter="t")
-    check_gotchas("## Gotchas\n\nJust prose, no bullets.\n", result)
+    check_gotchas("## 常见坑\n\nJust prose, no bullets.\n", result)
     assert result.failures
 
 
 def test_check_gotchas_passes_with_a_bullet() -> None:
     result = ChapterResult(chapter="t")
-    check_gotchas("## Gotchas\n\n- Watch out for X.\n", result)
+    check_gotchas("## 常见坑\n\n- Watch out for X.\n", result)
     assert result.failures == []
 
 
@@ -155,7 +154,7 @@ def test_check_dead_links_warns_on_missing_relative_target(tmp_path: Path) -> No
     result = ChapterResult(chapter="t")
     text = "[broken](../does-not-exist/)"
     check_dead_links(text, tmp_path, result)
-    assert result.warnings and "does not exist" in result.warnings[0]
+    assert result.warnings and "不存在" in result.warnings[0]
 
 
 def test_check_dead_links_ignores_http_and_anchor_links(tmp_path: Path) -> None:
@@ -183,11 +182,11 @@ def test_discover_chapters_excludes_underscore_and_dot_dirs() -> None:
 
 
 def test_check_chapter_fails_multiple_checks_on_a_launcher_stub() -> None:
-    # A synthetic minimal stub (title + one-line summary + a bash run block,
-    # no concept/diagram/walkthrough/capstone/gotchas) — this is the shape
-    # every tutorials/<chapter>/README.md was in before Phase 4c restored
-    # them from git history. Deliberately not tied to any real chapter's
-    # current (post-restoration) content, which changes over time.
+    # 合成最小占位文档，只有标题、摘要和运行命令，
+    # 缺少概念、图、走读、落点和常见坑。
+    # 用于验证不完整章节会被拒绝，
+    # 不绑定任何真实章节的当前内容，
+    # 避免随文档更新而失效。
     result = ChapterResult(chapter="stub")
     stub_text = (
         "# Chapter NN — Something\n\n"
@@ -205,11 +204,11 @@ def test_check_chapter_fails_multiple_checks_on_a_launcher_stub() -> None:
 
 
 def test_every_chapter_passes() -> None:
-    # Phase 4c + 4d restored all 24 chapters (23 from git history, plus
-    # 21-capstone-tour written fresh since it depends on the other 23 being
-    # real first). This is the regression check for that milestone: every
-    # discovered chapter genuinely passes the full linter, not just
-    # "doesn't crash" — tutorials.yml's CI gate runs the same check.
+    # 历史修复补全了缺失教程内容，
+    # 完整项目导览也依赖这些章节，
+    # 这里保留相应回归检查：
+    # 全部发现的章节必须真正通过检查，
+    # 不能只满足检查程序不崩溃。
     chapters = discover_chapters()
     assert chapters, "expected to find restored chapters"
     failing = [c for c in chapters if not check_chapter(c).passed]
@@ -217,17 +216,17 @@ def test_every_chapter_passes() -> None:
 
 
 def test_cli_check_mode_returns_zero_now_that_every_chapter_passes(monkeypatch: pytest.MonkeyPatch) -> None:
-    # tutorials.yml's CI gate runs exactly this, no --exclude needed anymore.
-    # main() returns an exit code; sys.exit(main()) only happens in the
-    # __main__ guard, so calling it directly here doesn't raise SystemExit.
+    # 教程 CI 使用相同检查，无需排除章节。
+    # main() 返回退出码，只有 __main__ 才调用 sys.exit，
+    # 因此直接调用不会抛出 SystemExit。
     monkeypatch.setattr(sys, "argv", ["check_tutorial_readmes.py", "--check"])
     assert _module.main() == 0
 
 
 def test_cli_exclude_flag_drops_a_chapter_from_the_run(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Generic behavior check, independent of any chapter's current pass/fail
-    # state: excluding a chapter must shrink the checked set, and excluding
-    # a chapter that doesn't exist must not crash.
+    # 通用排除行为不依赖章节当前是否通过：
+    # 排除已有章节应缩小检查集合，
+    # 排除不存在章节不应崩溃。
     monkeypatch.setattr(
         sys, "argv", ["check_tutorial_readmes.py", "--check", "--exclude", "01-first-agent", "--exclude", "nope"]
     )
@@ -243,8 +242,8 @@ def test_00_setup_is_exempted_from_walkthrough_and_run_command_checks() -> None:
 
 @pytest.mark.parametrize("chapter", ["00-setup", "21-capstone-tour", "20b-devui"])
 def test_every_discovered_chapter_is_checkable_without_crashing(chapter: str) -> None:
-    # Not asserting pass/fail (today's stubs are expected to fail) — just
-    # that the linter runs cleanly against every real chapter shape in the
-    # repo, including the structurally different ones.
+    # 此处只检查程序能处理实际章节结构，
+    # 不对各章节的通过状态作断言，
+    # 也覆盖结构不同的指南章节。
     result = check_chapter(chapter)
     assert isinstance(result.failures, list)

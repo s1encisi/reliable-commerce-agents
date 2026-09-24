@@ -1,4 +1,4 @@
-"""Shared loyalty tools used by Pricing & Promotions and other agents."""
+"""定价促销及其他智能体共用的会员权益工具。"""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ async def get_loyalty_tier() -> dict:
         if not row:
             return {"error": f"User not found: {email}"}
 
-        # Check next tier
+        # 检查下一会员等级。
         next_tier = await conn.fetchrow(
             """SELECT name, min_spend, discount_pct
                FROM loyalty_tiers

@@ -6,7 +6,7 @@ import { CHART_COLORS, ChartContainer } from "@/components/ui/chart";
 export interface TrendChartSeries {
   key: string;
   label: string;
-  /** Index into CHART_COLORS; defaults to the series' position. */
+  /** CHART_COLORS 的下标；默认取该系列在数组中的位置。 */
   colorIndex?: number;
 }
 
@@ -25,10 +25,10 @@ const TOOLTIP_STYLE = {
   fontSize: "12px",
 } as const;
 
-/** Line chart for any time-series a specialist returns (e.g. monthly rating trend). */
+/** 折线图，适用于专业智能体返回的任何时间序列（例如月度评分趋势）。 */
 export function TrendChart({ data, xKey, series, height = 220 }: TrendChartProps) {
   if (data.length === 0) {
-    return <p className="py-4 text-center text-xs text-muted-foreground">No trend data available.</p>;
+    return <p className="py-4 text-center text-xs text-muted-foreground">暂无趋势数据。</p>;
   }
 
   return (

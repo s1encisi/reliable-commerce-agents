@@ -1,20 +1,8 @@
-"""Phase 1.5 — checkpoint storage attached to workflow_mode.py's modes.
+"""工作流模式的真实检查点持久化测试。
 
-Real Postgres (clean_db, via testcontainers). Proves:
-
-1. PrePurchaseMode's and ReturnReplaceMode's runs actually persist rows
-   to workflow_checkpoints (not just call an in-memory stub).
-2. Each save surfaces as its own kind="checkpoint" OrchestrationEvent —
-   MAF's own WorkflowEvent stream never mentions a save (verified while
-   building this), so this is real, load-bearing translation code, not a
-   pass-through.
-3. run_completed always carries latest_checkpoint_id.
-4. A HITL pause carries request_id + latest_checkpoint_id — exactly what
-   ReturnReplaceMode.resume() needs.
-5. resume() genuinely completes a *different* Workflow object than the
-   one that paused, purely from what's in Postgres — the actual
-   cross-request resume story, not the same-process same-object resume
-   test_return_replace_workflow.py already covers.
+确认购前和退货工作流实际写入数据库，每次保存产生检查点事件，
+完成及暂停事件携带最新检查点；恢复时用全新 Workflow 对象，
+仅依据 PostgreSQL 状态继续执行。
 """
 
 from __future__ import annotations
@@ -143,9 +131,7 @@ async def test_return_replace_mode_pause_carries_request_id_and_checkpoint(
 async def test_return_replace_mode_resume_completes_a_fresh_workflow_object(
     clean_db, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The real cross-request story: pause in one mode instance/run, resume
-    in a brand-new one, with nothing carried over except what's now in
-    Postgres."""
+    """跨请求恢复：旧实例暂停，全新实例只依据数据库状态继续执行。"""
     import order_management.tools as order_tools
 
     high = settings.RETURN_HITL_THRESHOLD + 100.0
@@ -167,15 +153,15 @@ async def test_return_replace_mode_resume_completes_a_fresh_workflow_object(
 
     resume_final = resume_events[-1]
     assert resume_final.kind == "run_completed"
-    # Not "ret-99": on_approval() rebuilds a minimal WorkflowState from the
-    # ReturnApprovalRequest snapshot, which doesn't carry the original
-    # return_id (see resume()'s comment in workflow_mode.py). Assert what
-    # actually survives resume — same fields test_return_replace_workflow.py's
-    # own resume tests assert on.
+    # 审批响应按快照重建最小工作流状态，
+    # 不能假定所有暂停前内存字段都仍存在，
+    # 包括原先的 return_id。
+    # 应断言真正需要跨恢复保留的字段，
+    # 与退货工作流恢复测试保持一致。
     assert "approved and finalized" in resume_final.payload["text"]
     assert "finalize" in resume_final.payload["agents_involved"]
     assert resume_final.payload["pending_approval"] is False
-    # Resume itself checkpoints too (discount, finalize supersteps).
+    # 恢复过程的折扣和收尾超步也会保存检查点。
     assert resume_final.payload["latest_checkpoint_id"] is not None
     assert resume_final.payload["latest_checkpoint_id"] != checkpoint_id
 

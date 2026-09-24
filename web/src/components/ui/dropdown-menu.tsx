@@ -1,3 +1,5 @@
+// 下拉菜单基础原语：基于 base-ui Menu，提供触发器、菜单项与分隔线等。
+
 "use client"
 
 import * as React from "react"

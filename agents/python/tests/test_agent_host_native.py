@@ -1,15 +1,7 @@
-"""
-Phase 7 Refactor 03 — MAF-native execution path tests.
+"""MAF 原生执行路径测试。
 
-Verifies:
-
-- ``_history_as_maf_messages`` builds the right MAF ``Message`` list from
-  the A2A history payload + current user message.
-- ``_run_agent_native`` returns ``response.text`` from ``agent.run``.
-- ``_run_agent_native_stream`` yields the text chunks from streaming
-  updates.
-- Real-LLM integration: running a live ``ChatClientAgent`` through the
-  native helpers against Azure OpenAI produces a sensible answer.
+覆盖历史消息转换、非流式答案、流式分块及可选真实模型集成。
+真实 Azure/OpenAI 测试需要单独启用和配置，普通测试使用替身。
 """
 
 from __future__ import annotations
@@ -20,8 +12,8 @@ import sys
 
 import pytest
 
-# Load the repo-root .env into os.environ so the integration tests see the
-# live Azure / OpenAI credentials the rest of the suite uses.
+# 从仓库 .env 加载集成测试环境，
+# 真实模型执行仍受相应测试条件控制。
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[3]))
 from tutorials._shared import maf_bootstrap  # noqa: E402
 
@@ -54,7 +46,7 @@ def test_history_builder_accepts_none_history() -> None:
 
 
 def test_history_builder_skips_other_roles_and_empty_content() -> None:
-    """System/tool messages and empty payloads get filtered out."""
+    """过滤系统消息、工具消息和空载荷。"""
     msgs = _history_as_maf_messages(
         history=[
             {"role": "system", "content": "ignored"},
@@ -92,12 +84,9 @@ async def test_rehydrate_returns_none_when_session_id_missing() -> None:
 
 @pytest.mark.asyncio
 async def test_rehydrate_returns_none_without_a_caller_identity(monkeypatch, caplog) -> None:
-    """No identity means no scoped read — and it must be logged, not silent.
+    """缺少身份时不能读取用户历史，且必须记录日志。
 
-    Rehydration is scoped to the caller's own conversation (#9), so an absent
-    ``x-user-email`` can no longer produce a full history. The original bug was
-    a silent short-circuit in this same function; this asserts the replacement
-    one announces itself.
+    测试确保新的归属守卫不会再次产生无日志的静默短路。
     """
     fake_pool = _FakePool(rows=[{"role": "user", "content": "hello"}])
     monkeypatch.setattr("shared.db.get_pool", lambda: fake_pool)
@@ -112,7 +101,7 @@ async def test_rehydrate_returns_none_without_a_caller_identity(monkeypatch, cap
 
 @pytest.mark.asyncio
 async def test_rehydrate_scopes_the_query_to_the_caller(monkeypatch) -> None:
-    """The session id arrives in a header, so the query must not trust it alone."""
+    """会话标识来自请求头，查询不能只信任该标识。"""
     fake_pool = _FakePool(rows=[])
     monkeypatch.setattr("shared.db.get_pool", lambda: fake_pool)
     current_user_email.set("owner@example.com")
@@ -129,8 +118,8 @@ async def test_rehydrate_reads_messages_by_conversation_id(monkeypatch) -> None:
     rows = [
         {"role": "user", "content": "hello"},
         {"role": "assistant", "content": "hi back"},
-        {"role": "tool", "content": "ignored"},  # non-user/assistant filtered
-        {"role": "user", "content": ""},  # empty content filtered
+        {"role": "tool", "content": "ignored"},  # 过滤非 user/assistant 角色。
+        {"role": "user", "content": ""},  # 过滤空内容。
         {"role": "user", "content": "still here"},
     ]
     fake_pool = _FakePool(rows=rows)
@@ -143,7 +132,7 @@ async def test_rehydrate_reads_messages_by_conversation_id(monkeypatch) -> None:
         {"role": "assistant", "content": "hi back"},
         {"role": "user", "content": "still here"},
     ]
-    # uses the $2 LIMIT parameter — no string interpolation.
+    # LIMIT 使用 $2 参数，不进行字符串插值。
     assert "LIMIT $2" in (fake_pool.last_query or "")
     assert fake_pool.last_args == ("11111111-1111-1111-1111-111111111111", 50, "owner@example.com")
 
@@ -152,9 +141,9 @@ async def test_rehydrate_reads_messages_by_conversation_id(monkeypatch) -> None:
 async def test_rehydrate_swallows_db_errors(monkeypatch) -> None:
     fake_pool = _FakePool(raise_on_fetch=RuntimeError("db down"))
     monkeypatch.setattr("shared.db.get_pool", lambda: fake_pool)
-    # Identity set on purpose: without it the new #9 guard would return None
-    # before the query ran, and this test would pass without ever reaching the
-    # error path it exists to cover.
+    # 有意设置身份，避免归属守卫提前返回 None，
+    # 导致测试没有真正执行查询，
+    # 也未覆盖目标异常路径却仍然通过。
     current_user_email.set("owner@example.com")
     assert await _rehydrate_history_from_session("any-id") is None
 
@@ -184,7 +173,7 @@ class _FakeStreamingUpdate:
 
 
 class _FakeAgent:
-    """Tiny stand-in exposing just the ``run`` signatures the helpers use."""
+    """仅提供辅助函数所用 run 签名的最小替身。"""
 
     def __init__(self, text: str = "stubbed-answer") -> None:
         self._text = text
@@ -200,7 +189,7 @@ class _FakeAgent:
         if stream:
 
             async def _gen():
-                # Two chunks so tests can see incremental yielding.
+                # 返回两个分块，验证增量输出。
                 for piece in [self._text[: len(self._text) // 2], self._text[len(self._text) // 2 :]]:
                     yield _FakeStreamingUpdate(piece)
 
@@ -221,8 +210,7 @@ async def test_run_agent_native_returns_response_text() -> None:
 
 @pytest.mark.asyncio
 async def test_run_agent_native_pins_temperature() -> None:
-    """Every run must carry the configured temperature so identical queries
-    produce consistent answers (provider default ~1.0 makes them diverge)."""
+    """每次运行必须携带配置温度，避免隐式使用提供方默认值。"""
     from shared.config import settings
 
     agent = _FakeAgent("ok")
@@ -260,7 +248,7 @@ async def test_run_agent_native_fills_metadata_box_from_additional_properties() 
 
 @pytest.mark.asyncio
 async def test_run_agent_native_metadata_box_untouched_when_none_passed() -> None:
-    # Must not raise when the caller doesn't care about metadata.
+    # 调用方不读取元数据时也不能抛错。
     agent = _FakeAgent("ok")
     text = await _run_agent_native(agent, "hi")
     assert text == "ok"
@@ -276,7 +264,7 @@ async def test_run_agent_native_stream_yields_all_chunks() -> None:
 
 @pytest.mark.asyncio
 async def test_run_agent_native_stream_skips_empty_updates() -> None:
-    """Some providers emit empty delta events; the helper must filter them."""
+    """提供方可能发送空增量，辅助函数必须过滤。"""
 
     class _AgentWithEmptyDeltas:
         def run(self, messages=None, *, stream: bool = False, options=None, **_kwargs):
@@ -294,8 +282,7 @@ async def test_run_agent_native_stream_skips_empty_updates() -> None:
 @pytest.mark.asyncio
 async def test_run_agent_native_stream_fills_metadata_box_after_exhaustion() -> None:
     class _FakeResponseStream:
-        """Minimal stand-in for MAF's ResponseStream: async-iterable plus a
-        get_final_response() the helper calls once iteration completes."""
+        """最小 ResponseStream 替身：支持异步迭代及结束后读取最终响应。"""
 
         def __init__(self, chunks: list[str], final: _FakeResponse) -> None:
             self._chunks = chunks
@@ -326,9 +313,9 @@ async def test_run_agent_native_stream_fills_metadata_box_after_exhaustion() -> 
 
 @pytest.mark.asyncio
 async def test_run_agent_native_stream_metadata_box_skipped_when_stream_has_no_finalizer() -> None:
-    # A plain async generator (no get_final_response) must not raise —
-    # covers every existing _FakeAgent-based test above, which return bare
-    # generators rather than a real MAF ResponseStream.
+    # 普通异步生成器没有 get_final_response，也不能抛错。
+    # 此前的 _FakeAgent 测试返回的是裸生成器，
+    # 而非真实 MAF ResponseStream。
     agent = _FakeAgent("ok")
     box: dict = {}
     chunks = [c async for c in _run_agent_native_stream(agent, "hi", metadata_box=box)]
@@ -354,7 +341,7 @@ def _llm_available() -> bool:
 @pytest.mark.asyncio
 @pytest.mark.skipif(not _llm_available(), reason="no LLM credentials in .env")
 async def test_native_path_against_real_llm() -> None:
-    """Proves the native path produces a sensible answer against Azure/OpenAI."""
+    """可选真实模型测试：验证原生路径在 Azure/OpenAI 上能够生成合理回答。"""
     from agent_framework import Agent
 
     from shared.factory import get_chat_client

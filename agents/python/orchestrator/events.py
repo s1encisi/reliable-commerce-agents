@@ -1,27 +1,24 @@
-"""Normalized orchestration event protocol.
+"""归一化的编排事件协议。
 
-Five orchestration mechanisms will exist behind the mode registry
-(``orchestrator/modes/``, Phase 1.2): the plain tool router, MAF's
-``HandoffBuilder``, MAF ``WorkflowBuilder`` graphs (fan-out/fan-in,
-declarative YAML), and eventually a magentic manager. Each emits its own
-native event shape — a ``WorkflowEvent`` with an 18-value ``type`` literal
-for workflows, a hand-rolled step dict for the tool router (see
-``shared/agent_observability.py``), something else again for handoff. The
-web UI must not know which mechanism is running; it renders one shape.
+模式注册表（``orchestrator/modes/``，Phase 1.2）背后将存在五种编排机制：
+普通工具路由、MAF 的 ``HandoffBuilder``、MAF ``WorkflowBuilder`` 图
+（扇出/扇入、声明式 YAML），以及最终的 magentic 管理器。每种机制都发出
+自己的原生事件形状 —— 工作流是带 18 个取值 ``type`` 字面量的
+``WorkflowEvent``，工具路由是手工构造的步骤字典（见
+``shared/agent_observability.py``），处理权交接又是另一种。Web UI 不应
+知道当前跑的是哪种机制；它只渲染一种形状。
 
-``OrchestrationEvent`` is that shape. ``adapt_workflow_event()`` and
-``adapt_step()`` are the two adapters that exist today, converting the two
-event sources currently wired into anything (workflow tests, and the live
-step-recorder path) into this common protocol. Adapters for handoff-specific
-and magentic-specific event types will be added as those modes are actually
-wired into the live app (Phase 1.2) — the ``kind`` values for "handoff" and
-"delta" are already reserved for them below, but the exact payload shape is
-better designed against the real wiring than guessed at now.
+``OrchestrationEvent`` 就是那种形状。``adapt_workflow_event()`` 与
+``adapt_step()`` 是目前存在的两个适配器，把当前真正接入到任何东西的
+两个事件源（工作流测试，以及实时的步骤记录器路径）转换到这套通用协议。
+针对处理权交接专用与 magentic 专用事件类型的适配器，会在这些模式真正
+接入实时应用（Phase 1.2）时补充 —— 下面已经为它们预留了 "handoff" 与
+"delta" 的 ``kind`` 取值，但确切的载荷形状更适合对照真实接线来设计，
+而不是现在猜测。
 
-Nothing consumes this module yet. It is scaffolding for Phase 1.2's mode
-registry and the SSE frames Phase 1.4 adds — kept import-cheap and
-dependency-free (no FastAPI, no DB) so it can be imported from anywhere
-without pulling in the rest of the orchestrator.
+目前还没有任何东西消费本模块。它是 Phase 1.2 模式注册表与 Phase 1.4
+新增的 SSE 帧的脚手架 —— 保持导入开销低、无依赖（不含 FastAPI、不含 DB），
+以便能从任何地方导入而不牵入编排器的其余部分。
 """
 
 from __future__ import annotations
@@ -50,18 +47,16 @@ EventKind = Literal[
 
 
 class OrchestrationEvent(BaseModel):
-    """One frame in the normalized event stream every orchestration mode emits.
+    """每个编排模式发出的归一化事件流中的一帧。
 
-    ``node_id`` identifies a step within a mode's graph (an executor id for
-    workflow modes, an agent name for the tool router / handoff mesh) — None
-    for events that aren't graph-scoped (``run_started``, ``run_completed``).
-    ``payload`` is intentionally an open dict rather than a union of typed
-    payloads: each ``kind`` has its own shape (see the adapters below for
-    what each one actually carries), and forcing a shared schema across
-    fan-out/fan-in, handoff, and magentic events would either be a very wide
-    union or lose information. Consumers switch on ``kind`` and know what
-    to expect from ``payload``, the same way SSE frame consumers already
-    switch on the frame's ``event:`` name.
+    ``node_id`` 标识模式图中的一个步骤（工作流模式中是执行器 id，
+    工具路由 / 处理权交接网格中是智能体名）—— 对不按图划分的事件
+    （``run_started``、``run_completed``）为 None。``payload`` 刻意是一个
+    开放的 dict，而不是各类型化载荷的联合：每种 ``kind`` 都有自己的形状
+    （各自实际携带什么见下方适配器），而在扇出/扇入、处理权交接与
+    magentic 事件之间强行统一 schema，要么会得到一个非常宽的联合，
+    要么会丢失信息。消费者对 ``kind`` 做分支并据此知道 ``payload`` 里
+    有什么，正如 SSE 帧消费者已经在对帧的 ``event:`` 名做分支一样。
     """
 
     kind: EventKind
@@ -72,11 +67,11 @@ class OrchestrationEvent(BaseModel):
 
 
 def _jsonable(value: Any) -> Any:
-    """Best-effort JSON-safe conversion for values that end up in ``payload``.
+    """对最终进入 ``payload`` 的值做尽力而为的 JSON 安全转换。
 
-    Workflow event ``data`` is often a dataclass or Pydantic model (e.g.
-    ``ReturnApprovalRequest``, ``WorkflowState``) rather than a plain dict —
-    verified directly against a live ``return_replace`` workflow run.
+    工作流事件的 ``data`` 常常是 dataclass 或 Pydantic 模型（例如
+    ``ReturnApprovalRequest``、``WorkflowState``）而不是普通 dict ——
+    已对照一次真实的 ``return_replace`` 工作流运行直接验证过。
     """
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
@@ -96,24 +91,21 @@ def _jsonable(value: Any) -> Any:
     return str(value)
 
 
-# Event types that carry no executor-scoped, UI-relevant information —
-# verified against a live workflow run (return_replace): "started"/"status"
-# bracket the whole run with nothing in .data or .executor_id, and
-# "superstep_started"/"superstep_completed" are MAF's internal barrier
-# bookkeeping between fan-out/fan-in rounds, not a graph node a reader would
-# recognize. Dropping them keeps the normalized stream one frame per thing a
-# viewer actually cares about, matching how the existing step-recorder
-# stream already only emits on tool calls, not on every internal state
-# transition.
+# 不携带任何执行器级、对 UI 有意义信息的事件类型 ——
+# 已对照一次真实工作流运行（return_replace）验证过："started"/"status"
+# 只是把整次运行括起来，.data 与 .executor_id 里都没有东西，而
+# "superstep_started"/"superstep_completed" 是 MAF 在扇出/扇入轮次之间的
+# 内部屏障记账，不是读者能识别出的图节点。丢掉它们，能让归一化流对每件
+# 观察者真正关心的事只保留一帧，与现有步骤记录器流只在工具调用时发出
+# （而非每次内部状态转换都发出）的做法保持一致。
 _SILENT_TYPES = frozenset({"status", "superstep_started", "superstep_completed"})
 
 
 def adapt_workflow_event(event: Any) -> OrchestrationEvent | None:
-    """Convert a MAF ``WorkflowEvent`` into the normalized protocol.
+    """把一个 MAF ``WorkflowEvent`` 转换为归一化协议。
 
-    Returns None for event types with nothing UI-relevant to say (see
-    ``_SILENT_TYPES``) — callers should skip yielding a frame in that case,
-    not synthesize an empty one.
+    对没有 UI 相关信息可说的事件类型返回 None（见 ``_SILENT_TYPES``）——
+    此时调用方应跳过产出一帧，而不是合成一个空帧。
     """
     etype = getattr(event, "type", None)
     if etype in _SILENT_TYPES:
@@ -140,8 +132,8 @@ def adapt_workflow_event(event: Any) -> OrchestrationEvent | None:
         return OrchestrationEvent(kind="error", node_id=executor_id, payload={"data": _jsonable(data)})
 
     if etype == "request_info":
-        # source_executor_id is only valid to read on request_info events —
-        # WorkflowEvent raises RuntimeError if accessed on any other type.
+        # source_executor_id 只在 request_info 事件上读取才有效 ——
+        # 在其他任何类型上访问，WorkflowEvent 都会抛 RuntimeError。
         source = getattr(event, "source_executor_id", None)
         request_id = getattr(event, "request_id", None)
         request_type = getattr(event, "request_type", None)
@@ -166,25 +158,23 @@ def adapt_workflow_event(event: Any) -> OrchestrationEvent | None:
     if etype in ("warning", "error", "failed"):
         return OrchestrationEvent(kind="error", node_id=executor_id, payload={"type": etype, "data": _jsonable(data)})
 
-    # Forward-compatible default: surface unmapped event types as a delta
-    # rather than silently dropping them — a future MAF release adding a new
-    # WorkflowEventType should be visible (even if unstyled) rather than
-    # invisible.
+    # 向前兼容的默认分支：把未映射的事件类型作为 delta 呈现，而不是静默
+    # 丢弃 —— 未来某个 MAF 版本新增的 WorkflowEventType 应当可见（哪怕没有
+    # 专属样式），而不是不可见。
     return OrchestrationEvent(kind="delta", node_id=executor_id, payload={"type": etype, "data": _jsonable(data)})
 
 
 def delta_text(payload: dict[str, Any]) -> str:
-    """Extract user-visible assistant text from a ``kind="delta"`` event's payload.
+    """从 ``kind="delta"`` 事件的载荷中提取用户可见的助手文本。
 
-    ``adapt_workflow_event`` wraps a workflow's raw ``AgentResponseUpdate``-shaped
-    ``data`` as ``{"type": ..., "data": {"contents": [...], "role": ..., ...}}``
-    — verified directly against a live handoff run (see
-    ``orchestrator/modes/handoff_mode.py``'s own text-assembly logic, which
-    reads the same shape pre-``_jsonable``). Only ``contents`` entries of
-    type ``"text"`` are real display text — a ``"function_call"``/
-    ``"function_result"`` content item is tool machinery (e.g. the
-    synthesized ``handoff_to_x`` call), and must not leak into a chat
-    bubble as raw JSON.
+    ``adapt_workflow_event`` 会把工作流原始的 ``AgentResponseUpdate`` 形状的
+    ``data`` 包装成 ``{"type": ..., "data": {"contents": [...], "role": ..., ...}}``
+    —— 已对照一次真实的处理权交接运行验证过（见
+    ``orchestrator/modes/handoff_mode.py`` 自己的文本拼装逻辑，它读取的是
+    ``_jsonable`` 之前的同一形状）。只有 type 为 ``"text"`` 的 ``contents``
+    条目才是真正的显示文本 —— ``"function_call"``/``"function_result"``
+    内容条目是工具机制（例如合成的 ``handoff_to_x`` 调用），绝不能以原始
+    JSON 的形式泄漏进聊天气泡。
     """
     data = payload.get("data")
     if not isinstance(data, dict):
@@ -196,16 +186,15 @@ def delta_text(payload: dict[str, Any]) -> str:
 
 
 def adapt_step(step: dict[str, Any]) -> OrchestrationEvent:
-    """Convert a step-recorder dict (``shared/agent_observability.py``) into
-    the normalized protocol.
+    """把步骤记录器 dict（``shared/agent_observability.py``）转换为
+    归一化协议。
 
-    Step dicts are always well-formed — ``StepRecorderMiddleware`` builds
-    them with a fixed key set (``tool_name``, ``tool_input``, ``tool_output``,
-    ``status``, ``duration_ms``), and ``agent`` is set by the caller before
-    this runs (``routes.py``'s ``s.setdefault("agent", "orchestrator")``) —
-    so this adapter takes plain ``.get()`` reads rather than the defensive
-    ``getattr`` chains ``adapt_workflow_event`` needs for a heterogeneous
-    MAF object.
+    步骤 dict 始终是良构的 —— ``StepRecorderMiddleware`` 用固定的键集
+    （``tool_name``、``tool_input``、``tool_output``、``status``、
+    ``duration_ms``）构建它们，而 ``agent`` 由调用方在本函数运行前设置
+    （``routes.py`` 的 ``s.setdefault("agent", "orchestrator")``）——
+    因此本适配器直接做普通的 ``.get()`` 读取，而不需要
+    ``adapt_workflow_event`` 为异构 MAF 对象所需的那些防御性 ``getattr`` 链。
     """
     return OrchestrationEvent(
         kind="tool_call",

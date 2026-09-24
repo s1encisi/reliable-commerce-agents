@@ -1,22 +1,8 @@
-"""Central factory helpers for MAF clients, storage backends, and registries.
+"""统一创建 MAF 客户端、存储后端和智能体注册表。
 
-Downstream code (specialist agents, orchestrator, evals) calls these factories
-instead of constructing clients directly. The indirection lets Phase 7 feature
-flags (MAF_SESSION_BACKEND, MAF_CHECKPOINT_BACKEND, etc.) swap implementations
-without touching call sites.
-
-Exports:
-    get_chat_client          — MAF chat client for OpenAI or Azure
-    get_embeddings_client    — async OpenAI embeddings client
-    get_embedding_model      — correct model/deployment name per provider
-    parse_agent_registry     — validate an A2A endpoint map (raises, never degrades)
-    get_agent_registry       — parse_agent_registry over the environment, cached
-    get_session_storage      — MAF AgentSession storage backend (lazy)
-    get_checkpoint_storage   — MAF workflow checkpoint backend (lazy)
-
-The session/checkpoint factories are lazy imports — their concrete classes
-are only loaded when the caller asks for a non-memory backend. This keeps
-the happy path for tests cheap.
+专业智能体、编排器和评测通过工厂获取依赖，使功能开关可替换实现而
+不修改调用点。导出聊天客户端、向量嵌入客户端与模型名称、A2A 注册表
+解析和缓存、会话存储以及检查点存储。存储类按需导入，降低测试开销。
 """
 
 from __future__ import annotations
@@ -64,25 +50,23 @@ def _validate_azure() -> None:
 
 
 def get_chat_client() -> OpenAIChatClient | OpenAIChatCompletionClient | Any:
-    """Return a MAF chat client configured for the active LLM_PROVIDER.
+    """按 LLM_PROVIDER 创建 MAF 聊天客户端。
 
-    * ``openai``  → ``OpenAIChatClient`` (Responses API — public OpenAI
-      supports it on every model). Honors ``LLM_BASE_URL`` for any
-      OpenAI-compatible endpoint (GitHub Models, OpenRouter, vLLM, LM
-      Studio) instead of api.openai.com.
-    * ``azure``   → ``OpenAIChatCompletionClient`` (Chat Completions API —
-      universally supported across Azure OpenAI deployments; the
-      Responses-API variant only works on the newest Azure regions).
-    * ``replay``  → ``ReplayChatClient`` (see ``shared/replay_client.py``) —
-      serves recorded fixtures with no credentials required; set
-      ``RECORD=true`` to record new ones against ``REPLAY_RECORD_PROVIDER``.
-
-    This matches the decision documented in the Ch01/Ch07 tutorial code —
-    see docs/architecture.md for the full rationale.
+    openai 使用 OpenAIChatClient，并尊重 LLM_BASE_URL；目标兼容端点
+    必须支持实际使用的 API。azure 使用 OpenAIChatCompletionClient，
+    通过 Chat Completions 接口调用。replay 使用 ReplayChatClient 读取
+    已有夹具；只有 RECORD=true 时才经 REPLAY_RECORD_PROVIDER 录制。
+    具体选择见前两章教程和 docs/architecture.md。
     """
     provider = settings.LLM_PROVIDER.lower()
 
+    if provider in {"deepseek", "moonshot"}:
+        return get_compatible_client(provider)
+
     if provider == "openai":
+        host = urlparse(settings.LLM_BASE_URL or "").hostname
+        if host in {"api.deepseek.com", "api.moonshot.cn", "api.typesafe.ai"}:
+            raise ValueError("请使用专用提供方配置，兼容地址不能绕过累计预算")
         _validate_openai()
         logger.info("Creating OpenAI chat client (model=%s, base_url=%s)", settings.LLM_MODEL, settings.LLM_BASE_URL)
         return OpenAIChatClient(
@@ -119,25 +103,29 @@ def get_chat_client() -> OpenAIChatClient | OpenAIChatCompletionClient | Any:
             record_provider=settings.REPLAY_RECORD_PROVIDER,
         )
 
-    raise ValueError(f"Unknown LLM_PROVIDER: {settings.LLM_PROVIDER!r}. Must be 'openai', 'azure', or 'replay'.")
+    raise ValueError(
+        f"Unknown LLM_PROVIDER: {settings.LLM_PROVIDER!r}. "
+        "Must be 'openai', 'azure', 'replay', 'deepseek', or 'moonshot'."
+    )
 
 
 def get_embeddings_client() -> openai.AsyncOpenAI | openai.AsyncAzureOpenAI:
-    """Return an async client configured for embeddings.
+    """创建异步向量嵌入客户端，包括离线 replay 分支。
 
-    The ``replay`` branch is the whole point of #52. Without it this fell
-    through to the OpenAI path and raised "OPENAI_API_KEY is required", MAF
-    caught that and handed the model an error result, and the agent quietly
-    answered from ``search_products`` instead. CI's eval smoke job runs
-    entirely in replay mode, so pgvector semantic search was exercised by no
-    CI run at all while product-discovery still scored 92%.
+    回放模式不能落入需要密钥的 OpenAI 路径，否则模型可能仅使用普通
+    商品搜索，掩盖 pgvector 检索从未真正执行的问题。
     """
-    if settings.LLM_PROVIDER.lower() == "replay":
+    embedding_provider = settings.EMBEDDING_PROVIDER.lower()
+    if embedding_provider == "auto":
+        embedding_provider = settings.LLM_PROVIDER.lower()
+    if embedding_provider in {"none", "deepseek", "moonshot"}:
+        raise EmbeddingsUnavailableError("未配置独立嵌入提供方，请使用词法检索")
+    if embedding_provider == "replay":
         from shared.replay_embeddings import ReplayEmbeddingsClient
 
         return ReplayEmbeddingsClient()  # type: ignore[return-value]
 
-    if settings.LLM_PROVIDER.lower() == "azure":
+    if embedding_provider == "azure":
         _validate_azure()
         return openai.AsyncAzureOpenAI(
             azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
@@ -145,11 +133,11 @@ def get_embeddings_client() -> openai.AsyncOpenAI | openai.AsyncAzureOpenAI:
             api_version=settings.AZURE_OPENAI_API_VERSION,
         )
     _validate_openai()
-    return openai.AsyncOpenAI(api_key=settings.OPENAI_API_KEY, base_url=settings.LLM_BASE_URL or None)
+    return openai.AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
 
 def get_embedding_model() -> str:
-    """Correct embedding model (OpenAI) / deployment (Azure) name."""
+    """返回提供方对应的向量嵌入模型或 Azure 部署名称。"""
     if settings.LLM_PROVIDER.lower() == "azure" and settings.AZURE_EMBEDDING_DEPLOYMENT:
         return settings.AZURE_EMBEDDING_DEPLOYMENT
     return settings.EMBEDDING_MODEL
@@ -159,21 +147,11 @@ def get_embedding_model() -> str:
 
 
 def parse_agent_registry(raw: str | None) -> dict[str, str]:
-    """Validate the AGENT_REGISTRY JSON blob into a name→URL dict.
+    """把 AGENT_REGISTRY JSON 校验为名称到 URL 的映射。
 
-    Every failure here raises rather than degrading, because each one is
-    silent otherwise: malformed JSON becomes "no specialists configured", and
-    a blank or scheme-less URL becomes a routing failure on the first request
-    that needs that agent. Both look like a model problem from the outside.
-
-    That matters more once the value is assembled from infrastructure outputs
-    rather than hand-written in a compose file — a template that resolves an
-    endpoint to the empty string produces a stack that starts cleanly, passes
-    a health check, and cannot route.
-
-    Scheme and host are checked; the port is not, because there isn't one on
-    a managed endpoint (``https://agent.internal.azurecontainerapps.io``) and
-    requiring it would reject exactly the deployment this validates for.
+    格式错误、空地址或缺少协议必须立即抛错，不能让服务通过健康检查后
+    才在首次路由时失败。校验协议和主机，不强制端口；托管 HTTPS 端点
+    可能不显式指定端口。
     """
     try:
         registry = json.loads(raw or "{}")
@@ -202,11 +180,10 @@ def parse_agent_registry(raw: str | None) -> dict[str, str]:
 
 @lru_cache(maxsize=1)
 def get_agent_registry() -> dict[str, str]:
-    """``parse_agent_registry`` over the current environment, cached.
+    """解析并缓存当前配置中的智能体注册表。
 
-    Cached so specialists don't re-parse on every tool call. Callers that
-    need to see a monkeypatched ``settings.AGENT_REGISTRY`` should call
-    ``parse_agent_registry`` directly.
+    测试若临时替换 settings.AGENT_REGISTRY，应直接调用
+    parse_agent_registry，避免读取旧缓存。
     """
     return parse_agent_registry(settings.AGENT_REGISTRY)
 
@@ -215,12 +192,10 @@ def get_agent_registry() -> dict[str, str]:
 
 
 def get_session_storage() -> Any:
-    """Return a MAF AgentSession storage backend per MAF_SESSION_BACKEND.
+    """按 MAF_SESSION_BACKEND 选择会话存储入口。
 
-    Phase 7 step 1 ships the enumeration + default selection; the concrete
-    Postgres/File implementations land in `plans/refactor/06-session-and-
-    history.md`. Until then, every backend returns None and callers fall
-    back to the manual history-forwarding path.
+    当前返回值与调用方的历史处理方式需结合实际分支读取；
+    手动历史转发由会话提供器负责。
     """
     backend = settings.MAF_SESSION_BACKEND.lower()
     if backend not in {"postgres", "file", "memory"}:
@@ -230,16 +205,11 @@ def get_session_storage() -> Any:
 
 
 def get_checkpoint_storage(*, pool: Any = None) -> Any:
-    """Return a MAF workflow checkpoint backend per ``MAF_CHECKPOINT_BACKEND``.
+    """按 MAF_CHECKPOINT_BACKEND 创建工作流检查点存储。
 
-    Backends:
-
-    - ``postgres`` — durable storage in the ``workflow_checkpoints`` table.
-      Requires an asyncpg pool; either pass one explicitly or rely on
-      ``shared.db.get_pool()`` (returns ``None`` cleanly when the pool
-      isn't initialized, e.g., in scripts).
-    - ``file`` — FileCheckpointStorage at ``MAF_CHECKPOINT_DIR``.
-    - ``memory`` — ephemeral, for tests.
+    postgres 写入 workflow_checkpoints，需要传入连接池或从 shared.db
+    读取；连接池未初始化时返回 None。file 使用 MAF_CHECKPOINT_DIR，
+    memory 用于无需持久化的测试。
     """
     backend = settings.MAF_CHECKPOINT_BACKEND.lower()
 
@@ -260,7 +230,7 @@ def get_checkpoint_storage(*, pool: Any = None) -> Any:
                 from shared.db import get_pool
 
                 pool = get_pool()
-            except Exception as exc:  # pool not initialised (tests, scripts)
+            except Exception as exc:  # 连接池未初始化，常见于测试或脚本。
                 logger.debug("Postgres pool unavailable for checkpoint storage: %s", exc)
                 return None
         from shared.checkpoint_storage import PostgresCheckpointStorage
@@ -275,12 +245,10 @@ def get_checkpoint_storage(*, pool: Any = None) -> Any:
 
 @lru_cache(maxsize=1)
 def get_token_verifier() -> Any:
-    """Return the RS256 verifier for AUTH_MODE=oauth, else None.
+    """oauth 模式返回 RS256 校验器，否则返回 None。
 
-    ``None`` signals callers to keep using the local HS256 path
-    (``shared.jwt_utils.decode_token``) unchanged — this only exists so the
-    RS256Verifier (which eagerly builds a PyJWKClient) is never constructed
-    at all in the default ``local`` mode.
+    None 表示继续使用本地 HS256 校验，避免 local 模式也创建
+    会立即初始化 PyJWKClient 的 RS256Verifier。
     """
     if settings.AUTH_MODE != "oauth":
         return None
@@ -291,8 +259,28 @@ def get_token_verifier() -> Any:
 
 # ─────────────────────── Back-compat shims ─────────────────
 
-# Older code imports `create_chat_client` and `create_embedding_client` from
-# shared.agent_factory. Re-export under the same names so the transition is
-# zero-friction; agent_factory.py will eventually be reduced to re-exports.
+# 兼容旧代码从 shared.agent_factory 导入的工厂名称。
+# 使用同名导出，保持调用方不变，
+# 具体实现集中在当前模块。
 create_chat_client = get_chat_client
 create_embedding_client = get_embeddings_client
+
+
+class EmbeddingsUnavailableError(ValueError):
+    """没有配置可用于当前数据维度的嵌入服务。"""
+
+
+def get_compatible_client(provider: str) -> OpenAIChatCompletionClient:
+    """保留 MAF 原生工具执行层，在 HTTP 边界限制模型与预算。"""
+    import httpx
+
+    from shared.paid_transport import PaidTransport
+
+    key = settings.DEEPSEEK_API_KEY if provider == "deepseek" else settings.MOONSHOT_API_KEY
+    if not key:
+        raise ValueError(f"{provider} API key is required")
+    model = "deepseek-flash" if provider == "deepseek" else "kimi-k3"
+    endpoint = "https://api.deepseek.com/v1" if provider == "deepseek" else "https://api.moonshot.cn/v1"
+    http_client = httpx.AsyncClient(transport=PaidTransport(provider), timeout=60.0, follow_redirects=False)
+    client = openai.AsyncOpenAI(api_key=key, base_url=endpoint, max_retries=0, http_client=http_client)
+    return OpenAIChatCompletionClient(model=model, async_client=client)

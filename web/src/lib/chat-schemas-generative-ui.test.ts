@@ -6,8 +6,8 @@ import {
   TrendChartDataSchema,
 } from "./chat-schemas";
 
-describe("generative-UI primitive schemas (Phase 8.4 Stage 3)", () => {
-  it("DataTableDataSchema accepts a well-shaped table", () => {
+describe("生成式 UI 基础类型的 schema（第 8.4 阶段 Step 3）", () => {
+  it("DataTableDataSchema 接受格式正确的表格", () => {
     const result = DataTableDataSchema.safeParse({
       title: "Warehouse stock",
       columns: [
@@ -19,7 +19,7 @@ describe("generative-UI primitive schemas (Phase 8.4 Stage 3)", () => {
     expect(result.success).toBe(true);
   });
 
-  it("DataTableDataSchema rejects more than 50 rows", () => {
+  it("DataTableDataSchema 拒绝超过 50 行", () => {
     const rows = Array.from({ length: 51 }, (_, i) => ({ name: `Row ${i}`, stock: i }));
     const result = DataTableDataSchema.safeParse({
       columns: [{ key: "name", header: "Name" }],
@@ -28,7 +28,7 @@ describe("generative-UI primitive schemas (Phase 8.4 Stage 3)", () => {
     expect(result.success).toBe(false);
   });
 
-  it("TrendChartDataSchema accepts a time series", () => {
+  it("TrendChartDataSchema 接受时间序列", () => {
     const result = TrendChartDataSchema.safeParse({
       xKey: "month",
       series: [{ key: "rating", label: "Average rating" }],
@@ -40,7 +40,7 @@ describe("generative-UI primitive schemas (Phase 8.4 Stage 3)", () => {
     expect(result.success).toBe(true);
   });
 
-  it("DistributionChartDataSchema accepts a label/value distribution", () => {
+  it("DistributionChartDataSchema 接受 label/value 形式的分布", () => {
     const result = DistributionChartDataSchema.safeParse({
       data: [
         { label: "5 star", value: 12 },
@@ -50,7 +50,7 @@ describe("generative-UI primitive schemas (Phase 8.4 Stage 3)", () => {
     expect(result.success).toBe(true);
   });
 
-  it("StatTileDataSchema accepts a scalar with a tone", () => {
+  it("StatTileDataSchema 接受带 tone 的标量", () => {
     const result = StatTileDataSchema.safeParse({
       label: "Risk Level",
       value: "High",
@@ -59,7 +59,7 @@ describe("generative-UI primitive schemas (Phase 8.4 Stage 3)", () => {
     expect(result.success).toBe(true);
   });
 
-  it("StatTileDataSchema rejects an unrecognized tone", () => {
+  it("StatTileDataSchema 拒绝无法识别的 tone", () => {
     const result = StatTileDataSchema.safeParse({
       label: "Risk Level",
       value: "High",

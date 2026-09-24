@@ -1,11 +1,4 @@
-"""Phase 6.4 — output content moderation.
-
-No DB, no LLM — pure classification logic (shared/guardrails/moderation.py)
-and the middleware wrapping it (shared/guardrails/moderation_middleware.py),
-exercised against synthetic ChatContext/response objects, mirroring the
-existing pattern in tests/test_cost_budget.py for the same class of
-streaming-aware chat middleware.
-"""
+"""模型输出审核测试，覆盖纯分类规则及流式感知中间件，无外部调用。"""
 
 from __future__ import annotations
 
@@ -42,8 +35,8 @@ def test_classify_is_case_insensitive() -> None:
 
 
 def test_classify_does_not_flag_benign_use_of_similar_words() -> None:
-    # "kill" appears in ordinary e-commerce prose ("killer deal") without
-    # matching the precise self-harm/violence phrase patterns.
+    # 正常电商措辞中的 killer deal，
+    # 不应命中精确的自伤或暴力规则。
     assert classify("This is a killer deal on a great product!") == set()
 
 
@@ -74,7 +67,7 @@ async def test_off_mode_skips_entirely(monkeypatch: pytest.MonkeyPatch) -> None:
     await middleware.process(context, call_next)
     assert called is True
     assert middleware.flagged == 0
-    # Result is left exactly as call_next set it — no classification ran.
+    # 不执行分类，结果保持 call_next 设置的原值。
     assert context.result.messages[0].contents[0].text == "I want to kill myself"
 
 
@@ -88,7 +81,7 @@ async def test_observe_mode_flags_but_never_blocks(monkeypatch: pytest.MonkeyPat
 
     await middleware.process(context, call_next)
     assert middleware.flagged == 1
-    # observe mode never replaces the response, even though it was flagged.
+    # 观察模式即使命中也不替换响应。
     assert context.result.messages[0].contents[0].text == "I want to kill myself"
 
 
@@ -120,9 +113,7 @@ async def test_enforce_mode_leaves_clean_response_untouched(monkeypatch: pytest.
 
 
 async def test_streaming_flagged_response_is_logged_not_blocked(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Chunks are already on the wire by the time the hook fires — enforce
-    mode can only flag a streamed response, never replace it, mirroring
-    GROUNDING_MODE=enforce's same documented streaming caveat."""
+    """结果钩子触发时分块已发送，流式路径只能标记，不能替换已展示文本。"""
     monkeypatch.setattr(settings, "OUTPUT_MODERATION_MODE", "enforce")
     middleware = OutputModerationMiddleware()
 
@@ -146,7 +137,7 @@ async def test_streaming_flagged_response_is_logged_not_blocked(monkeypatch: pyt
     returned = hook(flagged_response)
 
     assert middleware.flagged == 1
-    # The hook returns the response unchanged — nothing to block anymore.
+    # 钩子返回原响应，无法再阻止已发送内容。
     assert returned is flagged_response
 
 

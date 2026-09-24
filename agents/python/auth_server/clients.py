@@ -1,10 +1,9 @@
-"""OAuth client registry — fixed, seeded, in-memory cached.
+"""OAuth 客户端注册表——固定、经播种、内存缓存。
 
-This is offline-first with a known, static set of first-party clients (no
-dynamic client registration), so the registry is loaded once from
-``oauth_clients`` at startup and served from memory. That also sidesteps
-authlib's ``query_client`` being called synchronously (see ``_bridge.py``)
-for the hot path: client lookups never touch the database per-request.
+这是离线优先的，且一方客户端集合已知且静态（没有动态客户端注册），因此
+注册表在启动时从 ``oauth_clients`` 加载一次，之后从内存提供。这也顺带避开了
+热路径上 authlib 的 ``query_client`` 被同步调用的问题（见 ``_bridge.py``）：
+客户端查找从不按请求访问数据库。
 """
 
 from __future__ import annotations
@@ -36,13 +35,13 @@ class Client(ClientMixin):
         self.allowed_audiences = list(allowed_audiences)
         self.token_endpoint_auth_method = token_endpoint_auth_method
 
-    # ── ClientMixin ────────────────────────────────────────────────
+    # ClientMixin 接口
 
     def get_client_id(self) -> str:
         return self.client_id
 
     def get_default_redirect_uri(self):
-        return None  # no authorization-code/redirect flow in this AS
+        return None  # 本 AS 没有授权码/重定向流程
 
     def get_allowed_scope(self, scope: str | None) -> str:
         if not scope:
@@ -51,7 +50,7 @@ class Client(ClientMixin):
         return list_to_scope(sorted(requested & self.allowed_scopes))
 
     def check_redirect_uri(self, redirect_uri: str) -> bool:
-        return False  # no authorization-code/redirect flow in this AS
+        return False  # 本 AS 没有授权码/重定向流程
 
     def check_client_secret(self, client_secret: str) -> bool:
         try:
@@ -65,14 +64,14 @@ class Client(ClientMixin):
         return self.token_endpoint_auth_method == method
 
     def check_response_type(self, response_type: str) -> bool:
-        return False  # no authorization-code/implicit flow in this AS
+        return False  # 本 AS 没有授权码/隐式流程
 
     def check_grant_type(self, grant_type: str) -> bool:
         return grant_type in self.allowed_grant_types
 
 
 class ClientStore:
-    """In-memory client registry, warmed once from ``oauth_clients``."""
+    """内存中的客户端注册表，从 ``oauth_clients`` 预热一次。"""
 
     def __init__(self) -> None:
         self._clients: dict[str, Client] = {}

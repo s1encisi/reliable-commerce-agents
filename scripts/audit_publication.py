@@ -1,4 +1,4 @@
-"""Build an allowlisted source snapshot and run Gitleaks without printing secrets."""
+"""构建经过白名单过滤的源码快照，并在不打印密钥的前提下运行 Gitleaks。"""
 
 import argparse
 import json
@@ -56,7 +56,7 @@ def git(*args: str) -> bytes:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--ref", default="HEAD", help="Only the history that will be published"
+        "--ref", default="HEAD", help="仅审计即将发布的那段历史"
     )
     parser.add_argument(
         "--output", type=Path, default=ROOT / ".local/publication-audit"
@@ -65,7 +65,7 @@ def main() -> None:
     if not any(
         args.output.resolve().is_relative_to(ROOT / d) for d in [".local", ".claude"]
     ):
-        raise SystemExit("Audit output must stay in an ignored local directory")
+        raise SystemExit("审计输出必须留在被忽略的本地目录内")
     args.output.mkdir(parents=True, exist_ok=True)
     revision = (
         git("rev-parse", "--verify", "--end-of-options", args.ref + "^{commit}")
@@ -74,7 +74,7 @@ def main() -> None:
     )
     tree = args.output / "tree"
     if tree.exists():
-        shutil.rmtree(tree)  # only this script's generated snapshot
+        shutil.rmtree(tree)  # 仅删除本脚本自己生成的快照目录
     tree.mkdir()
     files = sorted(
         set(
@@ -102,7 +102,7 @@ def main() -> None:
         capture_output=True,
     )
     if ignored.returncode not in {0, 1}:
-        raise SystemExit("Could not check the publication ignore boundary")
+        raise SystemExit("无法校验发布忽略边界")
     forbidden.extend(name for name in ignored.stdout.decode().split("\0") if name)
     forbidden = sorted(set(forbidden))
     symlinks = []

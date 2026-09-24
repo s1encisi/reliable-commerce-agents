@@ -1,8 +1,7 @@
-"""HTTP client for the self-hosted auth-server's token endpoint (AUTH_MODE=oauth).
+"""自托管授权服务器令牌端点的 HTTP 客户端。
 
-``request_token`` backs the orchestrator's login/refresh broker — Phase B's
-ROPC and refresh_token grants on behalf of the browser. Phase C adds
-``acquire_service_token`` here for inter-agent/MCP client-credentials calls.
+request_token 供编排器代理用户登录和刷新；acquire_service_token
+供智能体间及 MCP 客户端凭据调用使用。
 """
 
 from __future__ import annotations
@@ -26,11 +25,9 @@ def _client_secret() -> str:
 
 
 async def request_token(grant_type: str, **form: str) -> dict:
-    """POST to the auth-server's token endpoint as this service's own client.
+    """以当前服务的客户端身份请求令牌端点。
 
-    Raises ``httpx.HTTPStatusError`` on a non-2xx response (invalid
-    credentials, disallowed grant, etc.) — callers translate that into the
-    appropriate user-facing error.
+    非 2xx 响应抛出 httpx.HTTPStatusError，由调用方转换为用户错误。
     """
     async with httpx.AsyncClient(timeout=10.0) as client:
         response = await client.post(
@@ -42,28 +39,24 @@ async def request_token(grant_type: str, **form: str) -> dict:
         return response.json()
 
 
-# ── Service-token acquirer (Phase C: inter-agent + MCP client-credentials) ──
+# 智能体间与 MCP 客户端凭据令牌获取。
 
 _REFRESH_SKEW_SECONDS = 30
 
-# Keyed by (scope, audience); audience is never sent to the AS — the token
-# endpoint derives it from the requested scope (see
-# ``auth_server/token.py::_scope_audience_map``) — it's part of the cache key
-# only, so callers requesting the same scope against distinct resources don't
-# collide.
+# 缓存键为 (scope, audience)，audience 不直接发送给授权服务器。
+# 令牌端点根据 scope 推导受众，
+# 映射见 auth_server/token.py；audience 只参与缓存键，
+# 避免相同范围、不同资源的调用
+# 错误共用缓存。
 _service_token_cache: dict[tuple[str, str], tuple[str, float]] = {}
 _service_token_lock = asyncio.Lock()
 
 
 async def acquire_service_token(scope: str, audience: str) -> str:
-    """Client-credentials grant against the AS, cached per ``(scope, audience)``.
+    """通过客户端凭据授权获取令牌，按 (scope, audience) 缓存。
 
-    Refreshes ``_REFRESH_SKEW_SECONDS`` before the cached token's expiry so a
-    request already in flight never carries a token that expires mid-call.
-    Uses ``time.monotonic()`` for the expiry clock (immune to wall-clock
-    adjustments) and a single process-wide lock — refreshes are infrequent
-    (once per token TTL, default 1h) and fast, so per-key locking would add
-    complexity for no measurable benefit at this call volume.
+    过期前 _REFRESH_SKEW_SECONDS 提前刷新，减少调用途中失效风险。
+    使用单调时钟抵御系统时间调整，并使用进程级锁合并并发刷新。
     """
     cache_key = (scope, audience)
     cached = _service_token_cache.get(cache_key)
@@ -71,7 +64,7 @@ async def acquire_service_token(scope: str, audience: str) -> str:
         return cached[0]
 
     async with _service_token_lock:
-        # Another caller may have refreshed while we were waiting on the lock.
+        # 等待锁期间，其他调用方可能已经刷新令牌。
         cached = _service_token_cache.get(cache_key)
         if cached is not None and time.monotonic() < cached[1] - _REFRESH_SKEW_SECONDS:
             return cached[0]
@@ -84,44 +77,30 @@ async def acquire_service_token(scope: str, audience: str) -> str:
 
 
 def reset_service_token_cache_for_tests() -> None:
-    """Clear the in-process cache — call from test fixtures between cases."""
+    """清空进程内令牌缓存，供测试用例之间隔离状态。"""
     _service_token_cache.clear()
 
 
 def build_mcp_http_client() -> httpx.AsyncClient:
-    """A dedicated ``httpx.AsyncClient`` for an ``MCPStreamableHTTPTool`` in
-    oauth mode, carrying a static ``Authorization`` header that covers the
-    *whole* MCP session — not just individual tool calls.
+    """为 oauth 模式的 MCP 工具创建独立 HTTP 客户端。
 
-    MAF's ``MCPStreamableHTTPTool.header_provider`` callback only wraps
-    ``call_tool()`` (headers are attached via a ``contextvars.ContextVar``
-    read on each outgoing request, scoped to that call). But the MCP SDK's
-    ``RequireAuthMiddleware`` gates the entire ``/mcp`` endpoint, including
-    the session-initialization/tool-listing handshake that happens *outside*
-    any ``call_tool()`` scope — so a per-call ``header_provider`` correctly
-    authenticates tool calls but leaves the initial connection unauthenticated,
-    which 401s immediately (confirmed via live Docker testing: the very
-    first `POST /mcp` — the handshake — failed auth while later `call_tool`
-    headers would have been correct). A plain default header on a dedicated
-    client, set once the token is acquired (see ``set_mcp_auth_header``),
-    covers the whole session uniformly instead.
+    默认 Authorization 请求头覆盖整个 MCP 会话，包括初始化和工具列表
+    握手。MAF 的 header_provider 只覆盖 call_tool，无法认证工具调用
+    之外的握手请求。令牌获取后通过 set_mcp_auth_header 设置默认头。
     """
     return httpx.AsyncClient()
 
 
 def set_mcp_auth_header(client: httpx.AsyncClient, token: str) -> None:
-    """Set/replace the client's default ``Authorization`` header in place."""
+    """原地设置或替换客户端默认 Authorization 请求头。"""
     client.headers["Authorization"] = f"Bearer {token}"
 
 
 async def build_a2a_headers() -> dict[str, str]:
-    """Build the outbound header set for an inter-agent A2A call.
+    """构建出站 A2A 请求头。
 
-    ``local`` mode: the static shared secret, as before. ``oauth`` mode: a
-    short-lived AS-issued service token (``agent:invoke`` scope) instead — the
-    shared secret is not sent at all. Either way the caller's end-user
-    identity travels the same way, via the forwarded ``x-user-*`` headers
-    that the callee's ``AgentAuthMiddleware`` reads regardless of mode.
+    local 使用共享密钥；oauth 使用含 agent:invoke 范围的短期服务令牌，
+    不发送共享密钥。两种模式都通过 x-user-* 转发用户身份。
     """
     headers = {
         "x-user-email": current_user_email.get(""),

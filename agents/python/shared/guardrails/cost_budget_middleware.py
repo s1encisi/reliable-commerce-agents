@@ -1,51 +1,13 @@
-"""Per-run cost budget ceiling — the runtime consumer of ``shared/cost.py``.
+"""单次运行费用预算中间件，消费 shared/cost.py 的估算结果。
 
-Before this, ``estimate_cost()`` (``shared/cost.py``) had exactly one caller:
-``evals/evaluator.py``, which prices a *completed* eval run for reporting.
-Nothing read it at runtime, so an agentic loop that keeps calling tools and
-re-prompting the model had no ceiling on what a single run could spend —
-only a post-hoc number you'd see after the money was already spent.
-``CostBudgetMiddleware`` closes that gap: it estimates the cost of every LLM
-turn as the run happens and, in ``enforce`` mode, refuses to start another
-turn once the running total crosses ``COST_BUDGET_USD_PER_RUN``.
+每轮模型调用结束后累计费用。off 不挂载；observe 只记录；enforce
+在累计值超限后拒绝下一轮调用，不调用 call_next()。已经发出的调用
+不会中途取消，因费用只能从完成后的 usage_details 得到，上限可能
+被最后一轮超出。
 
-Two-tier posture, mirroring ``GROUNDING_MODE`` (``shared/config.py``):
-
-- ``off``     — the middleware isn't attached at all (see
-  ``shared/middleware.py::build_specialist_middleware``).
-- ``observe`` — accumulates and logs the running cost; never blocks, even
-  past the configured ceiling. Safe default: turning this on can't change
-  a run's outcome, only its logs.
-- ``enforce`` — same accumulation, plus a hard stop: once the running total
-  exceeds ``COST_BUDGET_USD_PER_RUN``, the *next* LLM turn is refused before
-  it's made. Mirrors ``InjectionDetectionChatMiddleware``'s blocking
-  mechanism (``shared/guardrails/injection_middleware.py``): the middleware
-  sets ``context.result`` to a refusal and returns without calling
-  ``call_next()``, so the flagged turn never reaches the chat client. A
-  turn already "in flight" when the ceiling is crossed is never aborted
-  mid-call — cost is only knowable *after* a turn completes (from its
-  ``usage_details``), so enforcement is necessarily one turn behind the
-  actual overage. This is the same trade-off ``GroundingVerificationMiddleware``
-  makes for streamed content: correct the next decision point, not the one
-  already in flight.
-
-``current_run_cost_usd`` is the readable, accumulating side effect other code
-can inspect mid-run (e.g. a future budget dashboard), following the same
-ContextVar shape as ``shared.guardrails.flags.current_guardrail_flags`` and
-``shared.grounding.ledger.current_grounding_ledger``: ``None`` by default,
-set to a fresh baseline at the start of a request/run. Unlike those two
-siblings, this middleware does not require an external ``reset_*()`` call to
-become active — the first turn of any run lazily treats an unset ContextVar
-as a ``0.0`` baseline and starts accumulating immediately. That's a deliberate
-difference: this repo's ContextVars for user identity
-(``shared/context.py::current_user_email`` et al.) already rely on the same
-property this exploits — each concurrent request runs in its own asyncio
-Task, and a Task's context is a snapshot taken at creation time, so mutations
-in one request's task are invisible to another's without any explicit reset.
-``reset_run_cost()`` is still exported for callers that want an explicit,
-guaranteed-clean boundary (mirroring ``reset_guardrail_flags()``'s call site
-in ``evals/harness.py``) — e.g. a future eval harness integration — but the
-middleware itself does not depend on it being called.
+current_run_cost_usd 使用 ContextVar 按异步任务隔离。未设置时首轮
+以 0.0 开始累计；每个请求任务持有独立上下文快照。reset_run_cost()
+提供显式清零边界，但中间件不依赖外部先调用它。
 """
 
 from __future__ import annotations
@@ -68,28 +30,27 @@ current_run_cost_usd: ContextVar[float | None] = ContextVar("current_run_cost_us
 
 
 def reset_run_cost() -> float:
-    """Begin capture for the current request/run; returns the fresh baseline (0.0)."""
+    """为当前请求或运行初始化费用累计，返回 0.0。"""
     current_run_cost_usd.set(0.0)
     return 0.0
 
 
 def get_run_cost() -> float:
-    """Return the cumulative estimated cost recorded so far in this run's context."""
+    """返回当前运行上下文中累计的估算费用。"""
     return current_run_cost_usd.get() or 0.0
 
 
 def _add_run_cost(amount: float) -> float:
-    """Accumulate ``amount`` into the current context's running total; returns the new total."""
+    """累加 amount，返回新的费用总额。"""
     total = get_run_cost() + amount
     current_run_cost_usd.set(total)
     return total
 
 
 def _current_model() -> str:
-    """Resolve the deployment/model name the same way ``evals/evaluator.py`` does.
+    """按评测器相同规则解析模型或部署名。
 
-    Duplicated rather than imported: ``evals`` depends on ``shared``, not the
-    other way around, so ``shared.guardrails`` can't import from ``evals``.
+    在此独立实现，避免 shared 反向依赖 evals。
     """
     if settings.LLM_PROVIDER.lower() == "azure":
         return settings.AZURE_OPENAI_DEPLOYMENT
@@ -97,23 +58,20 @@ def _current_model() -> str:
 
 
 def _turn_cost(response: Any) -> tuple[float, int, int] | None:
-    """Estimate this turn's USD cost from a ``ChatResponse``'s ``usage_details``.
+    """根据 ChatResponse.usage_details 估算本轮美元费用并返回 token 数。
 
-    Returns ``None`` when no usage is available (e.g. a replay fixture that
-    doesn't carry token counts) rather than silently pricing at zero, so
-    callers can distinguish "no data" from "a free call."
-
-    Returns the token counts alongside the price so the caller can emit both
-    without re-reading ``usage_details``: the metric records tokens as well,
-    because cost is derived from them via a hand-maintained price table and
-    only the raw counts can tell you which of the two moved.
+    用量缺失时返回 None，区分无数据与免费调用。保留原始 token 数，
+    便于判断费用变化来自实际用量还是手工维护的价格表。
     """
     usage = getattr(response, "usage_details", None)
     if not usage:
         return None
     tokens_in = usage.get("input_token_count") or 0
     tokens_out = usage.get("output_token_count") or 0
-    return estimate_cost(_current_model(), tokens_in, tokens_out), tokens_in, tokens_out
+    cost = estimate_cost(_current_model(), tokens_in, tokens_out)
+    if cost is None:
+        return None
+    return cost, tokens_in, tokens_out
 
 
 BUDGET_REFUSAL_MESSAGE = (
@@ -123,12 +81,10 @@ BUDGET_REFUSAL_MESSAGE = (
 
 
 class CostBudgetMiddleware(ChatMiddleware):
-    """Track cumulative per-run cost and, in ``enforce`` mode, cap it.
+    """累计运行费用，并在 enforce 模式限制后续调用。
 
-    Attached alongside the other chat-layer middleware
-    (``InjectionDetectionChatMiddleware``, ``PiiRedactionMiddleware``) in
-    ``shared/middleware.py::build_specialist_middleware()``, gated on
-    ``settings.COST_BUDGET_MODE != "off"``.
+    COST_BUDGET_MODE 不为 off 时，在 build_specialist_middleware 中
+    与注入检测、个人信息脱敏等聊天层中间件一起挂载。
     """
 
     def __init__(self) -> None:
@@ -150,8 +106,8 @@ class CostBudgetMiddleware(ChatMiddleware):
                 budget,
             )
             context.result = self._refusal_result(context)
-            # Short-circuit: do NOT call call_next() — no further LLM turn
-            # is made once the run is already over budget.
+            # 直接返回，不调用 call_next()；
+            # 运行已超预算时不再发起下一轮模型调用。
             return
 
         await call_next()
@@ -175,12 +131,12 @@ class CostBudgetMiddleware(ChatMiddleware):
                 total,
                 settings.COST_BUDGET_MODE,
             )
-            # Same estimate, as a counter rather than only a log line — a log
-            # line cannot be alerted on without shipping and parsing logs.
-            # Emitted here because this is the only place that prices *every*
-            # LLM turn, including each specialist's; the orchestrator's
-            # usage_logs row sees one aggregate per run and would miss where
-            # the spend actually went.
+            # 将同一费用估算同时写入计数器，
+            # 避免告警只能依赖日志采集与解析。
+            # 这里覆盖每一轮模型调用，
+            # 包括专业智能体自身的调用。
+            # 编排器 usage_logs 只有运行级汇总，
+            # 不能单独说明费用分布。
             record_llm_turn_cost(
                 cost,
                 model=_current_model(),
@@ -193,9 +149,9 @@ class CostBudgetMiddleware(ChatMiddleware):
 
     @staticmethod
     def _refusal_result(context: ChatContext) -> ChatResponse | ResponseStream:
-        """Build a refusal result matching the invocation shape (streaming vs not).
+        """构造与流式或非流式调用形态一致的拒绝结果。
 
-        Mirrors ``InjectionDetectionChatMiddleware._refusal_result``.
+        方式与注入检测中间件一致。
         """
         if getattr(context, "stream", False):
 

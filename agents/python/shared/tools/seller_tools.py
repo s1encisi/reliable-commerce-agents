@@ -1,4 +1,4 @@
-"""Seller-specific tools for product and order management."""
+"""商家的商品与订单管理工具。"""
 
 from __future__ import annotations
 

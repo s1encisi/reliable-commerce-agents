@@ -1,15 +1,7 @@
-"""
-Phase 7 Refactor 09 — ReturnAndReplaceWorkflow (MAF Sequential + HITL) tests.
+"""退货与换货顺序工作流及 HITL 测试。
 
-Tools are stubbed so tests run without a DB or LLM. HITL tests exercise
-the request_info pause + resume cycle end-to-end, including the
-``@response_handler`` resume path via ``workflow.run(responses=...)``.
-
-Resume note: the first ``run()`` stream must be drained to completion before
-resuming. Breaking out of it early (e.g. at the first ``request_info`` event)
-leaves the workflow with ``_is_running=True`` and the resuming ``run()`` fails
-with "Workflow is already running". Any HTTP handler that suspends a workflow
-across requests has to drain first, then persist.
+替换业务工具，真实执行暂停和 response_handler 恢复。首次事件流
+必须消费完再恢复，否则工作流仍标为运行中，第二次 run 会失败。
 """
 
 from __future__ import annotations
@@ -139,14 +131,14 @@ async def test_high_value_return_pauses_for_approval() -> None:
     result = await ReturnAndReplaceWorkflow(TOOLS_HAPPY).execute(state)
 
     assert result.hitl_requested is True, "HITL gate must trigger for high-value orders"
-    # Workflow paused — finalize must not have run.
+    # 工作流已暂停，finalize 尚未执行。
     assert "finalize" not in result.completed_steps
     assert result.hitl_approved is None
 
 
 @pytest.mark.asyncio
 async def test_hitl_request_emits_expected_payload() -> None:
-    """Inspect the request_info event directly to assert on the ReturnApprovalRequest payload."""
+    """直接检查 request_info 中的 ReturnApprovalRequest。"""
     high = settings.RETURN_HITL_THRESHOLD + 100.0
     state = WorkflowState(user_email="a@b.com", order_id="o5", order_total=high)
     workflow = ReturnAndReplaceWorkflow(TOOLS_HAPPY)._build_maf_workflow()
@@ -162,8 +154,8 @@ async def test_hitl_request_emits_expected_payload() -> None:
     payload = request_payloads[0]
     assert payload.order_id == "o5"
     assert payload.order_total == high
-    # Approval now precedes every write and replacement lookup. This is an
-    # estimate of the requested amount, not a result from initiate_return.
+    # 审批位于所有写操作和替换查询之前，
+    # 因此此处是申请金额估算，不是已创建退货的结果。
     assert payload.refund_amount == high
     assert payload.replacement_count == 0
 
@@ -173,7 +165,7 @@ async def test_hitl_request_emits_expected_payload() -> None:
 
 @pytest.mark.asyncio
 async def test_order_at_threshold_does_not_trigger_hitl() -> None:
-    """Threshold is strictly exceeded; exactly equal → no gate."""
+    """只有严格超过阈值才暂停；恰好相等时不触发门控。"""
     state = WorkflowState(
         user_email="a@b.com",
         order_id="o6",
@@ -221,11 +213,9 @@ def test_workflow_builder_wires_all_six_executors() -> None:
 
 
 async def _pause_and_collect_request_id(workflow, state) -> str:
-    """Drain the first run to completion and return the pending request id.
+    """完整消费首次运行，返回待处理请求标识。
 
-    Draining matters: abandoning the stream early leaves the workflow marked
-    as running, and the resuming ``run()`` then raises "Workflow is already
-    running". See the module docstring.
+    提前放弃事件流会留下运行中标志，导致恢复失败。
     """
     request_id: str | None = None
     async for event in workflow.run(state, stream=True):
@@ -237,7 +227,7 @@ async def _pause_and_collect_request_id(workflow, state) -> str:
 
 @pytest.mark.asyncio
 async def test_hitl_approval_resumes_and_finalizes() -> None:
-    """An approved high-value return resumes through discount + finalize."""
+    """批准的高金额退货恢复后经过折扣和收尾步骤。"""
     high = settings.RETURN_HITL_THRESHOLD + 100.0
     state = WorkflowState(user_email="a@b.com", order_id="o10", order_total=high)
     workflow = ReturnAndReplaceWorkflow(TOOLS_HAPPY)._build_maf_workflow()
@@ -260,7 +250,7 @@ async def test_hitl_approval_resumes_and_finalizes() -> None:
 
 @pytest.mark.asyncio
 async def test_hitl_rejection_resumes_and_stops_before_finalize() -> None:
-    """A rejected return resumes, records the rejection, and never finalizes."""
+    """拒绝后记录决定，不执行收尾。"""
     high = settings.RETURN_HITL_THRESHOLD + 100.0
     state = WorkflowState(user_email="a@b.com", order_id="o11", order_total=high)
     workflow = ReturnAndReplaceWorkflow(TOOLS_HAPPY)._build_maf_workflow()

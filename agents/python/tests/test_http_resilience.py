@@ -1,13 +1,7 @@
-"""Phase 6.2 — ResilientAsyncTransport: bounded retries + per-host circuit breaker.
+"""有界重试与按主机端口隔离的熔断测试。
 
-No real network calls or database — the underlying
-``httpx.AsyncHTTPTransport.handle_async_request`` (what a subclass's
-``super().handle_async_request(request)`` resolves to) is monkeypatched with
-a scripted sequence of outcomes per test, so behavior is deterministic and
-fast. Timing-sensitive circuit-breaker tests use small, explicit
-``sampling_window_s``/``break_duration_s`` overrides and real (short)
-``asyncio.sleep`` calls rather than mocking the clock, so the state machine
-under test is exercised exactly as it runs in production.
+替换底层传输的结果序列，无真实网络。时间相关状态机使用短窗口和
+真实短暂等待；不关心时间的用例跳过退避等待。
 """
 
 from __future__ import annotations
@@ -26,7 +20,7 @@ from shared.http_resilience import (
 
 
 def _request(url: str = "http://specialist.local/message:send") -> httpx.Request:
-    return httpx.Request("POST", url, json={"message": "hi"})
+    return httpx.Request("POST", url, json={"message": "hi"}, extensions={"safe_to_retry": True})
 
 
 def _response(status_code: int, request: httpx.Request) -> httpx.Response:
@@ -40,7 +34,7 @@ def _patch_parent(monkeypatch: pytest.MonkeyPatch, side_effect: list) -> AsyncMo
 
 
 def _no_delay(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Skip real backoff sleeps in tests that don't care about timing."""
+    """不检查时序的测试跳过实际退避等待。"""
     monkeypatch.setattr(asyncio, "sleep", AsyncMock(return_value=None))
 
 
@@ -59,7 +53,7 @@ async def test_successful_request_returns_on_first_attempt_no_retry(monkeypatch:
 
 
 async def test_non_retryable_status_returns_immediately(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A 404 is the caller's problem, not the specialist's health — no retry, no breaker damage."""
+    """404 属于请求问题，不应重试或损伤服务健康统计。"""
     req = _request()
     mock = _patch_parent(monkeypatch, [_response(404, req)])
     transport = ResilientAsyncTransport()
@@ -124,7 +118,7 @@ async def test_exhausts_retries_on_persistent_connection_error_and_raises(monkey
 async def test_exhausts_retries_on_persistent_retryable_status_and_returns_last_response(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Unlike a connection error, a persistent 503 is a real HTTP response — return it, don't raise."""
+    """持续 503 仍是 HTTP 响应，最终返回它，而非转为连接异常。"""
     _no_delay(monkeypatch)
     req = _request()
     mock = _patch_parent(monkeypatch, [_response(503, req), _response(503, req), _response(503, req)])
@@ -152,7 +146,7 @@ async def test_timeout_exception_is_retried(monkeypatch: pytest.MonkeyPatch) -> 
 
 
 async def test_non_transient_exception_is_not_retried(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Something outside the retryable set (e.g. a decode error) must propagate immediately."""
+    """不在重试集合的异常应立即传播，例如解码错误。"""
     req = _request()
     mock = _patch_parent(monkeypatch, [httpx.DecodingError("bad content")])
     transport = ResilientAsyncTransport(max_attempts=3)
@@ -187,7 +181,7 @@ async def test_breaker_opens_after_failure_ratio_threshold_and_refuses_without_n
 ) -> None:
     _no_delay(monkeypatch)
     req = _request()
-    # 5 consecutive connection errors — min_throughput=5, ratio threshold 0.5 — must open.
+    # 五次连续连接错误达到最小样本数，应打开熔断器。
     mock = _patch_parent(monkeypatch, [httpx.ConnectError("down", request=req) for _ in range(20)])
     transport = ResilientAsyncTransport(max_attempts=1, min_throughput=5, failure_ratio_threshold=0.5)
 
@@ -213,7 +207,7 @@ async def test_breaker_below_min_throughput_never_opens(monkeypatch: pytest.Monk
         with pytest.raises(httpx.ConnectError):
             await transport.handle_async_request(req)
 
-    # Fewer than min_throughput failures recorded — breaker must still be closed.
+    # 失败数尚未达到最小样本数时，保持关闭。
     assert mock.call_count == 4
     mock.side_effect = [_response(200, req)]
     resp = await transport.handle_async_request(req)
@@ -241,19 +235,15 @@ async def test_breaker_per_host_is_independent(monkeypatch: pytest.MonkeyPatch) 
     with pytest.raises(CircuitBreakerOpenError):
         await transport.handle_async_request(bad_req)
 
-    # The good host's breaker must be untouched by the bad host's failures.
+    # 故障主机不能影响正常主机的熔断状态。
     resp = await transport.handle_async_request(good_req)
     assert resp.status_code == 200
 
 
 async def test_breaker_is_per_port_not_just_per_host(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Regression for the cascade seen while diagnosing issue #25.
+    """验证同主机不同端口的服务隔离。
 
-    All five specialists share ``localhost`` in local dev, CI and the eval
-    harness, differing only by port. Keying the breaker on hostname alone let
-    one failing specialist refuse calls to the other four — which turned three
-    missing eval fixtures into five failed orchestrator cases and masked the
-    real cause in the CI log.
+    五个专业智能体在本地共享 localhost；不能因一个失败就阻止其他端口。
     """
     bad_req = _request("http://localhost:8084/message:send")
     good_req = _request("http://localhost:8085/message:send")
@@ -272,7 +262,7 @@ async def test_breaker_is_per_port_not_just_per_host(monkeypatch: pytest.MonkeyP
     with pytest.raises(CircuitBreakerOpenError):
         await transport.handle_async_request(bad_req)
 
-    # Same host, different port — must still be reachable.
+    # 相同主机、不同端口仍需可访问。
     resp = await transport.handle_async_request(good_req)
     assert resp.status_code == 200
 
@@ -294,14 +284,14 @@ async def test_breaker_half_open_probe_succeeds_and_closes(monkeypatch: pytest.M
     with pytest.raises(CircuitBreakerOpenError):
         await transport.handle_async_request(req)
 
-    await asyncio.sleep(0.08)  # let the break duration elapse
+    await asyncio.sleep(0.08)  # 等待冷却时间结束。
 
     mock.side_effect = [_response(200, req)]
     resp = await transport.handle_async_request(req)
     assert resp.status_code == 200
 
-    # Breaker closed on the successful probe — the next call must go straight
-    # through as a normal request, not be treated as a second probe.
+    # 探测成功后熔断器关闭，
+    # 下一调用是普通请求，不再被视为探测。
     mock.side_effect = [_response(200, req)]
     resp2 = await transport.handle_async_request(req)
     assert resp2.status_code == 200
@@ -326,9 +316,9 @@ async def test_breaker_half_open_probe_fails_and_reopens(monkeypatch: pytest.Mon
 
     mock.side_effect = [httpx.ConnectError("still down", request=req)]
     with pytest.raises(httpx.ConnectError):
-        await transport.handle_async_request(req)  # the probe itself
+        await transport.handle_async_request(req)  # 探测请求本身。
 
-    # Probe failed — breaker must be open again immediately, refusing further calls.
+    # 探测失败应立即重新打开熔断器。
     with pytest.raises(CircuitBreakerOpenError):
         await transport.handle_async_request(req)
 
@@ -345,11 +335,11 @@ def test_host_breaker_prunes_outcomes_outside_the_sampling_window() -> None:
     )
     breaker.record_failure()
     breaker.record_failure()
-    assert breaker._open_until is not None  # 2/2 failures, min_throughput met — opens
+    assert breaker._open_until is not None  # 两次请求均失败且达到最小请求数，打开熔断器。
 
-    # A fresh breaker instance recording just one failure after the window
-    # would have pruned the old ones — verified indirectly via record_failure's
-    # own _prune call, exercised here by asserting the deque shrinks over time.
+    # 窗口推进后旧失败应被清理，
+    # 通过再次记录失败触发内部清理，
+    # 并断言队列随时间缩小。
     import time
 
     time.sleep(0.08)

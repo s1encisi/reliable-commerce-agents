@@ -1,33 +1,31 @@
-name: Package Cleanup
+name: 包清理
 
-# GHCR has no built-in retention setting, so this is the retention policy.
+# GHCR 没有内置的保留策略设置，所以这就是保留策略。
 #
-# Two things accumulate without limit once build-images.yml starts publishing:
+# 一旦 build-images.yml 开始发布，就有两类东西会无限累积：
 #
-#   1. `:sha-<7>` tags -- one per commit on main, forever.
-#   2. Untagged versions -- a multi-arch build pushes a manifest list plus one
-#      image manifest per platform. When the tag moves to a newer build, the
-#      previous platform manifests are left behind untagged. This is the larger
-#      source by volume, and it is invisible in the packages UI unless you go
-#      looking for it.
+#   1. `:sha-<7>` 标签 —— main 上每个提交一个，永不停止。
+#   2. 未打标签的版本 —— 多架构构建会推送一个 manifest list 以及每个平台一个
+#      image manifest。当标签移到更新的构建上时，先前的平台 manifest 就被留成未打标签的。
+#      这是数量上更大的来源，而且在包的 UI 里除非专门去找，否则根本看不见。
 #
-# What is never deleted, enforced by `ignore-versions` below:
-#   :latest              the newest release, which docker-compose.demo.yml pins
-#   :main                the rolling tip of main
-#   :vX.Y.Z              every release tag, including pre-releases
+# 永不删除的内容，由下面的 `ignore-versions` 强制：
+#   :latest              最新的发布版本，docker-compose.demo.yml 固定使用它
+#   :main                main 的滚动最新
+#   :vX.Y.Z              每一个发布标签，包括预发布
 #
-# Runs weekly. Also dispatchable with a dry_run input, which is worth using the
-# first time -- the action reports what it would remove without removing it.
+# 每周运行。也可用 dry_run 输入手动触发，第一次用值得先跑 dry run ——
+# 该 action 会报告将要删除什么，而不会真的删除。
 #
-# See docs/releasing.md.
+# 见 docs/releasing.md。
 
 on:
   schedule:
-    - cron: "0 4 * * 0" # Sundays 04:00 UTC
+    - cron: "0 4 * * 0" # 每周日 04:00 UTC
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Report what would be deleted, delete nothing"
+        description: "只报告将要删除什么，不实际删除"
         type: boolean
         default: true
 
@@ -40,7 +38,7 @@ concurrency:
 
 jobs:
   cleanup:
-    name: Prune ${{ matrix.package }}
+    name: 清理 ${{ matrix.package }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -63,16 +61,15 @@ jobs:
           - frontend
 
     steps:
-      - name: Prune old versions of ${{ matrix.package }}
+      - name: 清理 ${{ matrix.package }} 的旧版本
         uses: actions/delete-package-versions@v5
         with:
-          owner: nitin27may
-          package-name: e-commerce-agents/${{ matrix.package }}
+          owner: s1encisi
+          package-name: reliable-commerce-agents/${{ matrix.package }}
           package-type: container
-          # Keep a generous window. Twenty versions is roughly a month of
-          # commits on main, which is long enough to bisect a regression back
-          # to a specific image.
+          # 保留一个宽裕的窗口。二十个版本大约是 main 上一个月左右的提交量，
+          # 足以把一次回归二分定位回某个具体的镜像。
           min-versions-to-keep: 20
-          # Anything matching this is never a candidate, regardless of age.
+          # 任何匹配此模式的都永远不是候选，与新旧无关。
           ignore-versions: '^(latest|main|v\d+\.\d+\.\d+.*)$'
           dry-run: ${{ inputs.dry_run || false }}

@@ -1,4 +1,4 @@
-name: Portfolio verification
+name: 求职作品验证
 
 on:
   workflow_dispatch:

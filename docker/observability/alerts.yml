@@ -1,0 +1,17 @@
+groups:
+  - name: commerce-agents
+    rules:
+      - alert: CommerceTelemetryMissing
+        expr: up{job="commerce-agents"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: 智能体遥测采集端不可达
+      - alert: ModelCallsFailing
+        expr: sum(rate(commerce_model_attempts_total{status="unknown"}[5m])) / clamp_min(sum(rate(commerce_model_attempts_total[5m])), 0.001) > 0.2
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: 模型未知结果比例持续超过百分之二十

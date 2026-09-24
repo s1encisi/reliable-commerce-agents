@@ -1,12 +1,12 @@
-// Deterministic skeleton widths (no Math.random during render — that is an
-// impure call and triggers cascading/inconsistent renders).
+// 固定的骨架屏宽度（渲染期不使用 Math.random ——
+// 那是不纯调用，会导致级联渲染与结果不一致）。
 const CONV_WIDTHS = ["82%", "68%", "90%", "74%", "85%"];
 const BUBBLE_WIDTHS = ["48%", "62%", "40%", "56%"];
 
 export default function ChatLoading() {
   return (
     <div className="flex h-full">
-      {/* Conversation list skeleton (desktop) */}
+      {/* 会话列表骨架屏（桌面端） */}
       <aside className="hidden w-60 shrink-0 flex-col border-r bg-muted/30 lg:flex">
         <div className="flex items-center justify-between px-3 py-2.5">
           <div className="h-4 w-24 animate-pulse rounded bg-muted" />
@@ -24,14 +24,14 @@ export default function ChatLoading() {
         </div>
       </aside>
 
-      {/* Main area skeleton */}
+      {/* 主区域骨架屏 */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Top bar */}
+        {/* 顶栏 */}
         <div className="flex h-11 items-center border-b px-4">
           <div className="h-4 w-28 animate-pulse rounded bg-muted" />
         </div>
 
-        {/* Messages skeleton */}
+        {/* 消息骨架屏 */}
         <div className="flex-1 px-4 py-6">
           <div className="mx-auto flex max-w-3xl flex-col gap-4">
             {BUBBLE_WIDTHS.map((width, i) => (
@@ -49,7 +49,7 @@ export default function ChatLoading() {
           </div>
         </div>
 
-        {/* Input skeleton */}
+        {/* 输入框骨架屏 */}
         <div className="border-t px-4 py-3">
           <div className="mx-auto flex max-w-3xl items-end gap-2">
             <div className="h-10 flex-1 animate-pulse rounded-lg bg-muted" />

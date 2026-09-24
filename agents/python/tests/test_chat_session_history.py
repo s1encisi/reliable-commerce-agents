@@ -1,17 +1,7 @@
-"""Phase 1.5 — session-backed history read in chat.py.
+"""聊天历史读取测试，使用真实 PostgreSQL。
 
-Real Postgres (clean_db, via testcontainers — never mock the DB, per
-this repo's test policy). Proves two things about the read side that
-replaced the hand-rolled SELECT:
-
-1. History reaches the LLM correctly (prior turns, oldest first).
-2. The current turn is NOT duplicated — reading history before inserting
-   the new user message (the fix; the old order inserted first, so the
-   just-added row came back in `history` AND got appended a second time
-   by shared/agent_host.py::_history_as_maf_messages).
-
-Write-side (agent_name/agents_involved/metadata persistence) is
-untouched by 1.5 and already covered elsewhere; not re-tested here.
+确认历史按时间顺序进入模型，且先读取旧历史再插入当前用户消息，
+避免同一消息同时出现在历史与当前输入中。丰富元数据的写入另有测试。
 """
 
 from __future__ import annotations
@@ -44,7 +34,7 @@ def _text_response(text: str) -> ChatResponse:
 
 
 class _RecordingClient(FunctionInvocationLayer, BaseChatClient):
-    """Records every messages list it's asked to respond to."""
+    """记录每次调用收到的完整消息列表。"""
 
     def __init__(self, *responses: ChatResponse) -> None:
         super().__init__()

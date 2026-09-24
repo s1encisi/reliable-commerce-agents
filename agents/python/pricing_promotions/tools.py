@@ -1,4 +1,4 @@
-"""Pricing & Promotions tools — coupon validation, cart optimization, deals, bundles."""
+"""定价与促销工具 —— 优惠券校验、购物车优化、优惠活动、捆绑销售。"""
 
 from __future__ import annotations
 
@@ -39,11 +39,11 @@ async def validate_coupon(
         if not row:
             return {"valid": False, "error": f"Coupon '{code}' not found"}
 
-        # Check active
+        # 检查是否启用
         if not row["is_active"]:
             return {"valid": False, "code": code, "error": "Coupon is no longer active"}
 
-        # Check expiry
+        # 检查有效期
         if row["valid_until"]:
             from datetime import datetime
 
@@ -53,11 +53,11 @@ async def validate_coupon(
             if now < row["valid_from"]:
                 return {"valid": False, "code": code, "error": "Coupon is not yet valid"}
 
-        # Check usage limit
+        # 检查使用次数上限
         if row["usage_limit"] is not None and row["times_used"] >= row["usage_limit"]:
             return {"valid": False, "code": code, "error": "Coupon usage limit reached"}
 
-        # Check min spend
+        # 检查最低消费门槛
         if row["min_spend"] and cart_total < float(row["min_spend"]):
             return {
                 "valid": False,
@@ -65,7 +65,7 @@ async def validate_coupon(
                 "error": f"Minimum spend of ${float(row['min_spend']):.2f} not met (cart: ${cart_total:.2f})",
             }
 
-        # Check applicable categories
+        # 检查适用品类
         if row["applicable_categories"] and category:
             if category not in row["applicable_categories"]:
                 return {
@@ -77,11 +77,11 @@ async def validate_coupon(
                     ),
                 }
 
-        # Check user-specific restriction
+        # 检查用户限定
         if row["user_specific_email"] and row["user_specific_email"] != email:
             return {"valid": False, "code": code, "error": "This coupon is restricted to a specific user"}
 
-        # Calculate discount
+        # 计算折扣
         discount_type = row["discount_type"]
         discount_value = float(row["discount_value"])
         if discount_type == "percentage":
@@ -104,12 +104,12 @@ async def validate_coupon(
 
 
 def _as_list(value: object) -> list[str]:
-    """Normalise a rules field that may be a scalar or a list.
+    """归一化某个规则字段，它可能是标量也可能是列表。
 
-    `promotions.rules` is untyped JSONB and the seeded rows are inconsistent:
-    `buy_x_get_y` uses a singular `category`, `flash_sale` a plural
-    `categories`. Reading only one spelling is what made both promotions
-    silently match nothing.
+    `promotions.rules` 是无类型的 JSONB，并且种子数据并不一致：
+    `buy_x_get_y` 用单数的 `category`，`flash_sale` 用复数的
+    `categories`。只读取其中一种写法，正是这两个促销活动都静默匹配不到
+    任何东西的原因。
     """
     if value is None:
         return []
@@ -121,12 +121,12 @@ def _as_list(value: object) -> list[str]:
 
 
 def _pct(value: object) -> float:
-    """A percentage from untyped JSONB, or 0.0 if it isn't one."""
+    """从无类型 JSONB 中取出百分比，若不是百分比则返回 0.0。"""
     try:
         pct = float(value)  # type: ignore[arg-type]
     except (TypeError, ValueError):
         return 0.0
-    # A negative or >100% discount is a data error, not a bigger discount.
+    # 负数或超过 100% 的折扣属于数据错误，而不是更大的折扣。
     return pct if 0.0 <= pct <= 100.0 else 0.0
 
 
@@ -146,7 +146,7 @@ async def optimize_cart(
     email = current_user_email.get()
     pool = get_pool()
     async with pool.acquire() as conn:
-        # Fetch product details
+        # 获取商品详情
         cart_items = []
         for item in product_ids_with_quantities:
             pid = item.get("product_id", "")
@@ -174,7 +174,7 @@ async def optimize_cart(
         product_names = [i["name"] for i in cart_items]
         savings = []
 
-        # 1. Find applicable coupons
+        # 1. 查找适用的优惠券
         coupons = await conn.fetch(
             """SELECT code, description, discount_type, discount_value,
                       min_spend, max_discount, applicable_categories,
@@ -192,14 +192,14 @@ async def optimize_cart(
         best_coupon = None
         best_coupon_savings = 0.0
         for c in coupons:
-            # Check min spend
+            # 检查最低消费门槛
             if c["min_spend"] and original_total < float(c["min_spend"]):
                 continue
-            # Check category applicability
+            # 检查品类适用性
             if c["applicable_categories"]:
                 if not any(cat in c["applicable_categories"] for cat in categories):
                     continue
-            # Calculate savings
+            # 计算可省金额
             if c["discount_type"] == "percentage":
                 amount = original_total * (float(c["discount_value"]) / 100)
                 if c["max_discount"]:
@@ -220,7 +220,7 @@ async def optimize_cart(
                 }
             )
 
-        # 2. Find applicable promotions
+        # 2. 查找适用的促销活动
         promos = await conn.fetch(
             """SELECT name, type, rules
                FROM promotions
@@ -233,17 +233,16 @@ async def optimize_cart(
             promo_type = promo["type"]
 
             if promo_type == "bundle":
-                # Accept ids or names. `scripts/seed.py` writes product *names*
-                # under `products`; this only ever read `product_ids`, so
-                # `required` was always empty — and `all()` over an empty list
-                # is True, so every bundle promotion "matched" every cart and
-                # then contributed £0, because the sum below found no items
-                # whose id was in that same empty list. Silent noise on every
-                # cart-optimisation call since the promotions were seeded.
+                # 同时接受 id 和名称。`scripts/seed.py` 把商品 *名称* 写在
+                # `products` 下；这里过去只读 `product_ids`，因此 `required`
+                # 始终为空 —— 而对空列表做 `all()` 为 True，于是每个捆绑促销
+                # 都"匹配"了每个购物车，随后贡献了 £0，因为下面的求和找不到
+                # 任何 id 在这个同样为空的列表里的商品。自促销数据种下以来，
+                # 每一次购物车优化调用都在产生这种静默噪音。
                 required_ids = [str(x) for x in rules.get("product_ids", [])]
                 required_names = [str(x) for x in rules.get("products", [])]
                 if not required_ids and not required_names:
-                    continue  # never vacuously match
+                    continue  # 绝不因空集合而匹配
 
                 in_cart = (
                     all(pid in product_ids for pid in required_ids)
@@ -267,13 +266,12 @@ async def optimize_cart(
                     )
 
             elif promo_type == "buy_x_get_y":
-                # Two rule shapes, because the seeded data uses the second and
-                # this only understood the first. "Buy 2 Books Get 10% Off" is
-                # a percentage discount above a minimum quantity, not a
-                # free-units BOGO — and reading it as one meant
-                # `buy_quantity`/`free_quantity` both defaulted to 0, so
-                # `quantity >= 0 + 0` was always true and the next line divided
-                # by zero. That crashed the whole tool (#51).
+                # 存在两种规则形态，因为种子数据用的是第二种，而这里过去
+                # 只理解第一种。"Buy 2 Books Get 10% Off" 是达到最低数量后
+                # 的百分比折扣，并不是送赠品式的买一送一 —— 把它当作后者
+                # 会导致 `buy_quantity`/`free_quantity` 都默认为 0，于是
+                # `quantity >= 0 + 0` 恒为真，下一行除以零。那会让整个工具
+                # 崩溃（#51）。
                 cats = _as_list(rules.get("categories") or rules.get("category"))
                 buy_qty = int(rules.get("buy_quantity") or 0)
                 free_qty = int(rules.get("free_quantity") or 0)
@@ -285,19 +283,19 @@ async def optimize_cart(
                         continue
 
                     if buy_qty > 0 and free_qty > 0:
-                        # Genuine buy-X-get-Y-free.
+                        # 真正的买 X 送 Y。
                         group = buy_qty + free_qty
                         if item["quantity"] < group:
                             continue
                         free_units = item["quantity"] // group * free_qty
                         amount = item["price"] * free_units
                     elif min_qty > 0 and discount_pct > 0:
-                        # Percentage off once a minimum quantity is reached.
+                        # 达到最低数量后按百分比打折。
                         if item["quantity"] < min_qty:
                             continue
                         amount = item["subtotal"] * (discount_pct / 100)
                     else:
-                        # Rules describe neither shape — skip rather than guess.
+                        # 规则不属于任何已知形态 —— 跳过，而不是猜测。
                         continue
 
                     if amount > 0:
@@ -311,9 +309,9 @@ async def optimize_cart(
                         )
 
             elif promo_type == "flash_sale":
-                # Same mismatch again: the seed scopes flash sales by
-                # `categories`, this only read `product_ids`, so no item ever
-                # matched and the promotion was a silent no-op.
+                # 又是同样的不匹配：种子数据用 `categories` 来限定闪购，
+                # 这里过去只读 `product_ids`，所以没有任何商品能匹配上，
+                # 该促销成了静默的空操作。
                 flash_ids = [str(x) for x in rules.get("product_ids", [])]
                 flash_cats = _as_list(rules.get("categories") or rules.get("category"))
                 if not flash_ids and not flash_cats:
@@ -335,7 +333,7 @@ async def optimize_cart(
                             }
                         )
 
-        # 3. Calculate loyalty discount
+        # 3. 计算会员折扣
         if email:
             user = await conn.fetchrow(
                 """SELECT u.loyalty_tier, lt.discount_pct
@@ -427,7 +425,7 @@ async def check_bundle_eligibility(
 ) -> dict:
     pool = get_pool()
     async with pool.acquire() as conn:
-        # Fetch product details
+        # 获取商品详情
         products = []
         for pid in product_ids:
             row = await conn.fetchrow(
@@ -447,7 +445,7 @@ async def check_bundle_eligibility(
         if not products:
             return {"eligible": False, "error": "No valid products found"}
 
-        # Check bundle promotions
+        # 检查捆绑促销
         promos = await conn.fetch(
             """SELECT name, type, rules, start_date, end_date
                FROM promotions
@@ -463,7 +461,7 @@ async def check_bundle_eligibility(
             required_ids = rules.get("product_ids", [])
             required_categories = rules.get("categories", [])
 
-            # Check by product IDs
+            # 按商品 ID 检查
             if required_ids:
                 matching = [pid for pid in product_ids if pid in required_ids]
                 if len(matching) == len(required_ids):
@@ -481,7 +479,7 @@ async def check_bundle_eligibility(
                         }
                     )
 
-            # Check by categories
+            # 按品类检查
             if required_categories:
                 cart_categories = [p["category"] for p in products]
                 if all(cat in cart_categories for cat in required_categories):
@@ -500,7 +498,7 @@ async def check_bundle_eligibility(
                         }
                     )
 
-        # Also check buy_x_get_y promotions
+        # 同时检查 buy_x_get_y 促销
         bxgy_promos = await conn.fetch(
             """SELECT name, type, rules, end_date
                FROM promotions

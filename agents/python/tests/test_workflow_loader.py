@@ -1,8 +1,4 @@
-"""
-Phase 7 Refactor 12 — YAML workflow loader tests.
-
-No LLM — pure graph-construction + validation.
-"""
+"""YAML 工作流加载器测试，仅检查图构造与校验，不调用模型。"""
 
 from __future__ import annotations
 
@@ -108,7 +104,7 @@ def test_non_mapping_top_level_raises(tmp_path) -> None:
 
 
 def test_missing_required_key_raises(tmp_path) -> None:
-    spec = _write(tmp_path, "bad.yaml", "name: x\nstart: x\nexecutors: []\n")  # no edges
+    spec = _write(tmp_path, "bad.yaml", "name: x\nstart: x\nexecutors: []\n")  # 没有边。
     with pytest.raises(WorkflowSpecError, match="missing required key 'edges'"):
         load_workflow(spec)
 

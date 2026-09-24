@@ -1,0 +1,28 @@
+{
+  "deepseek": {
+    "currency": "CNY",
+    "input_per_million": "2",
+    "output_per_million": "8",
+    "version": "official-2026-09-24-peak-ceiling",
+    "valid_until": "2026-09-25",
+    "source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing",
+    "note": "按高峰、未命中缓存的价格上界预留；不依赖缓存或低峰优惠。"
+  },
+  "moonshot": {
+    "currency": "CNY",
+    "input_per_million": "60",
+    "output_per_million": "100",
+    "version": "official-2026-09-24-k3-cache-ceiling",
+    "valid_until": "2026-09-25",
+    "source": "https://platform.kimi.com/docs/pricing/chat",
+    "note": "输入上界按20元未命中输入加40元一小时缓存写入预留；高于默认5分钟写入的实际组合。结算为用量确认后的费用上界，不冒充账户账单。"
+  },
+  "jev": {
+    "currency": "USD",
+    "input_per_million": "0.042",
+    "output_per_million": "0",
+    "version": "official-2026-09-24-jev-1.13.0",
+    "valid_until": "2026-09-25",
+    "source": "https://docs.typesafe.ai/models"
+  }
+}

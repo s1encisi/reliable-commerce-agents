@@ -1,16 +1,11 @@
-"""
-OpenTelemetry setup for E-Commerce Agents.
+"""可靠电商多智能体平台的 OpenTelemetry 初始化。
 
-Every agent calls `setup_telemetry(service_name)` in its lifespan to enable:
-- Traces: HTTP spans, DB queries, LLM calls, A2A calls → Aspire Dashboard
-- Metrics: request counts, latencies → Aspire Dashboard
-- Logs: Python logging bridged to OTel with trace_id correlation
+智能体在生命周期启动时调用 setup_telemetry。HTTP、数据库、模型和
+A2A 追踪可发送至 Jaeger；指标与日志虽配置了 OTLP 导出，但需要
+支持相应信号的接收端，不能假定 Jaeger 提供指标或结构化日志存储。
 
-Auto-instrumented (zero code in agents):
-- httpx → catches OpenAI API calls + inter-agent A2A calls
-- asyncpg → catches all DB queries with SQL text
-- FastAPI / Starlette → HTTP request/response spans
-- Python logging → bridges log statements with trace_id/span_id
+自动插桩覆盖 httpx、asyncpg、FastAPI/Starlette 与 Python logging，
+并通过 trace_id/span_id 关联请求。
 """
 
 from __future__ import annotations
@@ -29,10 +24,9 @@ _initialized = False
 
 
 def setup_telemetry(service_name: str, service_version: str = "1.0.0") -> None:
-    """Configure OTel TracerProvider, MeterProvider, LoggerProvider with OTLP exporters.
+    """配置 OTel 追踪、指标和日志提供器及 OTLP 导出器。
 
-    Call once in agent lifespan before any requests are handled.
-    Safe to call when OTEL_ENABLED=false or Aspire is unreachable.
+    在处理请求前初始化一次；遥测关闭或初始化失败不应阻断业务。
     """
     global _initialized
     if _initialized:
@@ -62,7 +56,7 @@ def _do_setup(service_name: str, service_version: str) -> None:
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
-    # Opt into latest experimental GenAI semantic conventions (required for Aspire GenAI view)
+    # 启用实验性 GenAI 语义约定，为模型与智能体跨度添加标准属性。
     os.environ.setdefault("OTEL_SEMCONV_STABILITY_OPT_IN", "gen_ai_latest_experimental")
     if settings.GENAI_CAPTURE_CONTENT:
         os.environ.setdefault("OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT", "true")
@@ -77,7 +71,7 @@ def _do_setup(service_name: str, service_version: str) -> None:
         }
     )
 
-    # Try gRPC first (Aspire default), fall back to HTTP
+    # 优先使用 gRPC 导出器；模块不可用时使用 HTTP 导出器。
     try:
         from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
         from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
@@ -93,24 +87,24 @@ def _do_setup(service_name: str, service_version: str) -> None:
         metric_exporter = OTLPMetricExporter(endpoint=f"{endpoint}/v1/metrics")
         logger.info("Using HTTP OTLP exporters → %s", endpoint)
 
-    # Traces — primary sink (Aspire)
+    # 追踪主接收端，默认使用 Jaeger。
     tracer_provider = TracerProvider(resource=resource)
     tracer_provider.add_span_processor(BatchSpanProcessor(span_exporter))
 
-    # Optional parallel sink: Langfuse
+    # 可选的并行追踪接收端：Langfuse。
     _maybe_add_langfuse(tracer_provider, BatchSpanProcessor)
 
     trace.set_tracer_provider(tracer_provider)
 
-    # Metrics — 5s export interval for responsive Aspire dashboard updates
+    # 指标每 5 秒导出；接收端必须支持 OTLP 指标，Jaeger 不提供该存储。
     metric_reader = PeriodicExportingMetricReader(metric_exporter, export_interval_millis=5000)
     meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
     metrics.set_meter_provider(meter_provider)
 
-    # Logs — OTel LoggerProvider bridges Python logging to Aspire's structured log view
+    # 把 Python 日志桥接为 OTel 日志；需要支持日志的 OTLP 接收端。
     _setup_log_provider(resource, endpoint)
 
-    # Auto-instrument libraries
+    # 为依赖库安装自动插桩。
     _instrument_openai()
     _instrument_httpx()
     _instrument_asyncpg()
@@ -118,11 +112,9 @@ def _do_setup(service_name: str, service_version: str) -> None:
 
 
 def _maybe_add_langfuse(tracer_provider: Any, batch_span_processor: Any) -> None:
-    """Add a Langfuse OTLP span processor when LANGFUSE_ENABLED=true.
+    """启用 Langfuse 时追加 OTLP 跨度处理器。
 
-    Uses the standard OTLP HTTP exporter against Langfuse's OTel endpoint so
-    no extra SDK dependency is required — the OTel packages are already installed.
-    Fails silently: Langfuse is an additive sink; Aspire remains the primary.
+    复用标准 HTTP 导出器，无需额外 SDK；失败只记录，不影响主追踪接收端。
     """
     if not settings.LANGFUSE_ENABLED:
         return
@@ -150,7 +142,7 @@ def _maybe_add_langfuse(tracer_provider: Any, batch_span_processor: Any) -> None
 
 
 def instrument_fastapi(app: Any) -> None:
-    """Auto-instrument a FastAPI app. Call after setup_telemetry()."""
+    """在 setup_telemetry 之后为 FastAPI 应用安装自动插桩。"""
     if not settings.OTEL_ENABLED:
         return
     try:
@@ -162,7 +154,7 @@ def instrument_fastapi(app: Any) -> None:
 
 
 def instrument_starlette(app: Any) -> None:
-    """Auto-instrument a Starlette app (used by A2AAgentHost). Call after setup_telemetry()."""
+    """在 setup_telemetry 之后为 Starlette 智能体宿主安装自动插桩。"""
     if not settings.OTEL_ENABLED:
         return
     try:
@@ -174,21 +166,21 @@ def instrument_starlette(app: Any) -> None:
 
 
 def get_tracer(name: str = "ecommerce") -> Any:
-    """Get an OTel Tracer for creating custom spans."""
+    """获取用于创建自定义跨度的 OTel Tracer。"""
     from opentelemetry import trace
 
     return trace.get_tracer(name)
 
 
 def get_meter(name: str = "ecommerce") -> Any:
-    """Get an OTel Meter for creating custom metrics."""
+    """获取用于创建自定义指标的 OTel Meter。"""
     from opentelemetry import metrics
 
     return metrics.get_meter(name)
 
 
 def get_current_trace_id() -> str | None:
-    """Get the current trace_id as a hex string, or None if no active span."""
+    """返回当前追踪标识的十六进制字符串；没有有效跨度时返回 None。"""
     from opentelemetry import trace
 
     span = trace.get_current_span()
@@ -199,10 +191,9 @@ def get_current_trace_id() -> str | None:
 
 
 def enrich_span_with_session(agent_name: str = "") -> None:
-    """Add session/user/agent context from ContextVars to the current active span.
+    """将 ContextVar 中的会话、用户和智能体信息加入当前跨度。
 
-    Sets both session.id and gen_ai.conversation.id so Aspire can group LLM calls
-    by conversation and correlate them with the correct user identity.
+    同时设置 session.id 与 gen_ai.conversation.id，便于按会话关联模型调用。
     """
     if not settings.OTEL_ENABLED:
         return
@@ -220,29 +211,25 @@ def enrich_span_with_session(agent_name: str = "") -> None:
             span.set_attribute("enduser.role", role)
         if session := current_session_id.get(""):
             span.set_attribute("session.id", session)
-            # gen_ai.conversation.id is the Aspire GenAI semantic convention attribute
-            # that groups all LLM calls belonging to one conversation thread
+            # gen_ai.conversation.id 是会话关联的 GenAI 语义属性，
+            # 用于识别同一会话中的多次模型调用。
             span.set_attribute("gen_ai.conversation.id", session)
         if agent_name:
             span.set_attribute("gen_ai.agent.name", agent_name)
+        from shared.paid_transport import current_root_run
+
+        if current_root_run.get():
+            span.set_attribute("commerce.run.id", current_root_run.get())
     except Exception:
-        pass  # Telemetry must never break app flow
+        pass  # 遥测失败不能中断应用流程。
 
 
 @contextmanager
 def agent_run_span(agent_name: str):
-    """Context manager wrapping one agent invocation with GenAI semantic convention attributes.
+    """为一次智能体调用创建带 GenAI 语义属性的跨度。
 
-    Uses the OTel GenAI agent span convention (invoke_agent) so Aspire renders
-    this span with the agent badge and groups it under the GenAI telemetry view.
-
-    Span hierarchy in Aspire:
-        invoke_agent orchestrator        ← this span (INTERNAL, orchestrator process)
-          chat gpt-4.1                   ← OpenAI instrumentor (LLM call)
-          invoke_agent product-discovery ← a2a_call_span (CLIENT, cross-process)
-            invoke_agent product-discovery ← agent_run_span in specialist (INTERNAL)
-              chat gpt-4.1              ← OpenAI instrumentor
-              asyncpg SELECT ...        ← DB query
+    使用 invoke_agent 约定。在 Jaeger 中可沿父子关系查看编排器、模型
+    调用、跨进程 A2A、专业智能体以及数据库查询；不依赖专用 GenAI 徽标界面。
     """
     if not settings.OTEL_ENABLED:
         yield None
@@ -270,11 +257,10 @@ def agent_run_span(agent_name: str):
 
 @contextmanager
 def a2a_call_span(source_agent: str, target_agent: str, target_url: str):
-    """Context manager for cross-process A2A agent calls from the orchestrator.
+    """为编排器跨进程 A2A 调用创建客户端跨度。
 
-    Uses SpanKind.CLIENT and the invoke_agent convention so Aspire renders the
-    outbound call as a GenAI agent invocation with the target agent name.
-    Trace context is propagated by httpx instrumentation into the downstream span.
+    使用 SpanKind.CLIENT 和 invoke_agent 约定，记录目标智能体；
+    httpx 插桩将追踪上下文传播到下游。
     """
     from opentelemetry.trace import SpanKind
 
@@ -301,10 +287,9 @@ def a2a_call_span(source_agent: str, target_agent: str, target_url: str):
 
 @contextmanager
 def tool_call_span(tool_name: str):
-    """Context manager for individual tool invocations inside the tool-calling loop.
+    """为一次工具调用创建跨度，记录工具名、耗时与成功或失败。
 
-    Wraps the execution of a single LLM-chosen tool call. In Aspire, this produces
-    a child span under the LLM call, showing tool name, duration, and success/failure.
+    跨度挂在当前活动追踪上下文下。
     """
     if not settings.OTEL_ENABLED:
         yield None
@@ -329,11 +314,9 @@ def tool_call_span(tool_name: str):
 
 
 def traced_tool(fn: Callable) -> Callable:
-    """Decorator to wrap MAF @tool functions with OTel spans.
+    """给 MAF 工具函数增加 OTel 跨度。
 
-    Use only if MAF does not emit tool spans natively.
-    Apply AFTER the @tool decorator:
-
+    仅在 MAF 未原生输出工具跨度时使用；装饰器排列保持：
         @tool(name="search_products", description="...")
         @traced_tool
         async def search_products(...) -> ...:
@@ -364,18 +347,15 @@ def traced_tool(fn: Callable) -> Callable:
     return wrapper
 
 
-# ── Private instrumentation helpers ──────────────────────────
+# 内部插桩辅助函数
 
 
 def _setup_log_provider(resource: Any, endpoint: str) -> None:
-    """Wire Python's logging module to an OTel LoggerProvider with OTLP export.
+    """将 Python logging 连接到 OTel LoggerProvider 并经 OTLP 导出。
 
-    This is what populates Aspire Dashboard's structured log view. Each Python
-    log record becomes an OTel LogRecord with body, severity, trace_id/span_id
-    (correlation to the active span), and resource attributes (service.name).
-
-    The filter on the handler prevents OTel SDK's own internal log records from
-    re-entering the pipeline and causing recursive export loops.
+    日志记录包含正文、级别、trace_id/span_id 和服务资源属性。接收端
+    必须支持 OTLP 日志；Jaeger 本身不提供结构化日志存储。过滤器阻止
+    OTel 内部日志重新进入导出管线，避免递归循环。
     """
     import logging as _logging
 
@@ -397,30 +377,26 @@ def _setup_log_provider(resource: Any, endpoint: str) -> None:
         log_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
         set_logger_provider(log_provider)
 
-        # Bridge Python root logger → OTel log records
+        # 将 Python 根日志器桥接为 OTel 日志记录。
         handler = LoggingHandler(level=_logging.DEBUG, logger_provider=log_provider)
 
-        # Prevent OTel SDK's own logger output from re-entering the pipeline
+        # 阻止 OTel 自身日志重新进入导出管线。
         class _NoOtelLoopFilter(_logging.Filter):
             def filter(self, record: _logging.LogRecord) -> bool:
                 return not record.name.startswith("opentelemetry")
 
         handler.addFilter(_NoOtelLoopFilter())
         _logging.getLogger().addHandler(handler)
-        logger.info("OTel log provider initialized — Python logs will appear in Aspire structured log view")
+        logger.info("OTel 日志提供器已初始化；日志导出需要支持 OTLP 日志的接收端")
     except Exception:
-        logger.warning("Failed to set up OTel log provider — structured logs will not appear in Aspire", exc_info=True)
+        logger.warning("OTel 日志提供器初始化失败，无法导出结构化日志", exc_info=True)
 
 
 def _instrument_openai() -> None:
-    """Instrument the OpenAI Python SDK with GenAI semantic conventions.
+    """为 OpenAI Python SDK 安装 GenAI 语义插桩。
 
-    Automatically adds to every chat.completions.create() call:
-      - gen_ai.system, gen_ai.operation.name, gen_ai.request.model
-      - gen_ai.response.model, gen_ai.response.finish_reason
-      - gen_ai.usage.input_tokens, gen_ai.usage.output_tokens (as span attrs + metrics)
-
-    Works for both openai.AsyncOpenAI and openai.AsyncAzureOpenAI clients.
+    在模型调用中添加系统、操作、请求与响应模型、结束原因和输入输出
+    token 数等属性及指标。支持 AsyncOpenAI 与 AsyncAzureOpenAI。
     """
     try:
         from opentelemetry.instrumentation.openai_v2 import OpenAIInstrumentor

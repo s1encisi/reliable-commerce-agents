@@ -1,13 +1,7 @@
-"""Tests for orchestrator/modes/group_chat_mode.py.
+"""群聊编排模式测试。
 
-GroupChatMode wraps the already-tested workflows/group_chat.py round-table
-graph. Functional tests inject synthetic (sync and async) panelists via
-the constructor override — mirroring test_workflow_group_chat.py's own
-stubbing — so no LLM call is needed to prove the mode's event stream and
-run_completed contract. A separate structural test proves the *default*
-(no override) panelist wiring — the actual production path — builds real
-callables for the expected names without invoking them (invoking would
-need a live chat client).
+注入同步和异步讨论者验证事件流与完成契约；另检查默认生产配置
+会构建预期参与者，但不实际调用模型。
 """
 
 from __future__ import annotations
@@ -36,14 +30,12 @@ async def test_group_chat_mode_runs_panelists_in_order_then_moderator() -> None:
     assert final.payload["agents_involved"] == ["value", "quality", "moderator"]
     assert [t["speaker"] for t in final.payload["transcript"]] == ["value", "quality"]
     assert "Saw 1 prior turn" in final.payload["transcript"][1]["text"]
-    assert final.payload["text"]  # moderator verdict is non-empty
+    assert final.payload["text"]  # 主持人结论非空。
 
 
 @pytest.mark.asyncio
 async def test_group_chat_mode_supports_async_panelists() -> None:
-    """The whole point of wiring this mode: real panelists are LLM calls,
-    which are async — workflows/group_chat.py's Responder had to learn to
-    await these (see that module's docstring)."""
+    """真实讨论者调用模型是异步的，Responder 必须等待异步结果。"""
     mode = GroupChatMode(panelists=[("quality", _quality)])
     events = [e async for e in mode.run("worth it?", RunContext(history=[]))]
 
@@ -67,13 +59,12 @@ def test_group_chat_mode_graph_mermaid_reflects_panel_order() -> None:
     assert "panelist_value" in graph
     assert "panelist_quality" in graph
     assert "moderator" in graph
-    # value must precede quality in the edge list (turn order matters).
+    # 边列表中 value 应先于 quality，发言顺序有意义。
     assert graph.index("panelist_value") < graph.index("panelist_quality")
 
 
 def test_group_chat_mode_default_panel_has_value_and_quality_names() -> None:
-    """Structural check on the real production wiring (no override) — does
-    not invoke the panelists, which would need a live chat client."""
+    """只检查默认生产接线，不调用需要模型服务的参与者。"""
     mode = GroupChatMode()
     panelists = mode._resolve_panelists()
     names = [name for name, _ in panelists]

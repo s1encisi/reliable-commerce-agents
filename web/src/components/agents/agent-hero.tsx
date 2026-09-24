@@ -7,6 +7,7 @@ interface AgentHeroProps {
   agent: AgentMeta;
 }
 
+/** 智能体详情页头部：返回链接、图标、名称、角色徽章、一句话简介与详细说明。 */
 export function AgentHero({ agent }: AgentHeroProps) {
   const Icon = agent.icon;
   return (
@@ -16,7 +17,7 @@ export function AgentHero({ agent }: AgentHeroProps) {
         className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
         <ArrowLeft className="size-3.5" />
-        All agents
+        全部智能体
       </Link>
 
       <div className="flex items-start gap-5">

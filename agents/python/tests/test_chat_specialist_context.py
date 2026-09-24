@@ -1,27 +1,10 @@
-"""Issue #9 — a specialist must receive the conversation's prior turns.
+"""专业智能体必须收到当前会话的历史。
 
-The bug this file exists to prevent is subtle enough that every *other*
-session-related test in this repo passed while production was broken:
+浏览器不发送会话头时，编排器应从业务会话建立 ContextVar，再将标识
+传播到 A2A 请求；否则专业智能体会静默以空上下文处理追问。
 
-    web/src/lib/api.ts never sends an ``x-session-id`` header
-      -> orchestrator/routes/chat.py never sets ``current_session_id``
-        -> build_a2a_headers() forwards ``x-session-id: ""``
-          -> shared/agent_host.py::_rehydrate_history_from_session returns
-             None at its ``if not session_id`` guard, before touching the DB
-            -> the specialist answers every follow-up with no prior context
-
-Nothing failed. The specialist just silently started from a blank slate, so
-"which one has the longest battery life?" reached product-discovery as a bare
-comparative with no antecedent. It looked like LLM nondeterminism because the
-orchestrator *does* hold the history and its prompt asks it to inline context
-into the specialist message — a non-deterministic instruction that sometimes
-worked.
-
-Every existing test that appears to cover this sets the ContextVar or the
-header by hand (``test_orchestrator_intent.py::test_session_id_forwarded_in_headers``,
-``test_service_token.py``, ``test_streaming_steps.py``), which is precisely
-why they kept passing. These two drive a real HTTP request instead, and assert
-the two halves of the chain that production actually runs.
+手工设置头或 ContextVar 的单元测试无法发现断链，因此这里驱动真实
+HTTP 请求，分别验证标识传播和实际历史恢复。
 """
 
 from __future__ import annotations
@@ -56,7 +39,7 @@ def _text(text: str) -> ChatResponse:
 
 
 class _RoutingClient(FunctionInvocationLayer, BaseChatClient):
-    """Turn 1 routes to a specialist; turn 2 answers. Mirrors real tool use."""
+    """第一轮调用专业智能体，第二轮回答，模拟真实工具流程。"""
 
     def __init__(self, specialist: str, forwarded: str) -> None:
         super().__init__()
@@ -96,7 +79,7 @@ class _RoutingClient(FunctionInvocationLayer, BaseChatClient):
 
 
 def _capture_a2a() -> tuple[object, dict]:
-    """Intercept the outbound A2A POST and record its headers and body."""
+    """拦截出站 A2A POST，记录请求头和请求体。"""
     from unittest.mock import AsyncMock, MagicMock
 
     resp = MagicMock()
@@ -145,12 +128,9 @@ async def _seed_prior_turn(db, user_id: uuid.UUID, conversation_id: uuid.UUID, e
 async def test_specialist_call_carries_the_conversation_id_as_session_id(
     clean_db, monkeypatch: pytest.MonkeyPatch, sample_env: dict
 ) -> None:
-    """The root cause: a browser-driven turn must forward a real session id.
+    """浏览器请求必须转发真实会话标识。
 
-    Asserts against the *outbound A2A headers* rather than the ContextVar,
-    because the ContextVar being set is only interesting if it survives all
-    the way onto the wire — and in the streaming path it crosses an
-    ``asyncio.create_task`` boundary to get there.
+    断言出站请求头，而非只检查 ContextVar；流式路径还跨越任务创建边界。
     """
     user_id, conversation_id = uuid.uuid4(), uuid.uuid4()
     email = "issue9@example.com"
@@ -197,11 +177,9 @@ async def test_specialist_call_carries_the_conversation_id_as_session_id(
 async def test_specialist_rehydrates_the_prior_turn_from_that_session_id(
     clean_db, monkeypatch: pytest.MonkeyPatch, sample_env: dict
 ) -> None:
-    """The other half: that id must actually produce the prior turn.
+    """验证传播的标识确实能够恢复上一轮历史。
 
-    Split from the test above deliberately. The first proves the id reaches
-    the specialist; this proves the id is one the specialist can use. Either
-    half passing alone still leaves follow-ups broken.
+    仅证明标识到达或仅证明查询可用，都不足以保证完整追问链路。
     """
     from shared.agent_host import _rehydrate_history_from_session
 
@@ -210,7 +188,7 @@ async def test_specialist_rehydrates_the_prior_turn_from_that_session_id(
     await _seed_prior_turn(clean_db, user_id, conversation_id, email)
     monkeypatch.setattr("shared.db._pool", clean_db, raising=False)
     monkeypatch.setattr("shared.db.get_pool", lambda: clean_db)
-    # On a specialist this is set from the forwarded x-user-email header.
+    # 专业智能体从转发的 x-user-email 设置当前用户。
     current_user_email.set(email)
 
     history = await _rehydrate_history_from_session(str(conversation_id))
@@ -224,14 +202,10 @@ async def test_specialist_rehydrates_the_prior_turn_from_that_session_id(
 async def test_streaming_turn_also_carries_the_session_id(
     clean_db, monkeypatch: pytest.MonkeyPatch, sample_env: dict
 ) -> None:
-    """The streaming path must not lose the id across its task boundary.
+    """流式任务创建后不能丢失会话标识。
 
-    ``/api/chat/stream`` runs the orchestrator inside an
-    ``asyncio.create_task`` spawned from within the SSE generator, and a
-    ``create_task`` snapshots whatever context is active at creation time.
-    Setting a ContextVar in the endpoint body is therefore not, on its own,
-    proof that the specialist sees it — so this asserts on the wire again
-    rather than trusting the blocking test to generalise.
+    create_task 在创建时复制上下文；因此测试实际出站请求头，
+    不只依赖端点设置过 ContextVar 这一事实。
     """
     user_id, conversation_id = uuid.uuid4(), uuid.uuid4()
     email = "issue9-stream@example.com"
@@ -253,11 +227,11 @@ async def test_streaming_turn_also_carries_the_session_id(
     app.include_router(router)
     app.dependency_overrides[optional_auth] = _fake_auth
 
-    # The streaming branch of call_specialist_agent uses client.stream(), not
-    # post() — mock that instead, and make it fail after recording, so the
-    # call falls through to the blocking path rather than needing a full SSE
-    # transcript. The headers are already captured by then, which is all this
-    # test is about.
+    # 流式调用使用 client.stream 而非 post，
+    # 因此拦截 stream，记录后再令其失败，
+    # 让调用退回阻塞路径，
+    # 无需构造完整 SSE 内容；
+    # 本测试只关心已捕获的请求头。
     from unittest.mock import AsyncMock, MagicMock
 
     captured: dict = {}
@@ -292,22 +266,11 @@ async def test_streaming_turn_also_carries_the_session_id(
 async def test_assistant_turn_is_persisted_before_done_is_yielded(
     clean_db, monkeypatch: pytest.MonkeyPatch, sample_env: dict
 ) -> None:
-    """A follow-up sent the instant [DONE] lands must still see this turn.
+    """[DONE] 到达后立即追问，也必须读到刚完成的助手消息。
 
-    The assistant message used to be written by a task spawned *after*
-    ``[DONE]`` was already on the wire. ``[DONE]`` is what re-enables the
-    composer, so a fast follow-up — a script, an impatient user, an e2e
-    test — could read history before that INSERT committed and lose the very
-    turn it was following up on. Distinct from the session-id bug above and
-    able to break follow-ups on its own, so it gets its own test.
-
-    Asserted on the *server-side* ordering rather than by racing a read from
-    the client, for two reasons found by trying the obvious version first:
-    locally the detached INSERT usually wins anyway (so a timing assertion
-    passed against the bug), and httpx's ASGITransport buffers the whole body
-    (so the client cannot observe [DONE] before the generator ends, no matter
-    how it is written). Both make a client-side test structurally incapable
-    of catching this regression.
+    助手消息应在完成标记前持久化。测试断言服务端顺序，因为本地写入
+    竞态常碰巧成功，而 ASGITransport 又会缓冲整个响应，客户端竞速
+    无法可靠暴露该回归。
     """
     user_id, conversation_id = uuid.uuid4(), uuid.uuid4()
     email = "issue9-durable@example.com"
@@ -381,15 +344,11 @@ async def test_assistant_turn_is_persisted_before_done_is_yielded(
 async def test_anonymous_caller_cannot_bind_someone_elses_conversation(
     clean_db, monkeypatch: pytest.MonkeyPatch, sample_env: dict
 ) -> None:
-    """An anonymous request must not turn a guessed UUID into a session id.
+    """匿名请求不能把猜测的 UUID 绑定为他人的会话。
 
-    Caught while writing the .NET half of this fix, against my own first
-    version of the Python one. ``body.conversation_id`` is client-supplied and
-    is only ownership-checked on the authed path — the anonymous branch passes
-    it straight through. Binding it unconditionally meant an anonymous caller
-    could name any conversation UUID and have the specialist rehydrate that
-    conversation, which the rehydration query had no ownership predicate to
-    stop. Both halves are fixed; this covers the outer one.
+    body.conversation_id 来自客户端。匿名路径若直接转发它，专业智能体
+    就可能读取其他用户的历史。入口绑定与历史恢复查询都需要归属校验；
+    本测试覆盖入口侧的防护。
     """
     victim_id, victim_conversation = uuid.uuid4(), uuid.uuid4()
     await _seed_prior_turn(clean_db, victim_id, victim_conversation, "victim@example.com")
@@ -430,11 +389,9 @@ async def test_anonymous_caller_cannot_bind_someone_elses_conversation(
 async def test_rehydration_refuses_a_conversation_the_caller_does_not_own(
     clean_db, monkeypatch: pytest.MonkeyPatch, sample_env: dict
 ) -> None:
-    """The inner half: the query itself must not trust the session id alone.
+    """历史查询本身也必须校验用户归属。
 
-    Defence in depth for the test above. The session id reaches a specialist in
-    a header, so any call site that ever forwards an unvalidated one must not
-    be able to read another user's conversation.
+    即使其他调用点转发了未经验证的会话标识，也不能读取他人会话。
     """
     from shared.agent_host import _rehydrate_history_from_session
 
@@ -454,7 +411,7 @@ async def test_rehydration_refuses_a_conversation_the_caller_does_not_own(
 
     leaked = await _rehydrate_history_from_session(str(victim_conversation))
 
-    # Empty rather than None: the query runs and matches nothing, which is the
-    # security property. Both are falsy, so the caller falls back to a
-    # no-history run either way (shared/agent_host.py::_history_as_maf_messages).
+    # 返回空列表而非 None，表明查询执行但没有匹配，
+    # 这是需要验证的隔离性质。两者都为假值，
+    # 调用方均会退化为无历史运行。
     assert not leaked, f"another user's conversation leaked: {leaked}"

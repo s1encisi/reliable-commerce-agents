@@ -1,9 +1,4 @@
-"""
-Fix #1 — JWT_SECRET / AGENT_SHARED_SECRET validation tests.
-
-Rebuilds the ``Settings`` singleton in isolation so each case asserts on
-the validator's behavior without interference from the repo-root ``.env``.
-"""
+"""JWT 与智能体共享密钥校验测试，隔离重建 Settings，避免 .env 干扰。"""
 
 from __future__ import annotations
 
@@ -11,10 +6,10 @@ import logging
 
 import pytest
 
-# Import once before any test sets ENVIRONMENT=production, so the
-# module-level ``settings = Settings()`` runs against the dev defaults
-# (which only warn). Tests then re-construct ``Settings(_env_file=None)``
-# manually with their own env, avoiding the eager module-level call.
+# 设置 production 之前先导入模块，
+# 让模块单例在开发默认值下初始化，
+# 随后各例自行构造 Settings(_env_file=None)，
+# 测试自己的环境组合。
 from shared import config as config_mod  # noqa: E402
 
 
@@ -35,7 +30,7 @@ def _prepare_env(monkeypatch: pytest.MonkeyPatch, *, environment: str, **secrets
     return config_mod
 
 
-_STRONG_SECRET = "x" * 48  # 48 bytes, well above the 32-byte floor
+_STRONG_SECRET = "x" * 48  # 48 字节，超过 32 字节下限。
 _STRONG_SECOND = "y" * 48
 
 
@@ -85,17 +80,17 @@ def test_production_accepts_strong_secrets(monkeypatch: pytest.MonkeyPatch) -> N
 def test_development_warns_but_does_not_raise(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """Dev flow must keep working with the shipped placeholders."""
+    """开发环境仍允许占位值，但应告警。"""
     config_mod = _prepare_env(monkeypatch, environment="development")
     with caplog.at_level(logging.WARNING):
         settings = config_mod.Settings(_env_file=None)  # type: ignore[call-arg]
-    assert settings.JWT_SECRET  # loaded, not raised
+    assert settings.JWT_SECRET  # 成功加载，没有抛错。
     messages = [rec.getMessage() for rec in caplog.records]
     assert any("JWT_SECRET" in m for m in messages)
     assert any("AGENT_SHARED_SECRET" in m for m in messages)
 
 
 def test_test_environment_also_permits_weak_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`ENVIRONMENT=test` (pytest) must not fail startup."""
+    """test 环境不能因默认占位值阻止启动。"""
     config_mod = _prepare_env(monkeypatch, environment="test")
     config_mod.Settings(_env_file=None)  # type: ignore[call-arg]  # must not raise

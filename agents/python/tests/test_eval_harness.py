@@ -1,11 +1,7 @@
-"""Tests for evals/harness.py::ProductionRunner.
+"""ProductionRunner 的真实 MAF 分派测试。
 
-Real MAF Agent driven by a scripted fake chat client (reusing
-test_orchestration_modes.py's _ScriptedClient), not a mocked run() — same
-standard the rest of this repo holds. Proves ProductionRunner actually
-routes through the real dispatch (orchestrator.modes for the orchestrator
-case, shared.agent_host._run_agent_native for specialists), not a
-hand-rolled loop.
+使用脚本化客户端驱动真实 Agent，确认编排器经过模式注册表、专业
+智能体经过原生宿主路径，不使用另一套手写执行循环。
 """
 
 from __future__ import annotations

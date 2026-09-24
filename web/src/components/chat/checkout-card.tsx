@@ -40,24 +40,24 @@ export function ChatCheckoutCard({ data }: { data: CheckoutData }) {
   const addressStr = formatAddress(data.shipping_address);
 
   return (
-    // Checkout's brand accent reuses the chart-2 token (teal-hued already)
-    // instead of a literal teal-* — a deliberate accent, not a status color,
-    // but still theme-consistent so a future re-skin carries it along.
+    // 结算卡的品牌强调色复用 chart-2 令牌（本身就是青绿色系），而不是
+    // 字面量 teal-*——它是刻意的强调色而非状态色，但仍与主题一致，
+    // 以便将来换肤时能一并带上。
     <div className="my-2 max-w-md rounded-xl border-2 border-chart-2/30 bg-gradient-to-br from-chart-2/10 to-card overflow-hidden">
-      {/* Header */}
+      {/* 标题栏 */}
       <div className="flex items-center gap-3 px-5 pt-4 pb-3">
         <div className="flex size-10 items-center justify-center rounded-full bg-chart-2/15">
           <ShoppingCart className="size-5 text-primary" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-foreground truncate">{data.message || "Your cart"}</p>
+          <p className="font-semibold text-foreground truncate">{data.message || "您的购物车"}</p>
           <p className="text-xs text-muted-foreground">
-            {itemCount} {itemCount === 1 ? "item" : "items"}
+            {itemCount} 件商品
           </p>
         </div>
       </div>
 
-      {/* Items */}
+      {/* 商品列表 */}
       {items.length > 0 && (
         <div className="border-y border-chart-2/20 bg-card/60">
           <table className="w-full text-xs">
@@ -89,7 +89,7 @@ export function ChatCheckoutCard({ data }: { data: CheckoutData }) {
         </div>
       )}
 
-      {/* Footer: address + totals + CTA */}
+      {/* 底部：地址 + 合计 + 行动按钮 */}
       <div className="px-5 py-3 space-y-2.5">
         {addressStr && (
           <div className="flex items-start gap-2 text-[11px] text-muted-foreground">
@@ -98,12 +98,12 @@ export function ChatCheckoutCard({ data }: { data: CheckoutData }) {
           </div>
         )}
         <div className="flex items-center justify-between">
-          <span className="text-xs text-muted-foreground">Total</span>
+          <span className="text-xs text-muted-foreground">合计</span>
           <span className="text-lg font-bold text-primary">{formatPrice(total)}</span>
         </div>
         <Link href="/checkout">
           <Button className="w-full gap-2 bg-primary hover:opacity-90 text-primary-foreground">
-            Complete Checkout
+            去结算
             <ArrowRight className="size-4" />
           </Button>
         </Link>

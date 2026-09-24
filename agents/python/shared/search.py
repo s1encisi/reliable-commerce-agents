@@ -1,37 +1,36 @@
-"""Full-text and hybrid retrieval helpers shared by the product tools.
+"""商品工具共用的全文检索和混合检索辅助函数。
 
-The catalog carries a weighted ``products.search_vector`` tsvector (name=A,
-brand=B, description=C) with a GIN index. These helpers build the SQL
-fragments that query it consistently across agents.
-
-Note: ``packages/mcp-product`` vendors its own copy of these fragments rather
-than importing this module — it is an isolated uv workspace member that must
-stay installable without the ``shared`` library.
+products.search_vector 按名称、品牌、描述赋予 A/B/C 权重并使用 GIN
+索引。MCP 商品包为保持可独立安装，维护自己的 SQL 片段副本。
 """
 
 from __future__ import annotations
 
-# Reciprocal Rank Fusion constant. 60 is the value from the original RRF paper
-# (Cormack et al. 2009) and the de-facto default in hybrid-search implementations:
-# large enough that the top few ranks score close together, so a document found by
-# both arms beats one that merely ranks first in a single arm.
+# 倒数排名融合（RRF）的平滑常量取 60。
+# 该值是本项目采用的既定设置，
+# 让靠前名次之间的分数差异较小，
+# 从而提升同时被两路检索命中的候选。
 RRF_K = 60
 
 
 def or_joined_tsquery(param: str) -> str:
-    """SQL expression turning a text parameter into an OR-joined tsquery.
+    """将文本参数构造成以 OR 连接的 tsquery SQL 表达式。
 
-    ``plainto_tsquery`` ANDs its lexemes, so "noise cancelling headphones"
-    becomes ``'nois' & 'cancel' & 'headphon'`` and matches only products
-    containing all three — the same all-terms-required behavior as the
-    per-word ILIKE loop this replaced, which is what made those queries
-    return nothing. Rewriting the operators to ``|`` makes any term a match
-    and leaves ``ts_rank`` to sort full matches above partial ones.
-
-    Args:
-        param: Positional parameter placeholder, e.g. ``"$1"``.
-
-    Returns:
-        A SQL expression of type ``tsquery``.
+    plainto_tsquery 默认要求全部词元匹配；改用 | 让部分匹配也能召回，
+    再由 ts_rank 排序。param 是 $1 一类位置参数占位符，不插入用户文本。
     """
     return f"replace(plainto_tsquery('english', {param})::text, '&', '|')::tsquery"
+
+
+def expand_catalog_query(query: str) -> str:
+    """保留原词并补充受控品类别名，不让改写覆盖用户原始约束。"""
+    aliases = {
+        "耳机": "headphones",
+        "键盘": "keyboard",
+        "充电宝": "power bank",
+        "手环": "fitness tracker",
+        "空气炸锅": "air fryer",
+        "运动鞋": "shoes",
+    }
+    additions = [value for key, value in aliases.items() if key in query and value not in query.lower()]
+    return " ".join([query, *additions])

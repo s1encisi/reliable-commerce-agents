@@ -1,21 +1,11 @@
-"""Human-in-the-Loop (HITL) approval middleware and DB helpers.
+"""人工参与（HITL）审批中间件与数据库辅助函数。
 
-High-stakes, irreversible tool calls (cancel_order, process_refund,
-initiate_return, modify_order, place_backorder) are intercepted before
-execution. Each call creates a ``hitl_requests`` record with status="pending".
+敏感工具在执行前进入 hitl_requests 待审批队列，管理员通过
+/admin/approvals 批准或拒绝。批准后才执行底层业务操作；拒绝会记录
+决定。是否启用由 HITL_ENABLED 控制，关闭时工具按原路径执行。
 
-An admin reviews pending requests at /admin/approvals and either:
-- Approves: the approve handler directly executes the underlying DB operation
-  and marks the record as "executed".
-- Denies: the record is marked "denied" and the denial is recorded.
-
-The middleware uses the ``HITL_ENABLED`` config flag. When disabled it is a
-no-op and all tools execute normally (default-off).
-
-DB setup:
-    The ``hitl_requests`` table is in docker/postgres/init.sql.
-    For existing deployments, run the CREATE TABLE statement directly or
-    `./scripts/dev.sh --clean` to reinitialise.
+表定义位于 docker/postgres/init.sql；已有部署应按迁移说明升级，
+不能为了更新表结构而重建有价值的业务数据。
 """
 
 from __future__ import annotations
@@ -34,8 +24,8 @@ from shared.idempotency import idempotent
 
 logger = logging.getLogger(__name__)
 
-# Tools that require human approval before executing.
-# Matches the @tool(approval_mode="always_require") decorators.
+# 执行前需要人工审批的工具。
+# 与 @tool(approval_mode="always_require") 声明一致。
 HITL_GATED_TOOLS: frozenset[str] = frozenset(
     {
         "cancel_order",
@@ -51,15 +41,10 @@ HITL_GATED_TOOLS: frozenset[str] = frozenset(
 
 
 class HITLFunctionMiddleware(FunctionMiddleware):
-    """Intercept gated tool calls and route them through the approval queue.
+    """拦截受控工具，送入审批队列。
 
-    When a gated tool is invoked:
-    1. A ``hitl_request`` record is created with status="pending".
-    2. The tool does NOT execute.
-    3. The agent returns a structured ``pending_approval`` payload to the user.
-
-    The actual execution happens in the admin approve endpoint, which calls
-    ``execute_approved_action()`` directly against the DB.
+    创建 pending 记录，不执行工具，并返回 pending_approval 结构化结果。
+    实际业务执行由管理员审批端点调用 execute_approved_action 完成。
     """
 
     async def process(
@@ -78,7 +63,7 @@ class HITLFunctionMiddleware(FunctionMiddleware):
             await call_next()
             return
 
-        # Extract arguments
+        # 提取工具参数。
         raw_args: dict[str, Any] = {}
         if hasattr(context, "arguments"):
             args = context.arguments
@@ -88,15 +73,15 @@ class HITLFunctionMiddleware(FunctionMiddleware):
         user_email = current_user_email.get() or "unknown"
         session_id = current_session_id.get("") or None
 
-        # Find the agent name from the context hierarchy
+        # 从上下文层级读取智能体名称。
         agent_name = _extract_agent_name(context)
 
         if tool_name == "initiate_return":
             from shared.after_sales.service import failure, request_return
 
             try:
-                # The operation service queues once, or replays a confirmed
-                # receipt. It never converts an existing success into a new queue.
+                # 操作服务只入队一次，或重放已确认的回执；
+                # 不会把已有成功结果转为新审批。
                 context.result = await request_return(**raw_args, force_approval=True)
             except (TypeError, ValueError):
                 context.result = failure("VALIDATION_ERROR", "Invalid return request parameters.")
@@ -117,12 +102,12 @@ class HITLFunctionMiddleware(FunctionMiddleware):
             )
         except Exception:
             logger.exception("hitl: failed to create approval request for %s", tool_name)
-            # Fail CLOSED — a high-stakes tool (cancel_order, process_refund,
-            # initiate_return, modify_order, place_backorder) must never
-            # execute unapproved just because the approval record couldn't
-            # be written. Refuse the call the same way a denied request
-            # would read to the caller, rather than silently letting it
-            # through — a transient DB error is not consent.
+            # 审批记录写入失败时必须拒绝执行。
+            # 取消订单、退款、退货、修改订单和预订等敏感操作，
+            # 不能因为数据库无法保存审批记录，
+            # 就绕过审批继续调用。
+            # 调用方应得到明确拒绝，
+            # 临时数据库故障不等于用户授权。
             context.result = {
                 "status": "error",
                 "message": (
@@ -150,17 +135,14 @@ class HITLFunctionMiddleware(FunctionMiddleware):
             ),
             "request_id": str(request_id),
         }
-        # Don't call call_next() — tool not executed
+        # 不调用 call_next()，工具尚未执行。
 
 
 def _decode_jsonb(value: Any) -> dict | None:
-    """asyncpg returns JSONB columns as raw JSON text by default (no codec
-    registered on this pool) — decode explicitly rather than ``dict(value)``,
-    which silently "succeeds" on iterating a string's characters and raises
-    a confusing ``ValueError`` instead of a clear decode error. Mirrors the
-    ``isinstance(x, str)`` guard already used in
-    ``product_discovery/tools.py`` and ``orchestrator/routes/legacy.py`` for
-    the same reason, in case a future pool ever does register a codec.
+    """显式解码 asyncpg 返回的 JSONB 文本，同时兼容已注册编解码器的连接池。
+
+    不能用 dict(value) 处理字符串，否则会按字符迭代并抛出难以理解的
+    ValueError；字符串先 JSON 解码，字典保持原样。
     """
     if value is None:
         return None
@@ -170,7 +152,7 @@ def _decode_jsonb(value: Any) -> dict | None:
 
 
 def _extract_agent_name(context: Any) -> str:
-    """Best-effort extraction of the running agent name from MAF context."""
+    """尽可能从 MAF 上下文提取当前智能体名称。"""
     for attr in ("agent_context", "agent", "_agent"):
         obj = getattr(context, attr, None)
         if obj is None:
@@ -223,7 +205,7 @@ async def list_hitl_requests(
     status: str | None = None,
     limit: int = 50,
 ) -> list[dict]:
-    """Return HITL requests for the admin approval queue."""
+    """读取管理员审批队列中的 HITL 请求。"""
     from shared.db import get_pool
 
     pool = get_pool()
@@ -278,18 +260,10 @@ async def get_hitl_request(request_id: str) -> dict | None:
 
 
 async def claim_hitl_request(request_id: str) -> dict | None:
-    """Atomically flip a pending request to 'processing' and return its full row.
+    """原子地把 pending 请求认领为 processing，并返回完整记录。
 
-    Must be called before ``execute_approved_action`` runs, not after —
-    calling it after (the previous shape: check status, execute, THEN
-    atomically resolve) leaves a real window where two concurrent approve
-    calls both pass the pre-check and both execute the underlying action;
-    only the second ``resolve_hitl_request`` call would have failed, by
-    which point the damage (e.g. a duplicate refund) is already done. This
-    claims the row first, so only one caller ever proceeds to execute.
-    Returns None if the request doesn't exist or isn't 'pending' (already
-    claimed, resolved, or denied) — the caller should treat that as
-    "someone else got here first" and refuse, not retry.
+    必须先认领再执行，避免两个并发审批都通过检查后重复产生副作用。
+    记录不存在或已被处理时返回 None；调用方应拒绝继续执行，不重试认领。
     """
     from shared.db import get_pool
 
@@ -314,18 +288,15 @@ async def claim_hitl_request(request_id: str) -> dict | None:
 
 async def resolve_hitl_request(
     request_id: str,
-    decision: str,  # "approved" | "denied"
+    decision: str,  # 审批决定：approved 或 denied。
     admin_email: str,
     note: str | None = None,
     execution_result: dict | None = None,
 ) -> bool:
-    """Update a HITL request's status. Returns True if a row was updated.
+    """更新审批状态；实际更新记录时返回 True。
 
-    Accepts a row in either 'pending' (the deny path, which never calls
-    ``claim_hitl_request``) or 'processing' (the approve path, which does)
-    — both are "not yet finalized" states this function is allowed to
-    close out. A row already 'approved'/'denied'/'executed' is left alone
-    and this returns False, same as before.
+    允许结束 pending（拒绝路径）或 processing（批准路径）状态；
+    已 approved、denied 或 executed 的记录保持不变并返回 False。
     """
     from shared.db import get_pool
 
@@ -339,8 +310,8 @@ async def resolve_hitl_request(
             return resolved
     if decision == "approved" and execution_result:
         failed = execution_result.get("success") is False or "error" in execution_result
-        # Keep the existing approval-status vocabulary for the admin UI.
-        # A decision can be approved while execution_result rejects the action.
+        # 保留管理员界面使用的审批状态词汇。
+        # 审批决定可以是 approved，但 execution_result 仍可能因业务校验拒绝。
         final_status = "approved" if failed else "executed"
     result = await pool.execute(
         """UPDATE tool_approval_requests
@@ -354,7 +325,7 @@ async def resolve_hitl_request(
         request_id,
         decision,
     )
-    return result.endswith("1")  # "UPDATE 1" → updated
+    return result.endswith("1")  # UPDATE 1 表示更新成功。
 
 
 # ─────────────────────── Action executor ────────────────────────────────────
@@ -366,7 +337,7 @@ async def execute_approved_action(
     user_email: str,
     approval_id: str | None = None,
 ) -> dict:
-    """Dispatch returns through version-bound approval; preserve other tools' cache keys."""
+    """退货使用绑定政策版本的审批路径；其他工具保留原缓存键。"""
     if tool_name == "initiate_return":
         return await _execute_approved_return(tool_name, tool_input, user_email, approval_id)
     return await _execute_legacy_action(tool_name, tool_input, user_email)
@@ -378,7 +349,7 @@ async def _execute_approved_return(
     user_email: str,
     approval_id: str | None,
 ) -> dict:
-    """Only a claimed server-side approval may authorize the shared return service."""
+    """只有已认领的服务端审批才能授权共享退货服务执行。"""
     from shared.db import get_pool
 
     pool = get_pool()
@@ -447,18 +418,18 @@ async def _execute_legacy_action(tool_name: str, tool_input: dict, user_email: s
         return {"success": False, "message": "Order not found or already processed."}
 
     if tool_name == "process_refund":
-        # process_refund (shared/tools/return_tools.py) takes `return_id`,
-        # not `order_id` — HITLFunctionMiddleware captures whatever the
-        # gated tool was actually called with, so tool_input always has
-        # `return_id` here, never `order_id`. This branch previously read
-        # tool_input.get("order_id", "") (always empty) and updated
-        # `orders` instead of `returns`, so approving a refund silently
-        # failed to find a match and never marked the return processed —
-        # fixed to match the real tool's shape: operate on `returns` by
-        # `return_id`, guarded by status so a double-execution (a retry
-        # that reaches this code despite the idempotency wrapper above,
-        # e.g. two different HITL requests for the same return) reports
-        # "already refunded" instead of a second success.
+        # process_refund 接受 return_id，
+        # 而非 order_id。中间件记录真实工具参数，
+        # 因此 tool_input 在这里应该包含
+        # return_id，不能读取不存在的 order_id。
+        # 旧实现读取空订单标识，
+        # 且错误更新 orders 而非 returns，
+        # 导致审批后退款状态没有变化。
+        # 当前按 return_id 操作 returns，
+        # 并用状态条件防止重复执行。
+        # 即使不同审批请求绕过同一幂等键，
+        # 重复执行也应返回已退款，
+        # 不能再次报告新退款成功。
         return_id = tool_input.get("return_id", "")
         async with pool.acquire() as conn:
             row = await conn.fetchrow(

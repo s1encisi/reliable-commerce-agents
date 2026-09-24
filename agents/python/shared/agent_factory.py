@@ -1,9 +1,8 @@
-"""Back-compat shim — the implementations live in `shared.factory` now.
+"""向后兼容入口，实际实现已迁移到 shared.factory。
 
-Callers import `create_chat_client`, `create_embedding_client`,
-`get_embedding_model` from here today. Keep the symbols so existing code
-(evals, shared/agent_host.py, orchestrator/agent.py) doesn't churn. New
-code should import from `shared.factory` directly.
+保留 create_chat_client、create_embedding_client、get_embedding_model
+的导出，兼容评测、智能体宿主和编排器等既有调用方。新代码直接从
+shared.factory 导入。
 """
 
 from __future__ import annotations

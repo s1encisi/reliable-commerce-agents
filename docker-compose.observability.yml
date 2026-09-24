@@ -1,0 +1,60 @@
+# 本地可选观测后端，不发布公网服务。
+services:
+  otel-log-init:
+    image: quay.io/prometheus/prometheus:v3.2.1
+    user: "0:0"
+    network_mode: none
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["chown 10001:10001 /var/lib/otel && chmod 0700 /var/lib/otel"]
+    volumes:
+      - otel-logs:/var/lib/otel
+  otel-collector:
+    image: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.123.0
+    user: "10001:10001"
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./docker/observability/collector.yml:/etc/otelcol-contrib/config.yaml:ro
+      - otel-logs:/var/lib/otel
+    ports:
+      - "127.0.0.1:4327:4317"
+      - "127.0.0.1:4328:4318"
+    depends_on:
+      jaeger:
+        condition: service_started
+      otel-log-init:
+        condition: service_completed_successfully
+  prometheus:
+    image: quay.io/prometheus/prometheus:v3.2.1
+    volumes:
+      - ./docker/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./docker/observability/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+  orchestrator:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      GENAI_CAPTURE_CONTENT: "false"
+  product-discovery:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      GENAI_CAPTURE_CONTENT: "false"
+  order-management:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      GENAI_CAPTURE_CONTENT: "false"
+  pricing-promotions:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      GENAI_CAPTURE_CONTENT: "false"
+  review-sentiment:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      GENAI_CAPTURE_CONTENT: "false"
+  inventory-fulfillment:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      GENAI_CAPTURE_CONTENT: "false"
+volumes:
+  otel-logs:
+  prometheus-data:

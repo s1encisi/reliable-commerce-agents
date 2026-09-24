@@ -1,35 +1,33 @@
-name: Feature request
-description: Propose something this project should do
+name: 功能建议
+description: 提议本项目应该做的事
 labels: ["enhancement"]
 body:
   - type: textarea
     id: problem
     attributes:
-      label: What problem does this solve?
-      description: The situation you hit, not the solution you have in mind.
+      label: 它解决了什么问题？
+      description: 描述你遇到的情况，而不是你心里的那个方案。
     validations:
       required: true
 
   - type: textarea
     id: proposal
     attributes:
-      label: What would you like to see?
+      label: 你希望看到什么？
     validations:
       required: true
 
   - type: checkboxes
     id: stacks
     attributes:
-      label: Which stacks would it need to land on?
-      description: Parity between Python and .NET is enforced by a dual-backend test gate, so this affects the size of the work considerably.
+      label: 需要落到哪些层次？
       options:
-        - label: Python
-        - label: .NET
-        - label: Frontend
-        - label: Docs or tutorials only
+        - label: Python 后端
+        - label: 前端
+        - label: 仅文档或教程
 
   - type: textarea
     id: alternatives
     attributes:
-      label: Anything you already considered and rejected?
-      description: Optional, but the rejected options are often the most useful part.
+      label: 有没有你已考虑并否掉的方案？
+      description: 可选，但被否掉的选项往往是最有用的部分。

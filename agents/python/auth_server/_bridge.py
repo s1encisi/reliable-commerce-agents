@@ -1,14 +1,12 @@
-"""Sync-over-async bridge for authlib's callbacks.
+"""为 authlib 回调提供的「异步之上跑同步」桥接。
 
-authlib's OAuth2 core (``AuthorizationServer``, grant classes, client/token
-mixins) is entirely synchronous — there is no Starlette/FastAPI integration
-and no async support. This repo's database access (asyncpg) is entirely
-async. Rather than adding a second, synchronous Postgres driver just for
-this one service, the token endpoint runs authlib's synchronous call chain
-in a worker thread (via ``asyncio.to_thread``) and any of its callbacks
-that need the database submit a coroutine back onto the main event loop —
-the one that owns the asyncpg pool — via ``run_coroutine_threadsafe`` and
-block only the worker thread while waiting.
+authlib 的 OAuth2 核心（``AuthorizationServer``、各 grant 类、client/token
+mixin）完全是同步的——没有 Starlette/FastAPI 集成，也没有异步支持。本仓库
+的数据库访问（asyncpg）则完全是异步的。与其仅为这一个服务再引入一个同步的
+Postgres 驱动，不如让令牌端点在 worker 线程中运行 authlib 的同步调用链
+（经 ``asyncio.to_thread``），而它任何需要数据库的回调都把协程经
+``run_coroutine_threadsafe`` 提交回主事件循环——也就是持有 asyncpg 连接池
+的那个循环——并在等待期间只阻塞 worker 线程。
 """
 
 from __future__ import annotations
@@ -21,17 +19,16 @@ _main_loop: asyncio.AbstractEventLoop | None = None
 
 
 def bind_main_loop() -> None:
-    """Capture the running event loop. Call once, during app startup."""
+    """捕获正在运行的事件循环。在应用启动时调用一次。"""
     global _main_loop
     _main_loop = asyncio.get_running_loop()
 
 
 def run_coro_sync[T](coro: Coroutine[Any, Any, T]) -> T:
-    """Run an async coroutine from synchronous code and block for the result.
+    """从同步代码运行一个异步协程并阻塞等待结果。
 
-    Safe to call from a worker thread (e.g. inside ``asyncio.to_thread``);
-    raises if called from the main loop's own thread, since that would
-    deadlock waiting on itself.
+    从 worker 线程调用是安全的（例如在 ``asyncio.to_thread`` 内部）；
+    若从主循环自己的线程调用则会抛错，因为那会等待自己而死锁。
     """
     if _main_loop is None:
         raise RuntimeError("bind_main_loop() was not called during startup")

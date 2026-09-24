@@ -1,11 +1,7 @@
-"""
-Phase 7 Refactor 10 — Orchestrator Handoff workflow tests.
+"""编排器处理权交接工作流测试。
 
-Covers the ``RemoteSpecialistChatClient`` adapter and the ``HandoffBuilder``
-wiring in ``orchestrator/handoff.py``. HTTP calls are stubbed so the tests
-never touch the network or the LLM — we only assert on the shape of the
-A2A request, the ``ChatResponse`` shape, and the executors wired into the
-built workflow.
+覆盖远程客户端适配器、A2A 请求及 HandoffBuilder 接线；
+只替换 HTTP 传输，不访问真实网络和模型。
 """
 
 from __future__ import annotations
@@ -26,20 +22,17 @@ from shared.remote_agent import RemoteSpecialistChatClient, make_remote_speciali
 
 
 def _stub_orchestrator() -> Agent:
-    """Build an orchestrator-shaped Agent that never actually calls an LLM.
+    """构造名称为 orchestrator 的真实 Agent，但不调用模型。
 
-    ``build_orchestrator_handoff_workflow`` only needs an Agent instance
-    with a name of ``orchestrator``; assembly doesn't invoke the client.
-    Using a ``RemoteSpecialistChatClient`` here lets us side-step
-    ``shared.factory`` validation in tests.
+    使用远程客户端适配器绕开工厂凭据校验，组装工作流本身不执行请求。
     """
     return Agent(
         client=RemoteSpecialistChatClient(name="orchestrator", url="http://local-stub"),
         name="orchestrator",
         description="Stub orchestrator used only for handoff wiring tests.",
         instructions="You are a test stub.",
-        # HandoffBuilder.build() requires this on every participant — see the
-        # same flag on orchestrator/agent.py::create_orchestrator_agent().
+        # 构建器要求每个参与者设置此标志，
+        # 与编排器工厂中的设置一致。
         require_per_service_call_history_persistence=True,
     )
 
@@ -48,7 +41,7 @@ def _stub_orchestrator() -> Agent:
 
 
 class _StubTransport(httpx.AsyncBaseTransport):
-    """Captures A2A requests so we can assert on headers and payload."""
+    """捕获 A2A 请求头与载荷供断言。"""
 
     def __init__(self, reply: str = "ok from stub", status: int = 200) -> None:
         self.reply = reply
@@ -63,7 +56,7 @@ class _StubTransport(httpx.AsyncBaseTransport):
 
 @pytest.fixture
 def stub_transport(monkeypatch: pytest.MonkeyPatch) -> _StubTransport:
-    """Patch httpx.AsyncClient so every call lands on our stub transport."""
+    """替换 AsyncClient，让请求全部落到测试传输。"""
     transport = _StubTransport()
     orig = httpx.AsyncClient
 
@@ -146,12 +139,12 @@ CANONICAL_REGISTRY: dict[str, str] = {
 
 @pytest.fixture
 def registry_env(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
-    """Pin ``settings.AGENT_REGISTRY`` so ``_load_registry`` produces the canonical mesh."""
+    """固定智能体注册表，使加载结果可确定。"""
     from shared import config as config_mod
 
     monkeypatch.setattr(config_mod.settings, "AGENT_REGISTRY", json.dumps(CANONICAL_REGISTRY))
-    # Also patch the handoff module's imported alias, in case the binding
-    # was captured at import time.
+    # 同时替换交接模块导入时捕获的别名，
+    # 避免旧绑定绕过测试设置。
     import orchestrator.handoff as handoff_mod
 
     monkeypatch.setattr(handoff_mod.settings, "AGENT_REGISTRY", json.dumps(CANONICAL_REGISTRY))
@@ -182,7 +175,7 @@ def test_handoff_workflow_wires_orchestrator_plus_specialists(registry_env: dict
 
 
 def test_handoff_workflow_respects_autonomous_mode_flag(registry_env: dict[str, str]) -> None:
-    """Passing autonomous_mode=False must not raise and must still build."""
+    """关闭自主模式仍应成功构建。"""
     specialists = build_remote_specialist_agents(registry=registry_env)
     workflow = build_orchestrator_handoff_workflow(
         orchestrator=_stub_orchestrator(),
@@ -193,7 +186,7 @@ def test_handoff_workflow_respects_autonomous_mode_flag(registry_env: dict[str, 
 
 
 def test_handoff_workflow_with_empty_registry() -> None:
-    """With no remote specialists configured the orchestrator should still build alone."""
+    """未配置远程专业智能体时，编排器也可单独构建。"""
     workflow = build_orchestrator_handoff_workflow(
         orchestrator=_stub_orchestrator(),
         specialists=[],

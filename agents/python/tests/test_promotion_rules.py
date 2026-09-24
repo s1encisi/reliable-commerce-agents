@@ -1,23 +1,8 @@
-"""Issue #51 — promotion rules never matched the code that read them.
+"""促销规则与种子数据字段契约回归测试。
 
-Filed as "optimize_cart raises ZeroDivisionError on an eval case". The crash was
-real, but it was one symptom of a wider problem: `promotions.rules` is untyped
-JSONB with no documented schema, and `scripts/seed.py` writes different key
-names than `optimize_cart` reads. Every promotion type was affected, and only
-one of the three failed loudly:
-
-- `bundle`: seed writes `products` (names), the code read `product_ids`. So
-  `required` was empty — and `all([])` is True, so every bundle matched every
-  cart and then contributed £0.
-- `buy_x_get_y`: seed writes `category`/`min_quantity`/`discount_pct`, the code
-  read `categories`/`buy_quantity`/`free_quantity`. Both defaulted to 0, so
-  `qty >= 0 + 0` was always true and the next line divided by zero — the crash.
-- `flash_sale`: seed writes `categories`, the code read `product_ids`. Nothing
-  ever matched: a silent no-op.
-
-So no promotion had ever applied correctly in any environment. These tests use
-the real seeded rule shapes, so they fail if the seed/code contract drifts
-again.
+历史实现把套装 products 当作 product_ids，空条件匹配所有购物车；
+买赠字段不一致导致除零；限时促销分类与商品标识混淆导致不生效。
+使用真实种子规则形态，防止数据和消费代码再次漂移。
 """
 
 from __future__ import annotations
@@ -64,11 +49,9 @@ async def _optimize(db, monkeypatch, cart):
 
 @pytest.mark.asyncio
 async def test_buy_x_get_y_with_seeded_rule_shape_does_not_crash(clean_db, monkeypatch) -> None:
-    """The reported bug. `min_quantity` + `discount_pct` is what the seed writes.
+    """种子使用 min_quantity 与 discount_pct，不能按其他字段读成零后除零。
 
-    Before the fix this raised ZeroDivisionError("integer division or modulo by
-    zero") — MAF caught it and handed the model an error result, so the turn
-    completed and the eval still scored. The tool was simply never contributing.
+    模型层捕获异常并不代表促销工具正确执行，必须直接验证工具结果。
     """
     book = await _product(clean_db, "Deep Work", "Books", 20.00)
     await _promotion(
@@ -87,7 +70,7 @@ async def test_buy_x_get_y_with_seeded_rule_shape_does_not_crash(clean_db, monke
 
 @pytest.mark.asyncio
 async def test_buy_x_get_y_still_supports_real_free_units(clean_db, monkeypatch) -> None:
-    """The other rule shape must keep working — this is a genuine BOGO."""
+    """另一种真正买赠的规则形态也必须保持可用。"""
     item = await _product(clean_db, "Socks", "Clothing", 10.00)
     await _promotion(
         clean_db,
@@ -99,12 +82,12 @@ async def test_buy_x_get_y_still_supports_real_free_units(clean_db, monkeypatch)
     result = await _optimize(clean_db, monkeypatch, [{"product_id": item, "quantity": 6}])
 
     bogo = [s for s in result["savings"] if s["type"] == "buy_x_get_y"]
-    assert bogo and bogo[0]["amount"] == pytest.approx(20.00)  # two free units
+    assert bogo and bogo[0]["amount"] == pytest.approx(20.00)  # 赠送两件。
 
 
 @pytest.mark.asyncio
 async def test_a_bundle_requiring_nothing_never_matches(clean_db, monkeypatch) -> None:
-    """`all([])` is True — the trap that made every bundle fire on every cart."""
+    """all([]) 为真，空套装条件不能误匹配全部购物车。"""
     item = await _product(clean_db, "Random Thing", "Home", 50.00)
     await _promotion(clean_db, "Malformed Bundle", "bundle", {"discount_pct": 25})
 
@@ -115,7 +98,7 @@ async def test_a_bundle_requiring_nothing_never_matches(clean_db, monkeypatch) -
 
 @pytest.mark.asyncio
 async def test_bundle_matches_on_product_names(clean_db, monkeypatch) -> None:
-    """The seeded shape: bundles are authored by name, not by generated UUID."""
+    """种子套装按商品名配置，而非随机生成的 UUID。"""
     a = await _product(clean_db, "Sony WH-1000XM5", "Electronics", 300.00)
     b = await _product(clean_db, "Samsung T7 Shield SSD 2TB", "Electronics", 100.00)
     await _promotion(
@@ -135,7 +118,7 @@ async def test_bundle_matches_on_product_names(clean_db, monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_flash_sale_scoped_by_category_applies(clean_db, monkeypatch) -> None:
-    """Previously a silent no-op: the seed scopes by category, the code read ids."""
+    """按分类限制的促销不能被错误当作商品标识列表。"""
     shirt = await _product(clean_db, "Shirt", "Clothing", 80.00)
     book = await _product(clean_db, "A Book", "Books", 20.00)
     await _promotion(
@@ -156,10 +139,9 @@ async def test_flash_sale_scoped_by_category_applies(clean_db, monkeypatch) -> N
 
 @pytest.mark.asyncio
 async def test_malformed_rules_are_skipped_not_guessed_at(clean_db, monkeypatch) -> None:
-    """Unparseable rules must contribute nothing, and must never raise.
+    """规则无法解析时不产生优惠，也不能抛错。
 
-    `rules` is untyped JSONB written by hand, so a typo is a data error rather
-    than an exception — but it must not silently become a discount either.
+    手工 JSONB 数据错误不能静默转化为折扣。
     """
     item = await _product(clean_db, "Widget", "Home", 100.00)
     await _promotion(clean_db, "Nonsense BOGO", "buy_x_get_y", {"category": "Home"})

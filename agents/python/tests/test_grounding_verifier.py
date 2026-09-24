@@ -1,7 +1,6 @@
-"""Claim verification against real data.
+"""使用真实数据验证声明。
 
-Policy: never mock the database — clean_db provisions a real Postgres
-container (see tests/conftest.py). Ledger-tier tests need no DB at all.
+数据库层通过 clean_db 使用隔离 PostgreSQL；台账层无需数据库。
 """
 
 from __future__ import annotations
@@ -44,10 +43,15 @@ async def seeded_product(db_pool: asyncpg.Pool) -> dict:
 @pytest_asyncio.fixture
 async def seeded_order(db_pool: asyncpg.Pool) -> dict:
     async with db_pool.acquire() as conn:
+        user_id = await conn.fetchval(
+            "INSERT INTO users(email,password_hash,name) "
+            "VALUES('grounding-owner@example.test','hash','Owner') RETURNING id"
+        )
         row = await conn.fetchrow(
-            """INSERT INTO orders (status, total, shipping_address)
-               VALUES ('shipped', 129.50, '{"city": "Metropolis"}'::jsonb)
+            """INSERT INTO orders (user_id, status, total, shipping_address)
+               VALUES ($1, 'shipped', 129.50, '{"city": "Metropolis"}'::jsonb)
                RETURNING id, status, total""",
+            user_id,
         )
         return dict(row)
 
@@ -117,8 +121,8 @@ async def test_tracking_verified_against_ledger() -> None:
 
 @pytest.mark.asyncio
 async def test_unresolved_claim_without_pool_is_unverifiable_not_not_found() -> None:
-    # No ledger match and no DB connection available — must not be reported
-    # as a fabrication just because verification couldn't run.
+    # 没有台账或数据库证据时，
+    # 不能把无法执行核验等同于内容虚构。
     claims = ExtractedClaims(products=[ProductClaim(id="p1", name="X", price=10.0, image_url=None)])
     report = await verify_claims(claims, GroundingLedger(), pool=None)
     assert report.verdicts[0].status == "unverifiable"
@@ -134,7 +138,13 @@ async def test_product_verified_against_real_db(db_pool: asyncpg.Pool, seeded_pr
             ProductClaim(id=str(seeded_product["id"]), name="Widget", price=49.99, image_url=None),
         ]
     )
-    report = await verify_claims(claims, None, db_pool)
+    from shared.context import current_user_email
+
+    token = current_user_email.set("grounding-owner@example.test")
+    try:
+        report = await verify_claims(claims, None, db_pool)
+    finally:
+        current_user_email.reset(token)
     assert report.verdicts[0].status == "verified"
     assert report.verdicts[0].source == "db"
 
@@ -165,9 +175,9 @@ async def test_fabricated_product_id_is_not_found(db_pool: asyncpg.Pool) -> None
 
 @pytest.mark.asyncio
 async def test_non_uuid_id_is_not_found_without_a_db_round_trip(db_pool: asyncpg.Pool) -> None:
-    # A slug like "sony-wh1000xm5-001" is exactly grounding-rules.yaml's
-    # documented example of a fabricated id — must fail fast, not crash on
-    # an invalid ::uuid[] cast.
+    # 商品 slug 不是合法 UUID，
+    # 应提前拒绝，
+    # 不能在数据库 uuid[] 转换时崩溃。
     claims = ExtractedClaims(
         products=[
             ProductClaim(id=_NOT_A_UUID, name="Ghost", price=1.0, image_url=None),
@@ -184,7 +194,13 @@ async def test_order_verified_against_real_db(db_pool: asyncpg.Pool, seeded_orde
             OrderClaim(id=str(seeded_order["id"]), status="shipped", total=129.50, tracking=None),
         ]
     )
-    report = await verify_claims(claims, None, db_pool)
+    from shared.context import current_user_email
+
+    token = current_user_email.set("grounding-owner@example.test")
+    try:
+        report = await verify_claims(claims, None, db_pool)
+    finally:
+        current_user_email.reset(token)
     assert report.verdicts[0].status == "verified"
 
 
@@ -194,7 +210,13 @@ async def test_bare_id_verified_if_it_exists_as_either_product_or_order(
     seeded_order: dict,
 ) -> None:
     claims = ExtractedClaims(bare_ids=[BareIdClaim(id=str(seeded_order["id"]))])
-    report = await verify_claims(claims, None, db_pool)
+    from shared.context import current_user_email
+
+    token = current_user_email.set("grounding-owner@example.test")
+    try:
+        report = await verify_claims(claims, None, db_pool)
+    finally:
+        current_user_email.reset(token)
     assert report.verdicts[0].status == "verified"
 
 
@@ -210,9 +232,9 @@ async def test_ledger_match_skips_db_round_trip(
     db_pool: asyncpg.Pool,
     seeded_product: dict,
 ) -> None:
-    # Real product in the DB, but also present in the ledger with a
-    # DIFFERENT price — the ledger tier must win (cheaper, checked first)
-    # rather than silently falling through to the DB tier.
+    # 数据库和本轮台账中均有商品，但价格不同，
+    # 应优先使用先检查的台账结果，
+    # 不能静默落入数据库层覆盖它。
     ledger = GroundingLedger()
     pid = str(seeded_product["id"])
     ledger.products[pid] = ProductFact(id=pid, name="Widget", price=49.99)
@@ -221,3 +243,20 @@ async def test_ledger_match_skips_db_round_trip(
     report = await verify_claims(claims, ledger, db_pool)
     assert report.verdicts[0].status == "verified"
     assert report.verdicts[0].source == "ledger"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("email", ["another@example.test", ""])
+async def test_other_user_or_anonymous_cannot_verify_order(db_pool, seeded_order, email):
+    from shared.context import current_user_email
+
+    token = current_user_email.set(email)
+    try:
+        claims = ExtractedClaims(
+            orders=[OrderClaim(id=str(seeded_order["id"]), status="shipped", total=129.50, tracking=None)]
+        )
+        result = await verify_claims(claims, None, db_pool)
+        assert result.verdicts[0].status == "not_found"
+        assert result.verdicts[0].corrected_value is None
+    finally:
+        current_user_email.reset(token)

@@ -1,7 +1,7 @@
-"""Intent classification types and agent routing map.
+"""意图分类类型与智能体路由映射。
 
-The LLM handles actual intent classification via the system prompt and tool selection.
-These types exist for structured logging and analytics.
+实际的意图分类由 LLM 通过系统提示词与工具选择完成。
+这些类型的存在是为了结构化日志与分析。
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from enum import StrEnum
 
 
 class Intent(StrEnum):
-    """User intent categories for analytics and routing."""
+    """用于分析与路由的用户意图分类。"""
 
     PRODUCT_QUESTION = "product_question"
     ORDER_INQUIRY = "order_inquiry"

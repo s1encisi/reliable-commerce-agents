@@ -1,10 +1,7 @@
-"""Service-token acquirer (Phase C: inter-agent client-credentials).
+"""服务令牌获取、缓存与提前刷新测试。
 
-``request_token`` (the AS HTTP call) is monkeypatched throughout — these
-tests exercise the acquirer's caching/refresh-skew logic and the
-``build_a2a_headers`` mode branch, not the network call itself (that's
-covered by ``test_auth_server_integration.py``'s real client-credentials
-grant tests). No DB, no LLM.
+替换授权服务器 HTTP 调用，验证缓存和 A2A 请求头模式分支；
+真实授权往返由集成测试覆盖。
 """
 
 from __future__ import annotations
@@ -37,7 +34,7 @@ async def test_acquires_and_caches_token(monkeypatch) -> None:
 
     assert first == "tok-1"
     assert second == "tok-1"
-    assert len(calls) == 1  # second call served from cache
+    assert len(calls) == 1  # 第二次调用命中缓存。
     assert calls[0] == ("client_credentials", {"scope": "agent:invoke"})
 
 
@@ -70,7 +67,7 @@ async def test_refreshes_after_expiry(monkeypatch) -> None:
     first = await acquire_service_token("agent:invoke", "ecommerce-agents")
     assert first == "tok-1"
 
-    # Force the cached entry to look expired without sleeping in a test.
+    # 直接使缓存看似过期，无需真实等待。
     cache_key = ("agent:invoke", "ecommerce-agents")
     token, _expires_at = service_client._service_token_cache[cache_key]
     service_client._service_token_cache[cache_key] = (token, 0.0)
@@ -81,9 +78,7 @@ async def test_refreshes_after_expiry(monkeypatch) -> None:
 
 
 async def test_refresh_skew_triggers_early_refresh(monkeypatch) -> None:
-    """A token that hasn't technically expired yet, but is within the skew
-    window, is refreshed anyway — a concurrent in-flight request must never
-    receive a token that expires mid-call."""
+    """进入提前刷新窗口的令牌即使尚未过期，也应重新获取。"""
     calls = 0
 
     async def fake_request_token(grant_type, **form):
@@ -96,7 +91,7 @@ async def test_refresh_skew_triggers_early_refresh(monkeypatch) -> None:
     await acquire_service_token("agent:invoke", "ecommerce-agents")
     cache_key = ("agent:invoke", "ecommerce-agents")
     token, expires_at = service_client._service_token_cache[cache_key]
-    # Simulate time passing to just inside the refresh-skew window.
+    # 模拟时间刚进入提前刷新窗口。
     import time
 
     service_client._service_token_cache[cache_key] = (
@@ -111,7 +106,7 @@ async def test_refresh_skew_triggers_early_refresh(monkeypatch) -> None:
 
 async def test_defaults_expires_in_when_as_omits_it(monkeypatch) -> None:
     async def fake_request_token(grant_type, **form):
-        return {"access_token": "tok-no-ttl"}  # no expires_in field
+        return {"access_token": "tok-no-ttl"}  # 响应缺少 expires_in。
 
     monkeypatch.setattr(service_client, "request_token", fake_request_token)
 

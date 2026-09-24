@@ -1,10 +1,10 @@
-"""Stored eval-score baselines and regression detection.
+"""存储的评测分数基线与回归检测。
 
-A baseline is a snapshot of an ``EvalSummary``'s key scores, committed to
-``evals/baselines/<suite>.json``. ``--baseline`` compares a fresh run
-against it and fails the run if any tracked score dropped by more than
-``--max-regression``; ``--update-baseline`` overwrites the stored file
-after a deliberate, reviewed change (never automatically).
+基线是某个 ``EvalSummary`` 关键分数的快照，提交到
+``evals/baselines/<suite>.json``。``--baseline`` 会把一次新的运行结果与它
+对比，若任何被跟踪的分数下降超过 ``--max-regression`` 则判定该次运行失败；
+``--update-baseline`` 会在一次经过审慎评审的变更之后覆盖已存储的文件
+（绝不会自动覆盖）。
 """
 
 from __future__ import annotations
@@ -36,11 +36,11 @@ def write_baseline(path: str | Path, summary: EvalSummary) -> None:
 
 
 def check_regression(baseline: dict[str, float], summary: EvalSummary, max_regression: float) -> tuple[bool, str]:
-    """Returns ``(regressed, human_readable_message)``.
+    """返回 ``(是否回归, 人类可读的消息)``。
 
-    A score is a regression only when it drops by more than
-    ``max_regression`` — small run-to-run noise (a different sampled
-    response, a flaky judge call) is expected and shouldn't fail a build.
+    只有当分数下降幅度超过 ``max_regression`` 时才判定为回归——运行之间
+    的微小噪声（采样到了不同的回复、一次不稳定的评判调用）属于预期之内，
+    不应导致构建失败。
     """
     lines = ["Baseline comparison:"]
     regressed = False

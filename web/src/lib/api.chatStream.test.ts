@@ -2,15 +2,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "./api";
 
 /**
- * `chatStream()`'s SSE parser must route structured, non-text frames (the
- * `node`/`handoff`/`checkpoint`/`request_info`/`error` events a non-"tool"
- * orchestration mode emits — see `orchestrator/routes/chat.py`) to
- * `onOrchestrationEvent`, not `onChunk` — falling through to `onChunk`
- * would render their raw JSON payload as if it were part of the assistant's
- * visible reply. `step`/`metadata`/plain-text behavior must stay exactly as
- * before. `delta` frames (a specialist's own live-streamed preview) route
- * to their own `onDeltaChunk` callback, not `onChunk` (Phase 8.1) — see the
- * second test below.
+ * `chatStream()` 的 SSE 解析器必须把结构化的非文本帧（非「tool」编排模式
+ * 发出的 `node`/`handoff`/`checkpoint`/`request_info`/`error` 事件——见
+ * `orchestrator/routes/chat.py`）路由到 `onOrchestrationEvent`，而不是
+ * `onChunk`——若落到 `onChunk`，它们的原始 JSON 载荷会被当作助手可见回复
+ * 的一部分渲染出来。`step`/`metadata`/纯文本的行为必须与之前完全一致。
+ * `delta` 帧（专业智能体自身的实时预览）路由到它自己的 `onDeltaChunk`
+ * 回调，而不是 `onChunk`（第 8.1 阶段）——见下方第二个测试。
  */
 
 function fakeStreamResponse(rawBody: string) {
@@ -39,8 +37,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("chatStream SSE parsing", () => {
-  it("routes structured frames to onOrchestrationEvent, not onChunk, and keeps step/metadata/text intact", async () => {
+describe("chatStream 的 SSE 解析", () => {
+  it("把结构化帧路由到 onOrchestrationEvent 而非 onChunk，并保持 step/metadata/文本不变", async () => {
     const raw = [
       "data: Hello ",
       "",
@@ -86,7 +84,7 @@ describe("chatStream SSE parsing", () => {
     expect(metadata).toEqual({ conversation_id: "c1", agents_involved: ["orchestrator", "math"] });
   });
 
-  it("routes a `delta` frame to onDeltaChunk, not onChunk (Phase 8.1 — no longer double-persisted)", async () => {
+  it("把 `delta` 帧路由到 onDeltaChunk 而非 onChunk（第 8.1 阶段——不再重复持久化）", async () => {
     const raw = ["event: delta\ndata: specialist chunk", "", "data: [DONE]", ""].join("\n");
 
     vi.stubGlobal(
@@ -100,11 +98,10 @@ describe("chatStream SSE parsing", () => {
       onDeltaChunk: (chunk) => deltaChunks.push(chunk),
     });
 
-    // A `delta` frame is a specialist's live preview, not the final answer —
-    // it must never reach the same buffer onChunk writes to (that's what
-    // caused every tool-mode answer that called a specialist to render
-    // twice, in independently-worded restatements, with a duplicated card
-    // fence). See orchestrator/routes/chat.py's streaming consumer loop.
+    // `delta` 帧是专业智能体的实时预览，不是最终回答——它绝不能进入
+    // onChunk 写入的同一个缓冲区（正是这一点导致每个调用过专业智能体的
+    // tool 模式回答被渲染两次：两段各自措辞的复述，外加重复的卡片代码块）。
+    // 见 orchestrator/routes/chat.py 的流式消费循环。
     expect(chunks).toEqual([]);
     expect(deltaChunks).toEqual(["specialist chunk"]);
   });

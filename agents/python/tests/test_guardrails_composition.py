@@ -1,4 +1,4 @@
-"""Tests for build_specialist_middleware composition (Track A3). No LLM/DB."""
+"""专业智能体中间件组合测试，无模型或数据库。"""
 
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ def test_guardrails_disabled_drops_security_layers(monkeypatch):
     types = _types(build_specialist_middleware())
     assert InjectionDetectionChatMiddleware not in types
     assert OutputSanitizationMiddleware not in types
-    # PII redaction + observability stay on regardless of the guardrail flag.
+    # 个人信息脱敏与可观测性不随护栏开关关闭。
     assert PiiRedactionMiddleware in types
     assert StepRecorderMiddleware in types
 

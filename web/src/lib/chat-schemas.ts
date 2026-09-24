@@ -1,21 +1,19 @@
 import { z } from "zod";
 
 /**
- * Schemas the chat renderer uses to validate JSON it pulls out of LLM
- * code-fenced blocks. Anything that doesn't pass `safeParse` falls
- * back to the raw markdown path — never to a half-rendered card.
+ * 对话渲染器用来校验「从 LLM 代码块中提取出的 JSON」的模式（schema）。
+ * 任何未通过 `safeParse` 的内容都会回退到原始 Markdown 路径——绝不会渲染
+ * 成一张残缺的卡片。
  *
- * Keep these *deliberately permissive*: the goal is "the data is
- * shaped like an object the card knows how to render", not strict
- * server-side validation. The agent backend already normalises shapes;
- * Zod here is a defence-in-depth gate against:
- *   - prompt-injected JSON with control characters or HTML
- *   - upstream tools returning the wrong shape
- *   - LLMs hallucinating extra/missing fields
+ * 请保持这些模式*刻意宽松*：目标是「数据的形状像卡片知道如何渲染的对象」，
+ * 而不是严格的服务端校验。智能体后端已经对形状做过规范化；这里的 Zod 是
+ * 一道纵深防御关卡，用于防范：
+ *   - 提示词注入产生的、带有控制字符或 HTML 的 JSON
+ *   - 上游工具返回了错误的形状
+ *   - LLM 幻觉出多余或缺失的字段
  */
 
-// Primitive: a non-empty string with no embedded markup that could be
-// re-parsed by ReactMarkdown later.
+// 基础类型：非空字符串，且不含可能被 ReactMarkdown 再次解析的内嵌标记。
 const safeString = z
   .string()
   .max(2000)
@@ -57,7 +55,7 @@ export const OrderItemSchema = z
 export const TimelineEventSchema = z
   .object({
     label: optionalSafeString,
-    // order-card.tsx renders event.status; backend may emit either field
+    // order-card.tsx 渲染的是 event.status；后端可能发出其中任一字段
     status: optionalSafeString,
     date: optionalSafeString,
     completed: z.boolean().optional(),
@@ -87,8 +85,8 @@ export const OrderDataSchema = z
     carrier: optionalSafeString,
     shipping_address: z.union([safeString, ShippingAddressObj]).optional(),
     timeline: z.array(TimelineEventSchema).max(20).optional(),
-    // Populated when the agent has already called check_return_eligibility;
-    // order-card.tsx falls back to a client-side heuristic when absent.
+    // 当智能体已经调用过 check_return_eligibility 时会被填充；
+    // 缺失时 order-card.tsx 会回退到客户端启发式判断。
     return_eligible: z.boolean().optional(),
   })
   .passthrough();
@@ -132,14 +130,13 @@ export const ReturnDataSchema = z
   })
   .passthrough();
 
-// ── Generative-UI primitives (Phase 8.4 Stage 3) ──────────────────────────
-// Generic shapes for the reusable DataTable/TrendChart/DistributionChart/
-// StatTile components (web/src/components/ui/). Not yet registered as their
-// own fence tags below — Stage 4 wires each specialist's specific fence
-// (e.g. a sentiment-distribution or stock-table tag) to one of these, once
-// that specialist's real data shape is known. Exported now so the schema
-// and the component it validates for land together, mirroring the existing
-// pattern of building the render layer and its guard rail as one unit.
+// ── 生成式 UI 基础类型（第 8.4 阶段 Step 3） ─────────────────────────────
+// 供可复用的 DataTable/TrendChart/DistributionChart/StatTile 组件
+// （web/src/components/ui/）使用的通用形状。目前尚未在下文注册为它们
+// 各自的代码块标记——第 4 阶段会在了解各专业智能体的真实数据形状后，
+// 把它特定的代码块（例如情感分布或库存表标记）接到其中之一。现在就导出，
+// 是为了让模式与其所校验的组件一同落地，延续「渲染层与其护栏作为一个
+// 整体构建」的既有做法。
 
 const SEMANTIC_TONE = z.enum(["success", "warning", "info", "destructive", "neutral"]);
 
@@ -187,11 +184,10 @@ export const StatTileDataSchema = z
   })
   .passthrough();
 
-// ── review-sentiment (Phase 8.4 Stage 4a) ──────────────────────────────────
-// Every field optional: analyze_sentiment, get_sentiment_trend, and
-// detect_fake_reviews each populate a different subset in one `sentiment`
-// fence, so the card renders whichever pieces are present rather than
-// requiring all three tool calls before showing anything.
+// ── 评论与情感分析（第 8.4 阶段 Step 4a） ─────────────────────────────────
+// 所有字段都可选：analyze_sentiment、get_sentiment_trend 与
+// detect_fake_reviews 会在同一个 `sentiment` 代码块中各自填充不同的子集，
+// 因此卡片只渲染实际存在的部分，而不要求三个工具调用全部完成才展示内容。
 
 const MonthlyRatingPointSchema = z
   .object({
@@ -218,10 +214,10 @@ export const SentimentDataSchema = z
   })
   .passthrough();
 
-// ── inventory-fulfillment (Phase 8.4 Stage 4b) ─────────────────────────────
-// Every field optional: check_stock, get_warehouse_availability, and
-// get_restock_schedule each populate a different subset in one `inventory`
-// fence, mirroring the `sentiment` fence's "whichever tools ran" design.
+// ── 库存与履约（第 8.4 阶段 Step 4b） ─────────────────────────────────────
+// 所有字段都可选：check_stock、get_warehouse_availability 与
+// get_restock_schedule 会在同一个 `inventory` 代码块中各自填充不同的子集，
+// 与 `sentiment` 代码块「哪个工具跑过就展示哪部分」的设计一致。
 
 const WarehouseStockSchema = z
   .object({
@@ -241,11 +237,10 @@ const RestockEntrySchema = z
   })
   .passthrough();
 
-// Phase 8.4 Stage 5 — estimate_shipping's fields. The one genuinely
-// interactive case in this fence: each option is a real choice, not just
-// display, wired to the re-prompt path (see inventory-card.tsx) since
-// there's no direct-mutation endpoint for "select a shipping carrier" —
-// unlike cart add-item, which already has one.
+// 第 8.4 阶段 Step 5——estimate_shipping 的字段。这是该代码块中唯一真正
+// 具备交互性的场景：每个选项都是真实的选择而非仅仅展示，并接到「重新提问」
+// 的路径上（见 inventory-card.tsx），因为「选择承运商」没有直接写入的接口
+// ——这与购物车添加商品不同，后者已经有这样的接口。
 const ShipsFromSchema = z
   .object({
     warehouse: optionalSafeString,
@@ -277,10 +272,11 @@ export const InventoryDataSchema = z
   })
   .passthrough();
 
-// ── pricing-promotions (Phase 8.4 Stage 4c) ────────────────────────────────
-// Every field optional: optimize_cart populates the discount-waterfall
-// fields (original_total/savings/total_savings/final_total), get_active_deals
-// populates coupons/promotions — same "whichever tools ran" design as 4a/4b.
+// ── 定价与促销（第 8.4 阶段 Step 4c） ─────────────────────────────────────
+// 所有字段都可选：optimize_cart 填充优惠瀑布相关的字段
+// （original_total/savings/total_savings/final_total），get_active_deals
+// 填充 coupons/promotions——与 4a/4b 同样是「哪个工具跑过就展示哪部分」的
+// 设计。
 
 const SavingsLineSchema = z
   .object({
@@ -338,11 +334,11 @@ const SCHEMAS = {
 } as const;
 
 /**
- * Recursively drop keys whose value is `null` (and `null` array elements).
- * The LLM/backend emit `null` for empty fields (e.g. "shipping_address":
- * null), but Zod `.optional()` accepts `undefined`, not `null` — so a stray
- * null would fail the whole schema and drop an otherwise-valid card. Treat
- * null as "absent" before validating.
+ * 递归删除值为 `null` 的键（以及数组中的 `null` 元素）。
+ * LLM/后端对空字段会发出 `null`（例如 "shipping_address": null），但 Zod
+ * 的 `.optional()` 接受 `undefined` 而不接受 `null`——因此一个多余的 null
+ * 会让整个模式校验失败，从而丢掉一张本应有效的卡片。在校验之前把 null
+ * 视为「不存在」。
  */
 function dropNulls(value: unknown): unknown {
   if (Array.isArray(value)) {
@@ -360,9 +356,9 @@ function dropNulls(value: unknown): unknown {
 }
 
 /**
- * Validate a parsed JSON value against the schema for `kind`. Returns
- * the sanitised data on success, or `null` if validation fails — which
- * the renderer treats as "drop the card, render the raw text instead".
+ * 用 `kind` 对应的模式校验已解析的 JSON 值。成功时返回清洗后的数据，
+ * 校验失败时返回 `null`——渲染器把 `null` 视为「丢弃该卡片，改为渲染
+ * 原始文本」。
  */
 export function validateCard<K extends CardKind>(
   kind: K,
