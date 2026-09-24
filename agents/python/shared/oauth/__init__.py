@@ -1,2 +1,1 @@
-"""OAuth2 client helpers shared between the auth-server, the seeder, and
-every service that authenticates against it (AUTH_MODE=oauth)."""
+"""授权服务器、种子脚本与各服务共用的 OAuth2 客户端辅助函数。"""

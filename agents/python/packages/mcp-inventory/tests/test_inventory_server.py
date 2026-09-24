@@ -1,10 +1,10 @@
-"""Tests for ecommerce-mcp-inventory server.
+"""ecommerce-mcp-inventory 服务的测试。
 
-Two tiers:
-- Registration smoke tests (no DB) — verify tool names are registered and
-  the ASGI app is importable. These always run in CI.
-- Integration tests (DB via testcontainers) — verify actual SQL queries against
-  a real Postgres container with the production schema. Marked `integration`.
+分两个层次：
+- 注册冒烟测试（不涉及数据库）—— 校验工具名称已注册，且 ASGI 应用可导入。
+  这些测试在 CI 中总会运行。
+- 集成测试（通过 testcontainers 连接数据库）—— 在带生产 schema 的真实
+  Postgres 容器上校验实际的 SQL 查询。标记为 `integration`。
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import pytest_asyncio
 
 from ecommerce_mcp_inventory.server import _get_pool, app, mcp
 
-# ─────────────────────── Registration smoke ─────────────────────────────────
+# ─────────────────────── 注册冒烟测试 ─────────────────────────────────
 
 
 def test_mcp_server_name() -> None:
@@ -23,7 +23,7 @@ def test_mcp_server_name() -> None:
 
 
 def test_tool_names_registered() -> None:
-    """All 5 inventory tools must be discoverable without a DB connection."""
+    """全部 5 个库存工具都必须能在无数据库连接的情况下被发现。"""
     tool_names = {t.name for t in mcp._tool_manager.list_tools()}
     expected = {
         "check_stock",
@@ -36,22 +36,22 @@ def test_tool_names_registered() -> None:
 
 
 def test_asgi_app_importable() -> None:
-    """app must be a callable ASGI app (uvicorn entry-point check)."""
+    """app 必须是可调用的 ASGI 应用（uvicorn 入口点检查）。"""
     assert callable(app)
 
 
 def test_get_pool_raises_before_startup() -> None:
-    """_get_pool() must fail loudly if called before lifespan starts."""
+    """若在 lifespan 启动前调用，_get_pool() 必须显式报错。"""
     with pytest.raises(RuntimeError, match="DB pool not initialized"):
         _get_pool()
 
 
-# ─────────────────────── Integration (live DB) ──────────────────────────────
+# ─────────────────────── 集成测试（真实数据库） ──────────────────────────────
 
 
 @pytest.fixture
 async def product_and_warehouse(postgres_pool: asyncpg.Pool) -> dict:
-    """Seed minimal product + warehouse + inventory rows; return ids."""
+    """种入最小化的商品 + 仓库 + 库存记录；返回各自的 id。"""
     async with postgres_pool.acquire() as conn:
         seller_id = await conn.fetchval(
             """INSERT INTO users (email, name, role, password_hash)
@@ -93,7 +93,7 @@ async def product_and_warehouse(postgres_pool: asyncpg.Pool) -> dict:
 
 @pytest_asyncio.fixture
 async def _patched_pool(postgres_pool: asyncpg.Pool, monkeypatch: pytest.MonkeyPatch):
-    """Patch module-level _pool so tool functions use the test container."""
+    """对模块级 _pool 打补丁，使工具函数使用测试容器。"""
     import ecommerce_mcp_inventory.server as srv
 
     monkeypatch.setattr(srv, "_pool", postgres_pool)
@@ -144,7 +144,7 @@ async def test_get_restock_schedule_empty(
 ) -> None:
     from ecommerce_mcp_inventory.server import get_restock_schedule
 
-    # No restock rows seeded — should return empty list without error
+    # 没有种入 restock 记录 —— 应返回空列表且不报错
     result = await get_restock_schedule(product_id=product_and_warehouse["product_id"])
     assert isinstance(result, list)
 
@@ -155,6 +155,6 @@ async def test_compare_carriers_no_rates(
 ) -> None:
     from ecommerce_mcp_inventory.server import compare_carriers
 
-    # No shipping_rates seeded — should return empty list without error
+    # 没有种入 shipping_rates —— 应返回空列表且不报错
     result = await compare_carriers(region_from="east", region_to="west")
     assert isinstance(result, list)

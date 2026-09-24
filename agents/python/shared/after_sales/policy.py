@@ -1,4 +1,4 @@
-"""returns-v1: a continuous, inclusive 30-day window with trusted evidence."""
+"""returns-v1：一个连续、含端点的 30 天窗口，基于可信证据。"""
 
 from datetime import UTC, datetime, timedelta
 
@@ -14,7 +14,7 @@ def aware(value: datetime | None) -> bool:
 
 
 def evaluate_return(snapshot: ReturnSnapshot, *, now: datetime) -> ReturnDecision:
-    """No I/O or implicit clock. Duplicate events with the same timestamp agree."""
+    """不执行 I/O，也不隐式读取时钟；时间戳相同的重复事件视为一致。"""
     if not aware(now):
         raise ValueError("Return policy requires an aware clock")
     if snapshot.existing_return_id is not None:

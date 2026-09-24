@@ -31,64 +31,64 @@ const STEPS: AgentStep[] = [
 ];
 
 describe("AgentTimeline", () => {
-  it("renders nothing when steps array is empty", () => {
+  it("steps 数组为空时不渲染任何内容", () => {
     const { container } = render(<AgentTimeline steps={[]} />);
     expect(container.firstChild).toBeNull();
   });
 
-  it("shows step rows expanded by default — the timeline is the point, not a click away from it", () => {
+  it("默认展开步骤行 —— 时间线本身就是重点，不该藏在一次点击之后", () => {
     render(<AgentTimeline steps={STEPS} />);
-    expect(screen.getByText(/Agent activity · 3 steps/)).toBeInTheDocument();
+    expect(screen.getByText(/智能体活动 · 3 步/)).toBeInTheDocument();
     expect(screen.getByText("search_products")).toBeInTheDocument();
     expect(screen.getByText("call_specialist_agent")).toBeInTheDocument();
     expect(screen.getByText("check_stock")).toBeInTheDocument();
   });
 
-  it("shows total duration in the header", () => {
+  it("在标题栏展示总耗时", () => {
     render(<AgentTimeline steps={STEPS} />);
-    // 120 + 89 + 12 = 221ms total
-    expect(screen.getByText("221ms total")).toBeInTheDocument();
+    // 120 + 89 + 12 = 221ms
+    expect(screen.getByText("共 221ms")).toBeInTheDocument();
   });
 
-  it("collapses to hide step rows on click", () => {
+  it("点击后折叠以隐藏步骤行", () => {
     render(<AgentTimeline steps={STEPS} />);
-    fireEvent.click(screen.getByRole("button", { name: /Agent activity/ }));
+    fireEvent.click(screen.getByRole("button", { name: /智能体活动/ }));
     expect(screen.queryByText("search_products")).not.toBeInTheDocument();
   });
 
-  it("shows agent label on each row", () => {
+  it("在每一行展示智能体标签", () => {
     render(<AgentTimeline steps={STEPS} />);
     expect(screen.getAllByText("orchestrator").length).toBeGreaterThan(0);
     expect(screen.getAllByText("product-discovery").length).toBeGreaterThan(0);
   });
 
-  it("shows duration per step", () => {
+  it("展示每个步骤的耗时", () => {
     render(<AgentTimeline steps={STEPS} />);
     expect(screen.getByText("120ms")).toBeInTheDocument();
     expect(screen.getByText("89ms")).toBeInTheDocument();
   });
 
-  it("expands a step row to reveal tool_input and tool_output", () => {
+  it("展开步骤行可看到 tool_input 与 tool_output", () => {
     render(<AgentTimeline steps={STEPS} />);
-    // Click the search_products step row to expand it
+    // 点击 search_products 这一行以展开
     fireEvent.click(screen.getByText("search_products").closest("button")!);
-    expect(screen.getByText("Input")).toBeInTheDocument();
-    expect(screen.getByText("Output")).toBeInTheDocument();
-    // tool_input JSON should be visible
+    expect(screen.getByText("输入")).toBeInTheDocument();
+    expect(screen.getByText("输出")).toBeInTheDocument();
+    // tool_input 的 JSON 应当可见
     expect(screen.getByText(/headphones/)).toBeInTheDocument();
   });
 
-  it("does not show expand chevron for steps without tool_input or tool_output", () => {
+  it("对没有 tool_input 或 tool_output 的步骤不显示展开箭头", () => {
     const noDetailStep: AgentStep[] = [
       { agent: "orchestrator", tool_name: "noop", status: "success", duration_ms: 1 },
     ];
     render(<AgentTimeline steps={noDetailStep} />);
-    // The step button should be disabled (no detail to expand)
+    // 该步骤按钮应为禁用状态（没有可展开的详情）
     const stepBtn = screen.getByText("noop").closest("button")!;
     expect(stepBtn).toBeDisabled();
   });
 
-  it("uses 'orchestrator' fallback when agent field is missing", () => {
+  it("agent 字段缺失时回退为 'orchestrator'", () => {
     const steps: AgentStep[] = [
       { tool_name: "some_tool", status: "success", duration_ms: 5 },
     ];
@@ -96,7 +96,7 @@ describe("AgentTimeline", () => {
     expect(screen.getByText("orchestrator")).toBeInTheDocument();
   });
 
-  it("shows a 'sourced from' line with row ids when the step expands and provenance has rows", () => {
+  it("当步骤展开且 provenance 带行记录时，展示带行 id 的「数据来源」行", () => {
     const steps: AgentStep[] = [
       {
         agent: "product-discovery",
@@ -114,7 +114,7 @@ describe("AgentTimeline", () => {
     expect(screen.getByText(/0fd372fa-ecb2-4db0-bb71-8628a784ced9/)).toBeInTheDocument();
   });
 
-  it("omits the 'sourced from' line when provenance has no row ids", () => {
+  it("provenance 没有行记录时省略「数据来源」行", () => {
     const steps: AgentStep[] = [
       {
         agent: "product-discovery",
@@ -128,6 +128,6 @@ describe("AgentTimeline", () => {
     ];
     render(<AgentTimeline steps={steps} />);
     fireEvent.click(screen.getByText("get_trending_products").closest("button")!);
-    expect(screen.queryByText(/Sourced from/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/数据来源/)).not.toBeInTheDocument();
   });
 });

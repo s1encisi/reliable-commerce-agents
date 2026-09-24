@@ -1,4 +1,4 @@
-"""Inventory & Fulfillment agent — entry point."""
+"""库存与履约智能体 —— 入口点。"""
 
 from inventory_fulfillment.agent import AGENT_TOOLS, create_inventory_fulfillment_agent, refresh_mcp_auth
 from shared.agent_host import create_agent_app

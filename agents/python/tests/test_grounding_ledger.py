@@ -1,9 +1,4 @@
-"""GroundingLedger fact-recording — pure logic, no DB, no LLM.
-
-Exercises the duck-typing that recognizes product/order/promo-shaped tool
-results, including the real key-name mismatch between the two (products key
-their id as "id"; get_order_details keys it as "order_id").
-"""
+"""事实台账纯逻辑测试，覆盖商品、订单和促销结果的不同字段形态。"""
 
 from __future__ import annotations
 
@@ -27,13 +22,9 @@ def _function_context(result) -> SimpleNamespace:
 
 
 class _FakeContent:
-    """Duck-types agent_framework._types.Content's runtime shape for a tool
-    result: a list of one of these, with the tool's JSON-serialized return
-    value in .text — not the raw dict tools are typed to return. Verified
-    live (see shared/function_results.py's module docstring) that this,
-    not a bare dict, is what GroundingLedgerMiddleware actually receives
-    in production; every other test in this file uses a raw dict, which
-    is exactly why this gap went uncaught until diagnosed manually."""
+    """模拟真实 Content 包装：工具 JSON 存于列表首项的 text。
+
+    仅用裸字典测试无法发现实际运行中包装形态不同的问题。"""
 
     def __init__(self, text: str) -> None:
         self.text = text
@@ -54,7 +45,7 @@ async def test_middleware_is_noop_when_ledger_unset() -> None:
     current_grounding_ledger.set(None)
     ctx = _function_context({"id": _PRODUCT_ID, "name": "X", "price": 5.0})
     await GroundingLedgerMiddleware().process(ctx, _noop)
-    # Nothing to assert on — must simply not raise.
+    # 无需额外断言，只需确认不抛错。
 
 
 @pytest.mark.asyncio
@@ -84,8 +75,8 @@ async def test_records_list_of_products() -> None:
 
 @pytest.mark.asyncio
 async def test_records_order_keyed_by_order_id_not_id() -> None:
-    # get_order_details returns order_id, not id — this is the real
-    # tool-shape mismatch the ledger's duck-typing has to bridge.
+    # 订单详情返回 order_id 而非 id，
+    # 台账必须正确识别这种真实字段差异。
     ledger = reset_grounding_ledger()
     order_id = "1a2b3c4d-5e6f-7890-abcd-ef0123456789"
     ctx = _function_context(
@@ -107,8 +98,8 @@ async def test_records_order_keyed_by_order_id_not_id() -> None:
 
 @pytest.mark.asyncio
 async def test_order_line_items_are_not_recorded_as_products() -> None:
-    # Order line items lack a product_id field entirely (only item_id), so
-    # they must never be mistaken for a verifiable ProductFact.
+    # 订单明细只有 item_id，没有 product_id，
+    # 不能误记为可核验的商品事实。
     ledger = reset_grounding_ledger()
     ctx = _function_context(
         {
@@ -147,9 +138,9 @@ async def test_invalid_coupon_result_is_not_recorded() -> None:
 
 @pytest.mark.asyncio
 async def test_check_stock_result_is_not_recorded_as_product() -> None:
-    # check_stock returns product_id/in_stock/total_quantity — a genuinely
-    # different shape from search/detail tools, and carries no price/name,
-    # so it must not be misfiled as a ProductFact.
+    # 库存结果包含 product_id、in_stock、total_quantity，
+    # 不含商品价格和名称，
+    # 不能被归入 ProductFact。
     ledger = reset_grounding_ledger()
     ctx = _function_context({"product_id": _PRODUCT_ID, "in_stock": True, "total_quantity": 12})
     await GroundingLedgerMiddleware().process(ctx, _noop)
@@ -167,13 +158,13 @@ async def test_error_shaped_result_is_ignored() -> None:
 
 @pytest.mark.asyncio
 async def test_get_price_history_shape_records_current_and_aggregate_prices() -> None:
-    # get_price_history's real return shape (shared/tools/pricing_tools.py)
-    # is aggregate stats at the top level -- current_price/average_price/
-    # min_price/max_price -- not id/name/price, so none of
-    # _looks_like_product/_looks_like_order/_looks_like_promo recognize it.
-    # Before known_amounts existed, every dollar figure in this response
-    # scored "unverifiable" even on a real, freshly-fetched tool result --
-    # verified live against a real price-history response.
+    # 价格历史工具顶层返回聚合字段，
+    # 包括 current_price、average_price、
+    # min_price 和 max_price，而非 id、name、price。
+    # 因此常规商品、订单、促销形态都不会识别它。
+    # 增加 known_amounts 前，
+    # 这些真实金额也会被判为无法核验，
+    # 本用例防止这一回归。
     ledger = reset_grounding_ledger()
     ctx = _function_context(
         {
@@ -199,9 +190,9 @@ async def test_get_price_history_shape_records_current_and_aggregate_prices() ->
 
 @pytest.mark.asyncio
 async def test_get_price_history_empty_shape_records_current_price_only() -> None:
-    # The no-history-rows branch returns a different shape again --
-    # current_price + an empty "history" list -- still not product-shaped
-    # (no top-level "id"/"price"/"name").
+    # 无历史记录时又是另一种形态：
+    # current_price 和空 history 列表，
+    # 仍没有完整的商品顶层字段。
     ledger = reset_grounding_ledger()
     ctx = _function_context(
         {
@@ -219,15 +210,15 @@ async def test_get_price_history_empty_shape_records_current_price_only() -> Non
 
 @pytest.mark.asyncio
 async def test_records_a_product_from_the_real_content_wrapped_runtime_shape() -> None:
-    # Every other test in this file calls the middleware with a bare dict,
-    # which is NOT what context.result actually is in production -- MAF
-    # wraps a tool's return value in list[Content], JSON-serialized into
-    # .text. Before shared/function_results.py's unwrap fix, the ledger
-    # stayed permanently empty in real runs (proved live: a debug patch on
-    # GroundingLedgerMiddleware.process showed context.result was
-    # `[<Content text='{"price": 299.99, ...}'>]`, and _iter_dicts's
-    # `isinstance(result, dict)` check silently rejected it, no exception,
-    # no signal anything was wrong).
+    # 其他测试多使用裸字典，
+    # 但生产 context.result 实际是
+    # list[Content]，JSON 保存在 text 中。
+    # 未解包时，事实台账始终为空，
+    # 即使本轮确实执行了工具。
+    # 此用例模拟实际包装形态，
+    # 其中包含商品价格 JSON，
+    # 避免 isinstance(result, dict) 静默跳过，
+    # 却没有任何错误信号。
     ledger = reset_grounding_ledger()
     payload = {"id": _PRODUCT_ID, "name": "Widget", "price": 19.99, "image_url": "u"}
     ctx = _function_context([_FakeContent(json.dumps(payload))])

@@ -1,15 +1,7 @@
-"""Tests for orchestrator/modes/workflow_mode.py.
+"""购前与退货工作流的模式适配测试。
 
-PrePurchaseMode and ReturnReplaceMode wrap the already-tested
-workflows/pre_purchase.py and workflows/return_replace.py graphs — these
-tests exercise them through the mode's ``run()`` contract (an
-OrchestrationEvent stream ending in ``run_completed``), the same
-real-MAF-machinery standard the rest of Phase 1 has held, with tools
-injected via the constructor override (mirroring
-test_pre_purchase_workflow.py / test_return_replace_workflow.py's own
-stubbing) so no DB or LLM is needed. ID-resolution (UUID-in-message vs.
-search/list fallback) is exercised directly against those tests' stub
-shape.
+通过 run() 事件契约执行真实 MAF 图，使用工具替身避免数据库和模型。
+同时覆盖消息 UUID 与查询兜底的标识解析。
 """
 
 from __future__ import annotations
@@ -119,11 +111,8 @@ def test_pre_purchase_mode_graph_mermaid_is_static() -> None:
 
 @pytest.mark.asyncio
 async def test_pre_purchase_mode_live_node_ids_correlate_to_the_graph() -> None:
-    """A client animating orchestration-graph.tsx needs every live
-    node_id (from node_enter/node_exit events) to resolve to a node in
-    graph_mermaid()'s output via node_id.replace("-", "_") — no hardcoded
-    per-mode alias table. Verifies that contract against a real run, not
-    just eyeballing the two strings."""
+    """真实运行的 node_id 将连字符替换为下划线后，必须能映射到 Mermaid
+    节点；不能依赖每种模式各自维护别名表。"""
     mode = PrePurchaseMode(tools=PRE_PURCHASE_TOOLS)
     events = [e async for e in mode.run(PRODUCT_UUID, RunContext(history=[]))]
     live_node_ids = {e.node_id for e in events if e.kind in ("node_enter", "node_exit") and e.node_id}
@@ -243,8 +232,7 @@ def test_return_replace_mode_graph_mermaid_is_static() -> None:
 
 @pytest.mark.asyncio
 async def test_return_replace_mode_live_node_ids_correlate_to_the_graph(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Same node_id.replace("-", "_") correlation contract as
-    pre-purchase's — see that test's docstring."""
+    """与购前模式相同，验证 node_id.replace("-", "_") 的图节点契约。"""
     import order_management.tools as order_tools
 
     monkeypatch.setattr(order_tools, "get_order_details", _stub_order_details(50.0))

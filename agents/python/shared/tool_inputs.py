@@ -1,20 +1,8 @@
-"""Pydantic input models for the destructive specialist tools.
+"""敏感工具的 Pydantic 输入校验模型。
 
-The MAF ``@tool`` decorator can derive a JSON schema from typed
-arguments, but our destructive tools were taking raw ``dict``s and
-plain strings — the LLM could pass ``zip="AAAA"`` or
-``order_id="not-a-uuid"`` and the tool body would happily round-trip
-that into an ``UPDATE`` statement.
-
-This module provides strict shapes the tool bodies validate against
-*before* hitting Postgres. Validation failures return a structured
-error dict instead of raising, so MAF's tool-call event surfaces a
-useful message to the LLM (which can then ask the user to clarify).
-
-Defence in depth on top of the ``approval_mode="always_require"`` gates
-added in audit fix #4: the human approver still sees what's about to
-happen, but if they wave through a malformed request, the tool refuses
-clean rather than corrupting the row.
+在数据库访问前严格检查 UUID、地址等结构，避免把模型提供的无效
+字符串直接送入 UPDATE。校验失败返回结构化错误，供模型请求澄清。
+人工审批不能替代参数校验，即使批准了畸形请求也必须拒绝执行。
 """
 
 from __future__ import annotations
@@ -25,11 +13,11 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
-# US ZIP: 5 digits or 9 digits with optional dash. Accepts a few common
-# foreign formats too (UK postcodes, CA postal codes) — strict enough
-# to catch nonsense like "AAAA" (no digits), loose enough not to bounce
-# a legit international ship-to. The real-world invariant: every postal
-# code on the planet contains at least one digit.
+# 现有邮编规则支持美国 5 位或 9 位格式，
+# 也接受部分英国、加拿大格式；本轮只翻译说明，
+# 现有规则要求至少含一个数字，以拒绝 AAAA 一类输入。
+# 这不是完整的国际地址验证，
+# 不能据此推断所有国家邮编的真实规则。
 _ZIP_PATTERN = re.compile(r"^(?=.*\d)[A-Za-z0-9 \-]{3,12}$")
 _STATE_PATTERN = re.compile(r"^[A-Za-z]{2,3}$")
 _COUNTRY_PATTERN = re.compile(r"^[A-Za-z]{2,3}$")
@@ -37,10 +25,10 @@ _REASON_MAX = 500
 
 
 class ShippingAddress(BaseModel):
-    """Strict ship-to / billing-to address.
+    """配送和账单地址校验。
 
-    Keep this permissive enough for international addresses but tight
-    enough that "ZIP=AAAA" or street=<10kb-of-script-tags> bounces.
+    兼容当前支持的地址形态，同时拒绝明显非法邮编或过长文本；
+    不代表覆盖所有国际地址格式。
     """
 
     street: str = Field(min_length=1, max_length=200)
@@ -89,7 +77,7 @@ class ModifyOrderInput(BaseModel):
 
 class InitiateReturnInput(BaseModel):
     order_id: UUID
-    # Keep every return entry point within returns.reason VARCHAR(255).
+    # 所有退货入口都限制在 returns.reason 的 VARCHAR(255) 范围内。
     reason: str = Field(min_length=1, max_length=255)
     refund_method: str = Field(default="original_payment")
 
@@ -118,20 +106,10 @@ def clamp_limit(
     default: int = 10,
     maximum: int = 100,
 ) -> int:
-    """Coerce an LLM-controlled ``LIMIT`` parameter into a safe integer.
+    """将模型控制的 LIMIT 参数归一为安全整数。
 
-    Audit fix for P0-1: several tools interpolated the raw ``limit`` kwarg
-    directly into their SQL string (``f"LIMIT {limit}"``). That was only
-    safe because ``limit`` is typed ``int`` on the function signature —
-    but MAF's tool bridge accepts whatever JSON the model emits and
-    coerces it, so a string like ``"100 UNION SELECT …"`` or a giant
-    ``999999`` value could reach the SQL formatter.
-
-    Rules:
-    - Non-integers fall back to ``default``.
-    - Values ``<= 0`` fall back to ``default``.
-    - Values above ``maximum`` are clamped.
-    - Always returns a plain ``int`` safe for string interpolation.
+    非整数或小于等于零时使用 default，超过 maximum 时截断。
+    返回普通 int，避免模型字符串或过大数值直接进入 SQL 格式化。
     """
     try:
         value = int(limit) if limit is not None else default
@@ -143,12 +121,10 @@ def clamp_limit(
 
 
 def validation_error_payload(name: str, exc: ValidationError) -> dict[str, Any]:
-    """Shape a Pydantic ValidationError into a tool-friendly error dict.
+    """将 Pydantic 校验异常转为工具友好的错误字典。
 
-    Returns the same ``{"error": ..., "field_errors": [...]}`` shape every
-    destructive tool now uses on bad input. Lets the LLM (or the HITL
-    reviewer) see exactly which field failed without leaking a raw
-    Pydantic stack trace.
+    统一返回 error 与 field_errors，让模型或审批人定位字段问题，
+    不暴露原始异常堆栈。
     """
     return {
         "error": f"Invalid input to {name}",

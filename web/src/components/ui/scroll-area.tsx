@@ -1,3 +1,5 @@
+// 可滚动区域基础原语：基于 base-ui ScrollArea，提供自定义滚动条。
+
 "use client"
 
 import * as React from "react"

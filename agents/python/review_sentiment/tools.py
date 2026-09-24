@@ -1,4 +1,4 @@
-"""Review & Sentiment tools — reviews, sentiment analysis, fake detection, comparisons."""
+"""评论与情感分析工具 —— 评论、情感分析、虚假评论检测、对比。"""
 
 from __future__ import annotations
 
@@ -94,7 +94,7 @@ async def analyze_sentiment(
         if not product:
             return {"error": f"Product not found: {product_id}"}
 
-        # Rating distribution
+        # 评分分布
         dist = await conn.fetch(
             """SELECT rating, COUNT(*) as count
                FROM reviews WHERE product_id = $1
@@ -107,19 +107,19 @@ async def analyze_sentiment(
             distribution[str(d["rating"])] = d["count"]
             total_reviews += d["count"]
 
-        # Verified vs unverified breakdown
+        # 已认证与未认证评论的分布
         verified_count = await conn.fetchval(
             "SELECT COUNT(*) FROM reviews WHERE product_id = $1 AND verified_purchase = TRUE",
             product_id,
         )
 
-        # Average by verified status
+        # 按认证状态计算平均分
         verified_avg = await conn.fetchval(
             "SELECT AVG(rating) FROM reviews WHERE product_id = $1 AND verified_purchase = TRUE",
             product_id,
         )
 
-        # Fetch reviews for keyword-based pros/cons extraction
+        # 取出评论，用于基于关键词的优缺点提取
         reviews = await conn.fetch(
             """SELECT rating, title, body FROM reviews
                WHERE product_id = $1
@@ -128,7 +128,7 @@ async def analyze_sentiment(
             product_id,
         )
 
-        # Simple keyword-based pros/cons extraction
+        # 基于关键词的简单优缺点提取
         positive_keywords = [
             "great",
             "excellent",
@@ -167,7 +167,7 @@ async def analyze_sentiment(
                     if kw in text and kw not in [c.lower() for c in cons]:
                         cons.append(kw.capitalize())
 
-        # Sentiment label
+        # 情感标签
         avg = float(product["rating"])
         if avg >= 4.5:
             sentiment = "very_positive"
@@ -207,7 +207,7 @@ async def get_sentiment_by_topic(
 ) -> dict:
     pool = get_pool()
 
-    # Topic keyword mappings
+    # 主题关键词映射
     topic_keywords: dict[str, list[str]] = {
         "quality": [
             "quality",
@@ -350,7 +350,7 @@ async def get_sentiment_trend(
             for r in rows
         ]
 
-        # Calculate trend direction
+        # 计算趋势方向
         if len(trend_data) >= 2:
             first_half = trend_data[: len(trend_data) // 2]
             second_half = trend_data[len(trend_data) // 2 :]
@@ -386,7 +386,7 @@ async def detect_fake_reviews(
 ) -> dict:
     pool = get_pool()
 
-    # Generic language patterns common in fake reviews
+    # 虚假评论中常见的套话模式
     generic_patterns = [
         "great product",
         "highly recommend",
@@ -413,7 +413,7 @@ async def detect_fake_reviews(
             product_id,
         )
 
-        # Already flagged reviews
+        # 已被标记的评论
         flagged = await conn.fetch(
             """SELECT r.id, r.rating, r.title, r.body, r.verified_purchase,
                       r.created_at, u.name as reviewer_name
@@ -424,7 +424,7 @@ async def detect_fake_reviews(
             product_id,
         )
 
-        # Unverified 5-star reviews (high suspicion)
+        # 未认证的五星评论（高度可疑）
         unverified_five_star = await conn.fetch(
             """SELECT r.id, r.rating, r.title, r.body, r.created_at,
                       u.name as reviewer_name
@@ -439,7 +439,7 @@ async def detect_fake_reviews(
             product_id,
         )
 
-        # Check for generic language in all reviews
+        # 检查所有评论中是否使用了套话
         all_reviews = await conn.fetch(
             """SELECT r.id, r.rating, r.title, r.body, r.verified_purchase,
                       r.created_at, u.name as reviewer_name
@@ -454,7 +454,7 @@ async def detect_fake_reviews(
         for r in all_reviews:
             text = f"{r['title'] or ''} {r['body']}".lower()
             matched_patterns = [p for p in generic_patterns if p in text]
-            # Short body + generic patterns + high rating = suspicious
+            # 正文短 + 套话 + 高评分 = 可疑
             if matched_patterns and len(r["body"]) < 100 and r["rating"] >= 4:
                 generic_matches.append(
                     {
@@ -588,7 +588,7 @@ async def draft_seller_response(
         product_name = row["product_name"]
         rating = row["rating"]
 
-        # Select template based on rating
+        # 根据评分选择模板
         if rating <= 2:
             template = (
                 f"Dear {reviewer},\n\n"
@@ -656,7 +656,7 @@ async def compare_product_reviews(
                 comparisons.append({"product_id": pid, "error": "Product not found"})
                 continue
 
-            # Rating distribution
+            # 评分分布
             dist = await conn.fetch(
                 """SELECT rating, COUNT(*) as count
                    FROM reviews WHERE product_id = $1
@@ -667,13 +667,13 @@ async def compare_product_reviews(
             for d in dist:
                 distribution[str(d["rating"])] = d["count"]
 
-            # Verified vs unverified
+            # 已认证与未认证
             verified = await conn.fetchval(
                 "SELECT COUNT(*) FROM reviews WHERE product_id = $1 AND verified_purchase = TRUE",
                 pid,
             )
 
-            # Recent trend (last 3 months avg)
+            # 近期趋势（最近 3 个月平均分）
             recent_avg = await conn.fetchval(
                 """SELECT AVG(rating) FROM reviews
                    WHERE product_id = $1 AND created_at >= NOW() - INTERVAL '3 months'""",

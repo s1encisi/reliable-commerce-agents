@@ -12,7 +12,7 @@ resolution-markers = [
 
 [manifest]
 members = [
-    "e-commerce-agents",
+    "reliable-commerce-agents",
     "ecommerce-mcp-inventory",
     "ecommerce-mcp-product",
 ]
@@ -645,7 +645,7 @@ wheels = [
 ]
 
 [[package]]
-name = "e-commerce-agents"
+name = "reliable-commerce-agents"
 version = "1.3.0"
 source = { editable = "." }
 dependencies = [

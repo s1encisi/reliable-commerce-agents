@@ -1,8 +1,4 @@
-"""Unit tests for the optional_auth dependency that powers the public storefront.
-
-Anonymous (no token) → anonymous identity; valid token → real payload;
-invalid token → 401. No DB/LLM needed.
-"""
+"""公开店铺可选认证测试：无令牌允许匿名，有效令牌返回身份，非法令牌返回 401。"""
 
 from __future__ import annotations
 
@@ -45,8 +41,7 @@ async def test_rejects_present_but_invalid_token():
 
 
 class _StubVerifier:
-    """Stand-in for RS256Verifier — these tests exercise require_auth's
-    oauth-mode branch, not the verifier itself (see test_rs256_verifier.py)."""
+    """RS256 校验器替身，仅验证 require_auth 的 oauth 分支。"""
 
     def __init__(self, payload=None, error=None):
         self._payload = payload
@@ -94,7 +89,7 @@ async def test_oauth_mode_rejects_expired_token(monkeypatch):
 
 
 async def test_oauth_mode_anonymous_unchanged(monkeypatch):
-    """No Authorization header still short-circuits before touching the verifier."""
+    """没有 Authorization 时，应在调用校验器前直接走匿名路径。"""
     monkeypatch.setattr(routes_module.settings, "AUTH_MODE", "oauth")
     user = await optional_auth(_request())
     assert user["anonymous"] is True

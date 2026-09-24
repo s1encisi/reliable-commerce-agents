@@ -1,4 +1,4 @@
-"""Tests for evals/baselines.py — stored eval-score snapshots + regression detection."""
+"""评测基线快照与回归检测测试。"""
 
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ def test_check_regression_no_drop_passes() -> None:
 
 def test_check_regression_small_drop_within_tolerance_passes() -> None:
     baseline = {"overall_score": 0.90, "avg_groundedness": 0.9, "avg_correctness": 0.85, "avg_completeness": 0.8}
-    # overall_score dropped 0.04, tolerance is 0.05 — not a regression.
+    # 总分下降 0.04，小于 0.05 容差，不判为回归。
     regressed, message = check_regression(baseline, _summary(overall_score=0.86), max_regression=0.05)
     assert regressed is False
     assert "REGRESSION" not in message

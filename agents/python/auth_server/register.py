@@ -1,18 +1,12 @@
-"""RFC 7591 dynamic client registration — the business logic (validation +
-persistence), separate from the HTTP route wiring in ``main.py``.
+"""RFC 7591 动态客户端注册的校验和持久化逻辑。
 
-Gated behind ``settings.AUTH_ALLOW_DYNAMIC_REGISTRATION`` (off by default —
-this app's client registry is otherwise fixed/seeded, see ``clients.py``'s
-own module docstring). When enabled, a caller must still present a bearer
-token scoped ``client:register`` (verified in ``main.py`` before this module
-is ever reached); this module only handles what happens after that check
-passes.
+HTTP 路由位于 main.py；AUTH_ALLOW_DYNAMIC_REGISTRATION 默认关闭。
+平时客户端由固定种子数据注册，详见 clients.py。启用此入口后，main.py
+仍须先校验调用方令牌中的 client:register 范围，本模块只处理校验后的请求。
 
-Deliberately narrow: registered clients get ``client_credentials`` only (no
-``password``/``refresh_token`` — this AS's interactive-login clients are
-first-party and fixed) and are capped to the two MCP read scopes. Nothing
-here can mint a client that could ever request ``agent:invoke``, ``api:chat``,
-or ``client:register`` itself.
+新客户端仅能使用 client_credentials，且范围限于两个 MCP 只读范围。
+第一方交互登录客户端保持固定，不能在这里申请 password、refresh_token、
+agent:invoke、api:chat 或 client:register 权限。
 """
 
 from __future__ import annotations
@@ -37,7 +31,7 @@ REGISTRABLE_SCOPES = frozenset(
 
 @dataclass
 class RegistrationError(Exception):
-    """Carries an RFC 7591-shaped error: ``{"error": ..., "error_description": ...}``."""
+    """携带 RFC 7591 错误对象：{"error": ..., "error_description": ...}。"""
 
     status: int
     error: str
@@ -48,12 +42,10 @@ class RegistrationError(Exception):
 
 
 def validate_registration_request(body: dict) -> tuple[str, list[str]]:
-    """Validate a registration request body.
+    """校验注册请求体，成功时返回 (client_name, scopes)。
 
-    Returns ``(client_name, scopes)`` on success. Raises
-    ``RegistrationError`` (400, ``invalid_client_metadata``) on any
-    violation — unknown scope, missing name, an unsupported grant type, or
-    a redirect-based flow this AS doesn't support.
+    未知范围、缺少名称、不支持的授权类型或重定向流程均抛出
+    RegistrationError，对应 HTTP 400 与 invalid_client_metadata。
     """
     client_name = body.get("client_name")
     if not isinstance(client_name, str) or not client_name.strip():
@@ -90,10 +82,9 @@ def validate_registration_request(body: dict) -> tuple[str, list[str]]:
 
 
 async def create_client(pool: asyncpg.Pool, client_name: str, scopes: list[str]) -> tuple[str, str]:
-    """Generate, hash, and persist a new client. Returns ``(client_id, plaintext_secret)``.
+    """生成、哈希并持久化客户端，返回 (client_id, plaintext_secret)。
 
-    The plaintext secret is returned exactly once — only the bcrypt hash is
-    stored, matching every other client in ``oauth_clients``.
+    明文密钥只返回一次；oauth_clients 中仅保存 bcrypt 哈希。
     """
     client_id = f"ext-{secrets.token_hex(8)}"
     client_secret = generate_token(48)

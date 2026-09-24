@@ -1,4 +1,4 @@
-"""Business decisions are separate from the existing orders/returns statuses."""
+"""业务决策与现有的 orders/returns 状态相互独立。"""
 
 from dataclasses import dataclass
 from datetime import datetime

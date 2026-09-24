@@ -11,8 +11,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 /**
- * Public storefront shell (no auth guard). Header adapts: "Sign in" when
- * anonymous, account avatar when logged in. Footer links back to the project.
+ * 公开店铺外壳（无登录校验）。页头随登录状态切换：
+ * 未登录显示「登录」，已登录显示账号头像。页脚回链项目主页。
  */
 export default function ShopLayout({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -20,8 +20,13 @@ export default function ShopLayout({ children }: { children: React.ReactNode }) 
   const [q, setQ] = useState("");
 
   const initials = user?.name
-    ? user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
-    : "U";
+    ? (() => {
+        const parts = user.name.trim().split(/\s+/).filter(Boolean);
+        return parts.length <= 1
+          ? (parts[0] ?? "").slice(0, 2)
+          : parts.map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+      })()
+    : "用";
 
   function onSearch(e: FormEvent) {
     e.preventDefault();
@@ -39,7 +44,7 @@ export default function ShopLayout({ children }: { children: React.ReactNode }) 
               <Store className="size-4 text-primary-foreground" />
             </div>
             <span className="hidden text-sm font-semibold tracking-tight sm:inline">
-              E-Commerce Agents
+              可靠电商多智能体平台
             </span>
           </Link>
 
@@ -49,8 +54,8 @@ export default function ShopLayout({ children }: { children: React.ReactNode }) 
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Search products…"
-                aria-label="Search products"
+                placeholder="搜索商品…"
+                aria-label="搜索商品"
                 className="h-9 w-full rounded-lg border bg-muted/40 pl-9 pr-3 text-sm outline-none transition-colors focus:border-ring focus:bg-background"
               />
             </div>
@@ -58,18 +63,18 @@ export default function ShopLayout({ children }: { children: React.ReactNode }) 
 
           <nav className="flex items-center gap-1.5">
             <Button render={<Link href="/shop/products" />} variant="ghost" size="sm">
-              Products
+              商品
             </Button>
             <ThemeToggle />
             {user ? (
-              <Link href="/home" aria-label="Your account" className="rounded-full focus-visible:ring-2 focus-visible:ring-ring">
+              <Link href="/home" aria-label="您的账号" className="rounded-full focus-visible:ring-2 focus-visible:ring-ring">
                 <Avatar className="size-8">
                   <AvatarFallback className="text-xs">{initials}</AvatarFallback>
                 </Avatar>
               </Link>
             ) : (
               <Button render={<Link href="/login" />} size="sm">
-                Sign in
+                登录
               </Button>
             )}
           </nav>
@@ -82,12 +87,12 @@ export default function ShopLayout({ children }: { children: React.ReactNode }) 
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-4 py-6 text-sm text-muted-foreground sm:flex-row sm:px-6">
           <p className="flex items-center gap-1.5">
             <Sparkles className="size-3.5 text-primary" />
-            Agentic shopping demo · powered by 6 specialist agents
+            智能体购物演示 · 由 6 个专业智能体驱动
           </p>
           <div className="flex items-center gap-4">
-            <Link href="/" className="hover:text-foreground">About this project</Link>
+            <Link href="/" className="hover:text-foreground">关于本项目</Link>
             <Link
-              href="https://github.com/nitin27may/e-commerce-agents"
+              href="https://github.com/s1encisi/reliable-commerce-agents"
               className="hover:text-foreground"
             >
               GitHub

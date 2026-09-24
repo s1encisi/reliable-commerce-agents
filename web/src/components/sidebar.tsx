@@ -18,6 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import { visibleGroups, type NavItem } from "@/lib/nav";
 
+/** 侧边栏中的单个导航项，激活态由 `isActive` 控制。 */
 function NavLink({
   item,
   isActive,
@@ -55,6 +56,7 @@ function NavLink({
   );
 }
 
+/** 购物车条目数角标；数量为 0 时不渲染。 */
 function CartBadge() {
   const { itemCount } = useCart();
   if (itemCount === 0) return null;
@@ -72,8 +74,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const isSeller = user?.role === "seller" || isAdmin;
   const groups = visibleGroups({ isAdmin, isSeller });
 
-  // Only the most specific matching item is active, so a parent route like
-  // /admin doesn't also light up while on /admin/usage.
+  // 只让最精确匹配的导航项处于激活态，这样在 /admin/usage 下时，父级路由
+  // /admin 不会同时高亮。
   const activeHref = groups
     .flatMap((g) => g.items)
     .filter((i) => pathname === i.href || pathname.startsWith(i.href + "/"))
@@ -90,19 +92,19 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Brand */}
+      {/* 品牌区 */}
       <div className="flex h-14 items-center gap-2 px-4">
         <div className="flex size-8 items-center justify-center rounded-lg bg-primary">
           <Store className="size-4 text-primary-foreground" />
         </div>
         <span className="text-sm font-semibold tracking-tight">
-          E-Commerce Agents
+          可靠电商多智能体平台
         </span>
       </div>
 
       <Separator />
 
-      {/* Navigation */}
+      {/* 导航区 */}
       <ScrollArea className="flex-1 px-3 py-4">
         <nav className="flex flex-col gap-5">
           {groups.map((group) => (
@@ -123,7 +125,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         </nav>
       </ScrollArea>
 
-      {/* User section */}
+      {/* 用户区 */}
       <Separator />
       <div className="p-3">
         <Link
@@ -149,7 +151,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               logout();
               onNavigate?.();
             }}
-            aria-label="Log out"
+            aria-label="退出登录"
           >
             <LogOut className="size-4" />
           </Button>
@@ -159,7 +161,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-/** Fixed sidebar for desktop viewports */
+/** 桌面端固定侧边栏 */
 export function DesktopSidebar() {
   return (
     <aside className="hidden w-64 shrink-0 border-r border-sidebar-border bg-sidebar lg:block">
@@ -168,7 +170,7 @@ export function DesktopSidebar() {
   );
 }
 
-/** Sheet-based sidebar for mobile viewports */
+/** 移动端抽屉式侧边栏 */
 export function MobileSidebar() {
   return (
     <Sheet>
@@ -176,10 +178,10 @@ export function MobileSidebar() {
         render={<Button variant="ghost" size="icon" className="lg:hidden" />}
       >
         <Menu className="size-5" />
-        <span className="sr-only">Toggle menu</span>
+        <span className="sr-only">切换菜单</span>
       </SheetTrigger>
       <SheetContent side="left" showCloseButton={false} className="w-64 p-0">
-        <SheetTitle className="sr-only">Navigation</SheetTitle>
+        <SheetTitle className="sr-only">导航</SheetTitle>
         <SidebarContent />
       </SheetContent>
     </Sheet>

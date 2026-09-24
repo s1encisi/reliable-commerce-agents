@@ -34,50 +34,49 @@ export default function ShopHome() {
       initial="hidden"
       animate="visible"
     >
-      {/* Hero */}
+      {/* 首屏 */}
       <section className="border-b bg-gradient-to-b from-muted/50 to-background">
         <div className="mx-auto max-w-7xl px-4 py-16 text-center sm:px-6 sm:py-20">
           <span className="inline-flex items-center gap-1.5 rounded-full border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
             <Sparkles className="size-3.5 text-primary" />
-            Shop with an AI assistant
+            与 AI 助手一起购物
           </span>
           <h1 className="mt-5 text-balance text-4xl font-bold tracking-tight sm:text-5xl">
-            Find what you need, faster
+            更快找到您想要的商品
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-pretty text-muted-foreground sm:text-lg">
-            Browse the catalog or just describe what you&apos;re looking for —
-            our specialist agents search, compare, and recommend in seconds.
+            浏览商品目录，或直接描述您的需求 ——
+            我们的专业智能体可在数秒内完成搜索、对比与推荐。
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Link
               href="/shop/assistant"
               className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition-opacity hover:opacity-90"
             >
-              <Sparkles className="size-4" /> Ask the assistant
+              <Sparkles className="size-4" /> 咨询 AI 助手
             </Link>
             <Link
               href="/shop/products"
               className="inline-flex items-center gap-1.5 rounded-lg border bg-card px-4 py-2.5 text-sm font-medium transition-colors hover:bg-accent"
             >
-              Browse products <ArrowRight className="size-4" />
+              浏览商品 <ArrowRight className="size-4" />
             </Link>
           </div>
           <p className="mt-3 text-xs text-muted-foreground/70">
-            Try: &ldquo;wireless headphones under $300&rdquo; · &ldquo;compare Sony WH-1000XM5 with AirPods Max&rdquo;
+            试试：「300 元以内的无线耳机」·「对比索尼 WH-1000XM5 与 AirPods Max」
           </p>
         </div>
       </section>
 
-      {/* Demo scenarios — visible without login */}
+      {/* 演示场景 —— 无需登录即可查看 */}
       <div className="border-b bg-muted/30">
         <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
           <SectionHeader
-            eyebrow="See it in action"
-            title="Try a scenario"
+            eyebrow="看看实际效果"
+            title="试试演示场景"
           />
           <p className="mb-6 max-w-xl text-sm text-muted-foreground">
-            Each prompt exercises a different set of specialist agents. Click any
-            card to open the AI assistant with the prompt prefilled.
+            每个提示词会调用不同的专业智能体组合。点击任意卡片即可打开已预填该提示词的 AI 助手。
           </p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {DEMO_SCENARIOS.map((s) => (
@@ -92,10 +91,10 @@ export default function ShopHome() {
       </div>
 
       <div className="mx-auto max-w-7xl space-y-12 px-4 py-12 sm:px-6">
-        {/* Categories */}
+        {/* 品类 */}
         {categories.length > 0 && (
           <section>
-            <SectionHeader title="Shop by category" />
+            <SectionHeader title="按品类选购" />
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
               {categories.map((c) => (
                 <Link
@@ -120,14 +119,14 @@ export default function ShopHome() {
           </section>
         )}
 
-        {/* Featured */}
+        {/* 精选 */}
         <section>
           <SectionHeader
-            eyebrow="Top rated"
-            title="Featured products"
+            eyebrow="高分好评"
+            title="精选商品"
             action={
               <Link href="/shop/products" className="text-sm font-medium text-primary hover:underline">
-                View all
+                查看全部
               </Link>
             }
           />

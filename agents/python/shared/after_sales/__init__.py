@@ -1,1 +1,1 @@
-"""Shared return policy and transaction boundary for the Python backend."""
+"""Python 后端共享的退货策略与事务边界。"""

@@ -1,15 +1,8 @@
-"""RFC 7591 dynamic client registration (`POST /oauth/register`) — gated,
-scoped, off by default.
+"""RFC 7591 动态注册测试：默认关闭，受权限范围约束。
 
-Uses the same ``OAuthAuthorizationServer`` direct-construction harness as
-``test_auth_server_integration.py``/``test_mcp_oauth_integration.py`` (real
-testcontainers Postgres via ``clean_db``, real authlib grant machinery) to
-mint a genuine ``client:register``-scoped token, then drives the real
-Starlette route in ``auth_server.main`` via ``httpx.AsyncClient`` +
-``ASGITransport`` (bypassing the app's own ``lifespan`` — same reasoning as
-the other auth-server integration tests: it reads the process-wide
-``shared.config.settings`` singleton, so the module-level globals
-(``main._server``, ``shared.db._pool``) are wired directly instead).
+用真实 PostgreSQL 和 authlib 签发 client:register 令牌，再通过
+ASGITransport 驱动实际 Starlette 路由。直接设置服务器和共享池，
+绕开读取进程全局配置的 lifespan。
 """
 
 from __future__ import annotations
@@ -49,9 +42,9 @@ async def _bind_loop():
 
 @pytest.fixture(autouse=True)
 def _issuer(monkeypatch: pytest.MonkeyPatch) -> None:
-    # RS256Verifier.decode() checks settings.AUTH_SERVER_ISSUER against the
-    # token's real `iss` claim, which comes from the `server` fixture's own
-    # issuer= param below — keep them in sync.
+    # 校验器使用 AUTH_SERVER_ISSUER 检查真实 iss 声明，
+    # 该声明来自下方服务器夹具的 issuer 参数，
+    # 两处必须一致。
     monkeypatch.setattr(settings, "AUTH_SERVER_ISSUER", ISSUER)
 
 
@@ -78,16 +71,15 @@ def _basic_auth_header(client_id: str, secret: str) -> httpx.Headers:
 
 @pytest.fixture
 async def server(clean_db, monkeypatch: pytest.MonkeyPatch):
-    """Real OAuthAuthorizationServer, wired into the real Starlette app's
-    module-level globals (bypassing lifespan)."""
+    """构建真实授权服务器并注入 Starlette 模块全局变量，绕过 lifespan。"""
     kid, signing_key = await keys.ensure_active_key(clean_db)
     store = ClientStore()
     await store.load(clean_db)
     srv = OAuthAuthorizationServer(client_store=store, pool=clean_db, issuer=ISSUER, kid=kid, signing_key=signing_key)
     monkeypatch.setattr(main, "_server", srv)
-    # Registration-token verification is entirely in-process against this
-    # signing key (see main.py's _verify_registration_token) — no JWKS/HTTP
-    # fetch to stub, unlike every other resource server's verifier.
+    # 注册令牌在进程内使用当前签名密钥校验，
+    # 不经 JWKS HTTP 查询，
+    # 因此无需模拟网络密钥获取。
     monkeypatch.setattr(main, "_signing_key", signing_key)
 
     return srv, signing_key
@@ -164,7 +156,7 @@ async def test_valid_registration_full_round_trip(client, server, clean_db, monk
     assert body["grant_types"] == ["client_credentials"]
     assert body["client_secret_expires_at"] == 0
 
-    # The stored hash matches the returned plaintext secret.
+    # 数据库哈希应匹配返回的明文密钥。
     row = await clean_db.fetchrow(
         "SELECT client_secret_hash, allowed_audiences FROM oauth_clients WHERE client_id = $1", body["client_id"]
     )
@@ -172,8 +164,8 @@ async def test_valid_registration_full_round_trip(client, server, clean_db, monk
     assert bcrypt.checkpw(body["client_secret"].encode(), row["client_secret_hash"].encode())
     assert list(row["allowed_audiences"]) == ["mcp-product"]
 
-    # Full round trip: the newly-registered client can immediately acquire a
-    # real, correctly-scoped token from the same live AS.
+    # 完整往返：新注册客户端可立即向同一授权服务器
+    # 申请真实、范围正确的令牌。
     await srv.client_store.load(clean_db)
     new_token = await _mint_token(srv, body["client_id"], body["client_secret"], "mcp:product")
     assert new_token

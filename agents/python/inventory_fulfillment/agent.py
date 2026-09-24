@@ -1,8 +1,8 @@
-"""Inventory & Fulfillment agent definition.
+"""库存与履约（inventory & fulfillment）智能体定义。
 
-When ``settings.MCP_ENABLED`` is True the agent connects to the Inventory MCP
-server (``ecommerce_mcp_inventory.server``) via ``MCPStreamableHTTPTool`` instead
-of calling asyncpg directly. Both modes expose the same capabilities.
+当 ``settings.MCP_ENABLED`` 为 True 时，智能体通过 ``MCPStreamableHTTPTool``
+连接到库存 MCP 服务（``ecommerce_mcp_inventory.server``），而不是直接调用
+asyncpg。两种模式对外暴露的能力相同。
 """
 
 from agent_framework import Agent
@@ -40,23 +40,22 @@ AGENT_TOOLS = [
     get_user_profile,
 ]
 
-# Set once by create_inventory_fulfillment_agent() when MCP_ENABLED+MCP_AUTH_ENABLED;
-# refresh_mcp_auth() (called from the async startup hook in main.py) sets its
-# Authorization header once a token is acquired — agent construction itself
-# is synchronous and can't await the client-credentials grant.
+# 由 create_inventory_fulfillment_agent() 在 MCP_ENABLED+MCP_AUTH_ENABLED 时设置一次；
+# refresh_mcp_auth()（由 main.py 中的异步启动钩子调用）在取得令牌后设置其
+# Authorization 头 —— 智能体构造本身是同步的，无法等待客户端凭证授予流程。
 _mcp_inventory_http_client = None
 
 
 def create_inventory_fulfillment_agent() -> Agent:
-    """Create the Inventory & Fulfillment ChatAgent.
+    """创建库存与履约 ChatAgent。
 
-    Uses the MCP server when ``MCP_ENABLED=true``, direct asyncpg tools otherwise.
+    当 ``MCP_ENABLED=true`` 时使用 MCP 服务，否则使用直接的 asyncpg 工具。
     """
     global _mcp_inventory_http_client
     if settings.MCP_ENABLED:
-        # MCP path: tools are discovered from the running MCP server at startup.
-        # Non-MCP tools (tracking, fulfillment plan, backorder, user_profile) still
-        # run locally since they are not yet exposed via the MCP server.
+        # MCP 路径：工具在启动时从运行中的 MCP 服务发现。
+        # 非 MCP 工具（追踪、履约计划、缺货预订、user_profile）仍在本地
+        # 运行，因为它们尚未通过 MCP 服务暴露。
         if settings.MCP_AUTH_ENABLED:
             _mcp_inventory_http_client = build_mcp_http_client()
         mcp_inventory = MCPStreamableHTTPTool(
@@ -88,10 +87,9 @@ def create_inventory_fulfillment_agent() -> Agent:
 
 
 async def refresh_mcp_auth() -> None:
-    """Acquire (or refresh) the ``mcp:inventory`` service token and set it as
-    the default Authorization header on the shared MCP http client. Called
-    once from the async startup hook in ``main.py`` — agent construction
-    itself is synchronous and can't await the client-credentials grant."""
+    """获取（或刷新）``mcp:inventory`` 服务令牌，并将其设为共享 MCP http 客户端
+    上的默认 Authorization 头。由 ``main.py`` 中的异步启动钩子调用一次 ——
+    智能体构造本身是同步的，无法等待客户端凭证授予流程。"""
     if _mcp_inventory_http_client is None:
         return
     token = await acquire_service_token(settings.MCP_INVENTORY_REQUIRED_SCOPE, settings.MCP_INVENTORY_AUDIENCE)

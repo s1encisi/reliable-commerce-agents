@@ -16,20 +16,20 @@ const RESUMED = {
 };
 
 describe("ApprovalCard", () => {
-  it("offers both decisions while the run is paused", () => {
+  it("运行暂停期间同时提供两种决定", () => {
     render(<ApprovalCard runId="run-1" onResolved={() => {}} />);
 
-    expect(screen.getByRole("button", { name: /approve/i })).toBeEnabled();
-    expect(screen.getByRole("button", { name: /reject/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /批准/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /拒绝/ })).toBeEnabled();
   });
 
-  it("resumes the run and hands the resumed turn back to the thread", async () => {
+  it("恢复运行并把恢复后的这一轮交还给对话流", async () => {
     const resume = vi.spyOn(api, "resumeRun").mockResolvedValue(RESUMED);
     const onResolved = vi.fn();
     const user = userEvent.setup();
     render(<ApprovalCard runId="run-1" onResolved={onResolved} />);
 
-    await user.click(screen.getByRole("button", { name: /approve/i }));
+    await user.click(screen.getByRole("button", { name: /批准/ }));
 
     expect(resume).toHaveBeenCalledWith("run-1", true);
     await waitFor(() =>
@@ -41,32 +41,31 @@ describe("ApprovalCard", () => {
     );
   });
 
-  it("passes the rejection through as false, not as a skipped call", async () => {
-    // Rejecting still resumes the workflow — it takes the other branch. Not
-    // calling resume at all would leave the run paused forever.
+  it("拒绝会以 false 透传，而不是被当成跳过调用", async () => {
+    // 拒绝同样会恢复工作流 —— 它走的是另一条分支。完全不调用 resume
+    // 会让这次运行永远停在暂停状态。
     const resume = vi.spyOn(api, "resumeRun").mockResolvedValue({ ...RESUMED, approved: false });
     const user = userEvent.setup();
     render(<ApprovalCard runId="run-9" onResolved={() => {}} />);
 
-    await user.click(screen.getByRole("button", { name: /reject/i }));
+    await user.click(screen.getByRole("button", { name: /拒绝/ }));
 
     expect(resume).toHaveBeenCalledWith("run-9", false);
   });
 
-  it("replaces both buttons with the outcome once resolved", async () => {
-    // A decision that leaves its buttons live invites a second approval on a
-    // run that has already moved on.
+  it("决定作出后用结果替换掉两个按钮", async () => {
+    // 一个决定作出后还留着可点按钮，会引诱用户对已经翻篇的运行再次审批。
     vi.spyOn(api, "resumeRun").mockResolvedValue(RESUMED);
     const user = userEvent.setup();
     render(<ApprovalCard runId="run-1" onResolved={() => {}} />);
 
-    await user.click(screen.getByRole("button", { name: /approve/i }));
+    await user.click(screen.getByRole("button", { name: /批准/ }));
 
-    await waitFor(() => expect(screen.getByText(/Approved/)).toBeInTheDocument());
-    expect(screen.queryByRole("button", { name: /reject/i })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/已批准/)).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /拒绝/ })).not.toBeInTheDocument();
   });
 
-  it("disables both buttons while a decision is in flight", async () => {
+  it("决定提交中时禁用两个按钮", async () => {
     let release: (v: typeof RESUMED) => void = () => {};
     vi.spyOn(api, "resumeRun").mockReturnValue(
       new Promise((resolve) => {
@@ -76,32 +75,32 @@ describe("ApprovalCard", () => {
     const user = userEvent.setup();
     render(<ApprovalCard runId="run-1" onResolved={() => {}} />);
 
-    await user.click(screen.getByRole("button", { name: /approve/i }));
+    await user.click(screen.getByRole("button", { name: /批准/ }));
 
-    expect(screen.getByRole("button", { name: /reject/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /拒绝/ })).toBeDisabled();
     release(RESUMED);
   });
 
-  it("shows the failure and stays actionable when resume fails", async () => {
-    // Silently reverting to two live buttons would hide that the decision
-    // never landed, and the run would sit paused with nothing to show for it.
+  it("恢复失败时展示错误并保持可操作", async () => {
+    // 悄悄退回两个可点按钮会掩盖「这个决定从未落地」的事实，
+    // 这次运行会一直停在暂停状态而毫无提示。
     vi.spyOn(api, "resumeRun").mockRejectedValue(new Error("checkpoint not found"));
     const user = userEvent.setup();
     render(<ApprovalCard runId="run-1" onResolved={() => {}} />);
 
-    await user.click(screen.getByRole("button", { name: /approve/i }));
+    await user.click(screen.getByRole("button", { name: /批准/ }));
 
     await waitFor(() => expect(screen.getByText(/checkpoint not found/)).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: /approve/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /批准/ })).toBeEnabled();
   });
 
-  it("does not report a resolution the backend rejected", async () => {
+  it("不会上报一个被后端拒绝的决议", async () => {
     vi.spyOn(api, "resumeRun").mockRejectedValue(new Error("nope"));
     const onResolved = vi.fn();
     const user = userEvent.setup();
     render(<ApprovalCard runId="run-1" onResolved={onResolved} />);
 
-    await user.click(screen.getByRole("button", { name: /approve/i }));
+    await user.click(screen.getByRole("button", { name: /批准/ }));
 
     await waitFor(() => expect(screen.getByText(/nope/)).toBeInTheDocument());
     expect(onResolved).not.toHaveBeenCalled();

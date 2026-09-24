@@ -2,14 +2,14 @@ import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { DistributionChart } from "./distribution-chart";
 
-/** See trend-chart.test.tsx for why this doesn't assert on recharts internals. */
+/** 为何不断言 recharts 内部实现，见 trend-chart.test.tsx。 */
 describe("DistributionChart", () => {
-  it("shows an empty-state message instead of an empty chart", () => {
+  it("数据为空时展示空态提示，而非空图表", () => {
     render(<DistributionChart data={[]} />);
-    expect(screen.getByText("No distribution data available.")).toBeInTheDocument();
+    expect(screen.getByText("暂无分布数据。")).toBeInTheDocument();
   });
 
-  it("mounts the chart container for non-empty data without crashing", () => {
+  it("非空数据下挂载图表容器且不崩溃", () => {
     const { container } = render(
       <DistributionChart
         data={[
@@ -19,6 +19,6 @@ describe("DistributionChart", () => {
       />
     );
     expect(container.querySelector('[data-slot="chart"]')).toBeInTheDocument();
-    expect(screen.queryByText("No distribution data available.")).not.toBeInTheDocument();
+    expect(screen.queryByText("暂无分布数据。")).not.toBeInTheDocument();
   });
 });

@@ -1,12 +1,6 @@
-"""Track D2-rest — shared tools coverage.
+"""共享工具测试：无身份守卫无需数据库，成功路径使用真实 PostgreSQL。
 
-Two tiers of tests:
-1. Guard-clause tests (pure, no DB): verify each identity-gated tool returns the
-   correct error payload when no ContextVar is set.
-2. DB-backed happy-path tests: use the clean_db testcontainer fixture; patch
-   shared.db._pool so all get_pool() calls resolve to the test pool.
-
-No live LLM. No mocked DB — always a real Postgres container.
+注入测试连接池，不调用真实模型。
 """
 
 from __future__ import annotations
@@ -34,16 +28,16 @@ from shared.tools.user_tools import get_purchase_history, get_user_profile
 
 @pytest_asyncio.fixture
 async def db_pool(clean_db: asyncpg.Pool, monkeypatch: pytest.MonkeyPatch) -> asyncpg.Pool:
-    """Inject clean_db into shared.db so all tools' get_pool() calls work."""
+    """把 clean_db 注入共享池供工具读取。"""
     monkeypatch.setattr(shared_db, "_pool", clean_db)
     return clean_db
 
 
 @pytest_asyncio.fixture
 async def seeded_user(db_pool: asyncpg.Pool) -> dict:
-    """Insert a bronze-tier customer and the three loyalty tier rows. Returns user record."""
+    """插入青铜会员及三个等级，返回用户记录。"""
     async with db_pool.acquire() as conn:
-        # loyalty tiers (truncated by clean_db each test)
+        # 会员等级每例由 clean_db 清理。
         for name, min_spend, discount, free_ship, priority in [
             ("bronze", 0, 0, None, False),
             ("silver", 1000, 5, 75.00, False),
@@ -72,9 +66,9 @@ async def seeded_user(db_pool: asyncpg.Pool) -> dict:
 
 @pytest_asyncio.fixture
 async def seeded_seller(db_pool: asyncpg.Pool) -> dict:
-    """Insert a seller user for role-enforcement tests."""
+    """插入用于角色校验的商家。"""
     async with db_pool.acquire() as conn:
-        # loyalty tiers
+        # 会员等级数据。
         for name, min_spend, discount, free_ship, priority in [
             ("bronze", 0, 0, None, False),
         ]:
@@ -99,7 +93,7 @@ async def seeded_seller(db_pool: asyncpg.Pool) -> dict:
 
 @pytest_asyncio.fixture
 async def seeded_product(db_pool: asyncpg.Pool, seeded_seller: dict) -> dict:
-    """Insert a product owned by seeded_seller."""
+    """插入属于测试商家的商品。"""
     async with db_pool.acquire() as conn:
         row = await conn.fetchrow(
             """INSERT INTO products
@@ -144,7 +138,7 @@ async def test_calculate_loyalty_discount_no_context_returns_error() -> None:
 
 @pytest.mark.asyncio
 async def test_store_memory_no_context_returns_error(db_pool: asyncpg.Pool) -> None:
-    # memory_tools calls get_pool() before the email guard, so a pool must be set.
+    # 记忆工具在邮箱守卫前读取连接池，因此先设置池。
     current_user_email.set("")
     result = await store_memory(category="preference", content="test")
     assert result.get("error") == "No authenticated user"
@@ -172,7 +166,7 @@ async def test_get_user_profile_returns_user_data(seeded_user: dict) -> None:
 
 @pytest.mark.asyncio
 async def test_get_user_profile_unknown_user(db_pool: asyncpg.Pool) -> None:
-    # loyalty tiers needed for the JOIN even though user won't be found
+    # 即使用户不存在，JOIN 仍需要会员等级表数据。
     current_user_email.set("nobody@example.com")
     result = await get_user_profile()
     assert "error" in result
@@ -249,6 +243,12 @@ async def test_store_and_recall_memory(seeded_user: dict) -> None:
     )
     assert store_result["stored"] is True
 
+    assert await recall_memories(category="preference") == []
+    from uuid import UUID
+
+    from orchestrator.routes.tasks import confirm_memory
+
+    await confirm_memory(UUID(store_result["memory_id"]), user={"sub": seeded_user["email"]})
     memories = await recall_memories(category="preference")
     assert len(memories) >= 1
     assert any("wireless" in m["content"] for m in memories)
@@ -257,9 +257,14 @@ async def test_store_and_recall_memory(seeded_user: dict) -> None:
 @pytest.mark.asyncio
 async def test_recall_memories_importance_clamp(seeded_user: dict) -> None:
     current_user_email.set(seeded_user["email"])
-    # importance > 10 should be clamped to 10 inside store_memory
+    # 重要性超过 10 时应截断为 10。
     result = await store_memory(category="feedback", content="test", importance=99)
     assert result["stored"] is True
+    from uuid import UUID
+
+    from orchestrator.routes.tasks import confirm_memory
+
+    await confirm_memory(UUID(result["memory_id"]), user={"sub": seeded_user["email"]})
     memories = await recall_memories()
     stored = next((m for m in memories if m["content"] == "test"), None)
     assert stored is not None
@@ -299,5 +304,5 @@ async def test_get_my_products_allowed_for_admin(
     current_user_email.set(seeded_seller["email"])
     current_user_role.set("admin")
     result = await get_my_products()
-    # admin is always allowed — result is a list (may be empty if admin email doesn't own products)
+    # 管理员通过角色校验；没有所属商品时返回空列表也是正常结果。
     assert isinstance(result, list)

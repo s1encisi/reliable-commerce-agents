@@ -1,13 +1,12 @@
-"""Agent evaluation framework — scores agent responses on groundedness, correctness, and completeness.
+"""智能体评测框架——从事实核验（grounding）、正确性、完整性三个维度为智能体的回复打分。
 
-Loads golden datasets, runs each input through the real production execution
-path (``evals/harness.py::ProductionRunner``), and produces a scored summary
-report.
+加载黄金数据集，把每个输入都跑过真实的生产执行路径
+（``evals/harness.py::ProductionRunner``），并生成一份带分数的汇总报告。
 
-Historical note: this used to hand-roll its own OpenAI tool-calling loop and
-call raw undecorated tool functions directly, bypassing every guardrail/HITL/
-grounding middleware a real request goes through. ``ProductionRunner`` fixed
-that — see its module docstring.
+历史备注：它过去自己手写了一套 OpenAI 工具调用循环，并直接调用未加装饰器的
+原始工具函数，绕过了真实请求会经过的每一层护栏 / 人工参与
+（Human-in-the-Loop，HITL）/ 事实核验（grounding）中间件。``ProductionRunner``
+修复了这个问题——参见它的模块文档字符串。
 """
 
 from __future__ import annotations
@@ -35,20 +34,20 @@ def _current_model() -> str:
 
 @dataclass
 class EvalCase:
-    """A single evaluation test case from a golden dataset."""
+    """来自黄金数据集的单条评测用例。"""
 
     input: str
     expected_tools: list[str]
     expected_fields: list[str]
     criteria: dict[str, bool]
-    # Orchestrator-only: the specialist this query should be routed to via
-    # call_specialist_agent. When set, correctness is scored on the route.
+    # 仅编排器使用：该查询应当经由 call_specialist_agent 被路由到的专业智能体。
+    # 一旦设置，正确性就按路由结果打分。
     expected_route: str | None = None
 
 
 @dataclass
 class EvalResult:
-    """Scored result for a single evaluation case."""
+    """单条评测用例的评分结果。"""
 
     input: str
     groundedness_score: float = 0.0
@@ -71,7 +70,7 @@ class EvalResult:
 
 @dataclass
 class EvalSummary:
-    """Aggregate results across all evaluation cases."""
+    """跨所有评测用例的聚合结果。"""
 
     agent_name: str
     dataset_path: str
@@ -85,16 +84,15 @@ class EvalSummary:
     total_latency_ms: int = 0
     total_tokens_in: int = 0
     total_tokens_out: int = 0
-    estimated_cost_usd: float = 0.0
+    estimated_cost_usd: float | None = 0.0
     results: list[EvalResult] = field(default_factory=list)
 
     @property
     def missing_fixtures(self) -> int:
-        """Cases that failed because their replay fixture was absent.
+        """因缺少回放夹具而失败的用例数。
 
-        Distinct from a low score: the agent never ran, so nothing about its
-        quality was measured. Reported separately by ``run_evals`` so a broken
-        fixture corpus can't masquerade as a quality regression.
+        这与低分不同：智能体根本没有运行，因此它的质量没有任何东西被测量。
+        由 ``run_evals`` 单独报告，这样一套损坏的夹具语料就不会伪装成质量回归。
         """
         return sum(1 for r in self.results if r.fixture_missing)
 
@@ -112,7 +110,7 @@ class EvalSummary:
             "total_latency_ms": self.total_latency_ms,
             "total_tokens_in": self.total_tokens_in,
             "total_tokens_out": self.total_tokens_out,
-            "estimated_cost_usd": round(self.estimated_cost_usd, 4),
+            "estimated_cost_usd": round(self.estimated_cost_usd, 4) if self.estimated_cost_usd is not None else None,
             "missing_fixtures": self.missing_fixtures,
             "results": [
                 {
@@ -140,7 +138,7 @@ class EvalSummary:
 
 
 def load_dataset(path: str | Path) -> list[EvalCase]:
-    """Load a golden dataset from a JSON file."""
+    """从 JSON 文件加载黄金数据集。"""
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(f"Dataset not found: {path}")
@@ -169,15 +167,15 @@ def load_dataset(path: str | Path) -> list[EvalCase]:
 
 
 class AgentEvaluator:
-    """Runs evaluation cases against an agent (via ``ProductionRunner``) and scores results.
+    """对某个智能体（经由 ``ProductionRunner``）运行评测用例并为其结果打分。
 
-    Scoring dimensions:
-      - Groundedness (0-1): does the response's claims check out against the
-        database (``shared/grounding/verifier.py``), not just "was a tool called".
-      - Correctness (0-1): did it call the right tools / route to the right specialist?
-      - Completeness (0-1): does the response cover what was expected? Keyword-alias
-        matching by default (fast, free, deterministic — the smoke suite's mode);
-        set ``use_llm_judge=True`` for a real judge call (the full suite's mode).
+    打分维度：
+      - 事实核验（groundedness）(0-1)：回复中的论断是否经得起数据库的检验
+        （``shared/grounding/verifier.py``），而不只是"是否调用过某个工具"。
+      - 正确性 (0-1)：是否调用了正确的工具 / 路由到了正确的专业智能体？
+      - 完整性 (0-1)：回复是否覆盖了预期内容？默认使用关键词别名匹配
+        （快、免费、确定性——冒烟套件的模式）；设置 ``use_llm_judge=True``
+        可进行一次真实的评判调用（完整套件的模式）。
     """
 
     def __init__(self, agent_name: str, pass_threshold: float = 0.7, *, use_llm_judge: bool = False) -> None:
@@ -187,7 +185,7 @@ class AgentEvaluator:
         self._runner = ProductionRunner(agent_name)
 
     async def run_once(self, user_input: str) -> dict[str, Any]:
-        """Run a single input through the production path (used by the safety suite)."""
+        """让单个输入走一遍生产路径（安全套件使用）。"""
         outcome = await self._runner.run(user_input)
         return {
             "text": outcome.text,
@@ -201,7 +199,7 @@ class AgentEvaluator:
         }
 
     async def evaluate_dataset(self, dataset_path: str | Path) -> EvalSummary:
-        """Run all cases in a dataset and return aggregate scores."""
+        """运行数据集中的全部用例并返回聚合分数。"""
         cases = load_dataset(dataset_path)
         summary = EvalSummary(
             agent_name=self.agent_name,
@@ -223,7 +221,7 @@ class AgentEvaluator:
             summary.total_tokens_in += result.tokens_in
             summary.total_tokens_out += result.tokens_out
 
-        # Compute averages
+        # 计算平均值
         n = len(summary.results)
         if n > 0:
             summary.avg_groundedness = sum(r.groundedness_score for r in summary.results) / n
@@ -238,7 +236,7 @@ class AgentEvaluator:
         return summary
 
     async def _evaluate_case(self, case: EvalCase, case_id: str) -> EvalResult:
-        """Evaluate a single test case against the agent."""
+        """针对智能体评测单条用例。"""
         result = EvalResult(input=case.input)
 
         start = time.monotonic()
@@ -257,9 +255,9 @@ class AgentEvaluator:
         result.tokens_out = outcome.tokens_out
         result.grounding = outcome.grounding
 
-        # Groundedness: reuse the report GroundingVerificationMiddleware
-        # already computed during the production run when available (free);
-        # fall back to a from-scratch DB check otherwise (e.g. GROUNDING_MODE=off).
+        # 事实核验（grounding）：在可用时复用 GroundingVerificationMiddleware
+        # 在生产运行期间已经算出的报告（免费）；否则回退到从零开始的数据库
+        # 校验（例如 GROUNDING_MODE=off）。
         if outcome.grounding is not None:
             from evals.scorers.db_groundedness import score_from_report
 
@@ -267,17 +265,16 @@ class AgentEvaluator:
         else:
             result.groundedness_score = await self._score_groundedness_fallback(response_text, case.criteria)
 
-        # Correctness: did it call the expected tools?
+        # 正确性：是否调用了预期的工具？
         result.correctness_score = self._score_correctness(outcome.tools_called, case.expected_tools)
 
-        # Routing override: for orchestrator cases the meaningful signal is
-        # whether it handed off to the *correct* specialist, not merely that it
-        # invoked the routing tool.
+        # 路由覆盖：对于编排器用例，有意义的信号是它是否把处理权交接给了
+        # *正确* 的专业智能体，而不仅仅是否调用了路由工具。
         if case.expected_route:
             result.route_called = outcome.routes[0] if outcome.routes else None
             result.correctness_score = self._score_routing(outcome.routes, case.expected_route)
 
-        # Completeness
+        # 完整性
         if self.use_llm_judge:
             from evals.scorers.llm_judge import judge_response
 
@@ -291,7 +288,7 @@ class AgentEvaluator:
                 response_text, case.expected_fields
             )
 
-        # Weighted overall score
+        # 加权总分
         result.overall_score = (
             result.groundedness_score * 0.4 + result.correctness_score * 0.4 + result.completeness_score * 0.2
         )
@@ -301,10 +298,10 @@ class AgentEvaluator:
 
     @staticmethod
     async def _score_groundedness_fallback(response_text: str, criteria: dict[str, bool]) -> float:
-        """No production grounding report available (GROUNDING_MODE=off) —
-        try a from-scratch DB check; if no DB pool is initialized either,
-        fall back to the old "was grounding expected at all" heuristic
-        rather than crashing a suite that never asked for DB access.
+        """没有可用的生产环境事实核验（grounding）报告（GROUNDING_MODE=off）时——
+        尝试从零开始做一次数据库校验；如果连数据库连接池也未初始化，
+        则回退到旧的"是否本来就预期要做事实核验"的启发式判断，
+        而不是让一个从未要求数据库访问的套件崩溃。
         """
         expects_grounded = criteria.get("grounded", True)
         if not expects_grounded:
@@ -324,20 +321,20 @@ class AgentEvaluator:
 
     @staticmethod
     def _score_correctness(tools_called: list[str], expected_tools: list[str]) -> float:
-        """Score whether the correct tools were called.
+        """为是否调用了正确的工具打分。
 
-        Partial credit: if 2 of 3 expected tools were called, score = 0.67.
-        Bonus: no penalty for calling additional helpful tools.
+        部分得分：若 3 个预期工具中调用了 2 个，则得分 = 0.67。
+        加分项：调用额外的有用工具不扣分。
         """
         if not expected_tools:
-            return 1.0  # No tool expectations
+            return 1.0  # 没有工具方面的预期
 
         matched = sum(1 for t in expected_tools if t in tools_called)
         return matched / len(expected_tools)
 
     @staticmethod
     def _score_routing(routes: list[str], expected_route: str) -> float:
-        """Score orchestrator hand-off: 1.0 right specialist, 0.5 wrong, 0.0 none."""
+        """为编排器的处理权交接打分：1.0 为正确的专业智能体，0.5 为错误，0.0 为未交接。"""
         if not routes:
             return 0.0
         return 1.0 if expected_route in routes else 0.5
@@ -346,10 +343,10 @@ class AgentEvaluator:
     def _score_completeness_keyword(
         response_text: str, expected_fields: list[str]
     ) -> tuple[float, list[str], list[str]]:
-        """Fast, free, deterministic completeness check via field-name aliases.
+        """通过字段名别名进行快速、免费、确定性的完整性检查。
 
-        Coarser than the LLM judge (a bare "$" counts as satisfying a "price"
-        field), but zero-cost and replay-compatible — the smoke suite's mode.
+        比 LLM 评判器更粗糙（一个孤零零的 "$" 也算满足 "price" 字段），
+        但零成本且与回放兼容——这是冒烟套件的模式。
         """
         if not expected_fields:
             return 1.0, [], []
@@ -388,7 +385,7 @@ class AgentEvaluator:
 
 
 def format_summary_report(summary: EvalSummary, verbose: bool = False) -> str:
-    """Format an EvalSummary into a human-readable report."""
+    """把 EvalSummary 格式化为人类可读的报告。"""
     lines: list[str] = []
     lines.append("")
     lines.append("=" * 70)
@@ -407,7 +404,8 @@ def format_summary_report(summary: EvalSummary, verbose: bool = False) -> str:
     lines.append(f"  Total latency: {summary.total_latency_ms:,}ms")
     lines.append(f"  Tokens (in):   {summary.total_tokens_in:,}")
     lines.append(f"  Tokens (out):  {summary.total_tokens_out:,}")
-    lines.append(f"  Est. cost:     ${summary.estimated_cost_usd:.4f}")
+    cost = f"${summary.estimated_cost_usd:.4f}" if summary.estimated_cost_usd is not None else "未计价（查看本币账本）"
+    lines.append(f"  Est. cost:     {cost}")
     lines.append("=" * 70)
 
     if verbose:

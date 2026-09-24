@@ -56,7 +56,7 @@ export default function SellerDashboardPage() {
       setOrders(ordersRes.orders);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to load dashboard data",
+        err instanceof Error ? err.message : "看板数据加载失败",
       );
     } finally {
       setLoading(false);
@@ -75,10 +75,10 @@ export default function SellerDashboardPage() {
         <div className="text-center">
           <Package className="mx-auto size-12 text-muted-foreground" />
           <h2 className="mt-4 text-lg font-semibold text-foreground">
-            Access Denied
+            无权访问
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            The seller dashboard is only available to sellers and admins.
+            商家看板仅对商家和管理员开放。
           </p>
         </div>
       </div>
@@ -89,7 +89,7 @@ export default function SellerDashboardPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
+      {/* 页头 */}
       <div className="border-b border-border bg-card">
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
@@ -98,10 +98,10 @@ export default function SellerDashboardPage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-foreground">
-                Seller Dashboard
+                商家看板
               </h1>
               <p className="text-sm text-muted-foreground">
-                Manage your products and track orders
+                管理您的商品并跟踪订单
               </p>
             </div>
           </div>
@@ -109,14 +109,14 @@ export default function SellerDashboardPage() {
       </div>
 
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Loading */}
+        {/* 加载中 */}
         {loading && (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="size-6 animate-spin text-muted-foreground" />
           </div>
         )}
 
-        {/* Error */}
+        {/* 错误提示 */}
         {error && (
           <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             {error}
@@ -125,11 +125,11 @@ export default function SellerDashboardPage() {
 
         {!loading && !error && stats && (
           <>
-            {/* Summary cards */}
+            {/* 汇总卡片 */}
             <div className="mb-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
               <Card>
                 <CardHeader>
-                  <CardDescription>Total Products</CardDescription>
+                  <CardDescription>商品总数</CardDescription>
                   <CardTitle className="text-3xl">
                     {stats.product_count}
                   </CardTitle>
@@ -137,7 +137,7 @@ export default function SellerDashboardPage() {
                 <CardContent>
                   <Link href="/seller/products">
                     <Button variant="outline" size="sm">
-                      View All <ArrowRight className="ml-1 size-3" />
+                      查看全部 <ArrowRight className="ml-1 size-3" />
                     </Button>
                   </Link>
                 </CardContent>
@@ -145,7 +145,7 @@ export default function SellerDashboardPage() {
 
               <Card>
                 <CardHeader>
-                  <CardDescription>Total Revenue</CardDescription>
+                  <CardDescription>总销售额</CardDescription>
                   <CardTitle className="flex items-center gap-2 text-3xl">
                     <DollarSign className="size-6 text-green-600" />
                     {formatPrice(stats.total_revenue)}
@@ -153,14 +153,14 @@ export default function SellerDashboardPage() {
                 </CardHeader>
                 <CardContent>
                   <p className="text-xs text-muted-foreground">
-                    Across {stats.order_count} orders
+                    来自 {stats.order_count} 笔订单
                   </p>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader>
-                  <CardDescription>Orders Received</CardDescription>
+                  <CardDescription>收到订单</CardDescription>
                   <CardTitle className="flex items-center gap-2 text-3xl">
                     <ShoppingCart className="size-6 text-blue-600" />
                     {stats.order_count}
@@ -168,16 +168,16 @@ export default function SellerDashboardPage() {
                 </CardHeader>
                 <CardContent>
                   <p className="text-xs text-muted-foreground">
-                    Orders containing your products
+                    包含您商品的订单
                   </p>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader>
-                  <CardDescription>Avg. Product Rating</CardDescription>
+                  <CardDescription>商品平均评分</CardDescription>
                   <CardTitle className="flex items-center gap-2 text-3xl">
-                    {stats.avg_rating > 0 ? stats.avg_rating.toFixed(1) : "N/A"}
+                    {stats.avg_rating > 0 ? stats.avg_rating.toFixed(1) : "暂无"}
                     {stats.avg_rating > 0 && (
                       <Star className="size-6 fill-amber-400 text-amber-400" />
                     )}
@@ -185,21 +185,21 @@ export default function SellerDashboardPage() {
                 </CardHeader>
                 <CardContent>
                   <p className="text-xs text-muted-foreground">
-                    Across {stats.product_count} products
+                    覆盖 {stats.product_count} 件商品
                   </p>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Recent orders table */}
+            {/* 最近订单表格 */}
             <div>
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-foreground">
-                  Recent Orders
+                  最近订单
                 </h2>
                 <Link href="/seller/products">
                   <Button variant="outline" size="sm">
-                    Manage Products
+                    管理商品
                   </Button>
                 </Link>
               </div>
@@ -208,19 +208,19 @@ export default function SellerDashboardPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Order ID</TableHead>
-                        <TableHead>Buyer</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Items</TableHead>
-                        <TableHead className="text-right">Total</TableHead>
+                        <TableHead>订单号</TableHead>
+                        <TableHead>买家</TableHead>
+                        <TableHead>状态</TableHead>
+                        <TableHead>日期</TableHead>
+                        <TableHead>商品数</TableHead>
+                        <TableHead className="text-right">金额</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {recentOrders.map((order: any) => (
                         <TableRow key={order.id}>
                           <TableCell className="font-mono text-xs text-muted-foreground">
-                            #{order.id?.slice(0, 8)}
+                            订单 #{order.id?.slice(0, 8)}
                           </TableCell>
                           <TableCell>
                             <div>
@@ -239,8 +239,7 @@ export default function SellerDashboardPage() {
                             {formatDate(order.date)}
                           </TableCell>
                           <TableCell className="text-xs">
-                            {order.item_count} item
-                            {order.item_count !== 1 ? "s" : ""}
+                            {order.item_count} 件商品
                           </TableCell>
                           <TableCell className="text-right font-medium">
                             {formatPrice(order.total)}
@@ -253,7 +252,7 @@ export default function SellerDashboardPage() {
                             colSpan={6}
                             className="py-8 text-center text-sm text-muted-foreground"
                           >
-                            No orders found for your products.
+                            暂无包含您商品的订单。
                           </TableCell>
                         </TableRow>
                       )}

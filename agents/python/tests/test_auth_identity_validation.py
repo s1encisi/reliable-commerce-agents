@@ -1,7 +1,6 @@
-"""Tests for forwarded-identity validation on the inter-agent path (Track A5).
+"""智能体间转发身份校验测试。
 
-Pure helper tests plus a Starlette integration test exercising the
-observe-vs-strict behavior. No LLM; no DB.
+纯辅助函数与 Starlette 集成测试覆盖观察和严格模式，无模型或数据库。
 """
 
 from __future__ import annotations
@@ -57,7 +56,7 @@ def test_valid_forwarded_identity_passes() -> None:
 def test_spoofed_role_allowed_when_not_strict(monkeypatch) -> None:
     monkeypatch.setattr(settings, "GUARDRAILS_STRICT_IDENTITY", False)
     resp = _client().post("/x", headers=_headers(role="superadmin"))
-    assert resp.status_code == 200  # observe-only: logged, not blocked
+    assert resp.status_code == 200  # 观察模式只记录，不阻止。
 
 
 def test_spoofed_role_rejected_when_strict(monkeypatch) -> None:
@@ -72,10 +71,9 @@ def test_wrong_agent_secret_rejected() -> None:
 
 
 class _StubVerifier:
-    """Stand-in for RS256Verifier — these exercise the middleware's oauth-mode
-    branch, not the verifier itself (see test_rs256_verifier.py). Records the
-    audience/scope it was asked to validate so tests can lock in exactly what
-    the inter-agent path requests."""
+    """RS256 校验器替身，仅测试中间件的 oauth 分支。
+
+    记录所需受众与范围；校验器本身由 test_rs256_verifier.py 覆盖。"""
 
     def __init__(self, payload=None, error=None):
         self._payload = payload
@@ -90,16 +88,14 @@ class _StubVerifier:
 
 
 def test_oauth_mode_agent_secret_rejected_outright(monkeypatch) -> None:
-    """oauth mode retires the shared secret — bearing it is a hard 401, not
-    a silent fall-through to the service-token path."""
+    """oauth 模式携带共享密钥应直接返回 401，不能继续尝试服务令牌路径。"""
     monkeypatch.setattr(settings, "AUTH_MODE", "oauth")
     resp = _client().post("/x", headers={"x-agent-secret": settings.AGENT_SHARED_SECRET})
     assert resp.status_code == 401
 
 
 def test_oauth_mode_accepts_valid_service_token(monkeypatch) -> None:
-    """Inter-agent oauth path: service token proves the caller, but identity
-    comes from forwarded x-user-* headers — not from the token payload."""
+    """服务令牌证明调用服务身份；用户身份来自转发头而非令牌载荷。"""
     monkeypatch.setattr(settings, "AUTH_MODE", "oauth")
     stub = _StubVerifier(payload={"scope": "agent:invoke"})
     monkeypatch.setattr(factory_module, "get_token_verifier", lambda: stub)
@@ -117,7 +113,7 @@ def test_oauth_mode_accepts_valid_service_token(monkeypatch) -> None:
 
 
 def test_oauth_mode_no_forwarded_headers_defaults_to_system(monkeypatch) -> None:
-    """System/health flows carry a service token with no x-user-* headers."""
+    """系统或健康检查调用可携带服务令牌而不带用户头。"""
     monkeypatch.setattr(settings, "AUTH_MODE", "oauth")
     stub = _StubVerifier(payload={"scope": "agent:invoke"})
     monkeypatch.setattr(factory_module, "get_token_verifier", lambda: stub)

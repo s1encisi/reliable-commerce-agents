@@ -35,7 +35,7 @@ import {
 } from "recharts";
 
 // ---------------------------------------------------------------------------
-// Types
+// 类型
 // ---------------------------------------------------------------------------
 
 interface AgentUsage {
@@ -66,25 +66,25 @@ interface UsageStats {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// 辅助函数
 // ---------------------------------------------------------------------------
 
 function formatNumber(n: number | undefined | null): string {
   if (n == null) return "0";
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return n.toLocaleString();
+  if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1)} 亿`;
+  if (n >= 10_000) return `${(n / 10_000).toFixed(1)} 万`;
+  return n.toLocaleString("zh-CN");
 }
 
 function formatDuration(ms: number | undefined | null): string {
-  if (ms == null) return "0ms";
-  if (ms < 1000) return `${Math.round(ms)}ms`;
-  return `${(ms / 1000).toFixed(2)}s`;
+  if (ms == null) return "0 ms";
+  if (ms < 1000) return `${Math.round(ms)} ms`;
+  return `${(ms / 1000).toFixed(2)} s`;
 }
 
 function formatDate(dateStr: string): string {
   try {
-    return new Date(dateStr).toLocaleDateString("en-US", {
+    return new Date(dateStr).toLocaleDateString("zh-CN", {
       weekday: "short",
       month: "short",
       day: "numeric",
@@ -96,7 +96,7 @@ function formatDate(dateStr: string): string {
 
 function shortDate(dateStr: string): string {
   try {
-    return new Date(dateStr).toLocaleDateString("en-US", {
+    return new Date(dateStr).toLocaleDateString("zh-CN", {
       month: "short",
       day: "numeric",
     });
@@ -126,7 +126,7 @@ function InlineBar({
 }
 
 // ---------------------------------------------------------------------------
-// Page
+// 页面
 // ---------------------------------------------------------------------------
 
 export default function AdminUsagePage() {
@@ -173,7 +173,7 @@ export default function AdminUsagePage() {
       });
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to load usage stats",
+        err instanceof Error ? err.message : "用量统计加载失败",
       );
     } finally {
       setLoading(false);
@@ -193,9 +193,9 @@ export default function AdminUsagePage() {
           <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-destructive/10">
             <ShieldAlert className="size-8 text-destructive" />
           </div>
-          <h2 className="mt-4 text-lg font-semibold">Access Denied</h2>
+          <h2 className="mt-4 text-lg font-semibold">无权访问</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            You do not have admin privileges to view this page.
+            您没有查看该页面的管理员权限。
           </p>
         </div>
       </div>
@@ -204,15 +204,15 @@ export default function AdminUsagePage() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      {/* Header */}
+      {/* 页头 */}
       <div className="mb-8 flex items-center gap-3">
         <div className="flex size-10 items-center justify-center rounded-lg bg-primary">
           <BarChart3 className="size-5 text-primary-foreground" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Usage Analytics</h1>
+          <h1 className="text-2xl font-bold tracking-tight">用量分析</h1>
           <p className="text-sm text-muted-foreground">
-            Detailed token and invocation metrics across all agents
+            全部智能体的 Token 与调用次数明细指标
           </p>
         </div>
       </div>
@@ -221,7 +221,7 @@ export default function AdminUsagePage() {
         <div className="flex items-center justify-center py-20">
           <Loader2 className="size-6 animate-spin text-primary" />
           <span className="ml-2 text-sm text-muted-foreground">
-            Loading usage data…
+            正在加载用量数据…
           </span>
         </div>
       )}
@@ -234,41 +234,41 @@ export default function AdminUsagePage() {
 
       {!loading && !error && stats && (
         <div className="space-y-8">
-          {/* Summary cards */}
+          {/* 汇总卡片 */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard
-              label="Total Invocations"
+              label="总调用次数"
               value={formatNumber(stats.total_invocations)}
               icon={Activity}
-              hint={`${stats.active_agents} active agents`}
+              hint={`${stats.active_agents} 个活跃智能体`}
             />
             <StatCard
-              label="Tokens In"
+              label="输入 Token"
               value={formatNumber(stats.total_tokens_in)}
               icon={ArrowDownToLine}
             />
             <StatCard
-              label="Tokens Out"
+              label="输出 Token"
               value={formatNumber(stats.total_tokens_out)}
               icon={ArrowUpFromLine}
             />
             <StatCard
-              label="Avg Duration"
+              label="平均耗时"
               value={formatDuration(stats.avg_duration_ms)}
               icon={Clock}
             />
           </div>
 
-          {/* Daily trend chart */}
+          {/* 每日趋势图 */}
           <div className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
             <SectionHeader
-              eyebrow="Last 7 days"
-              title="Daily Activity"
-              description="Agent invocations per day."
+              eyebrow="近 7 天"
+              title="每日活跃度"
+              description="每日智能体调用次数。"
             />
             {stats.daily_trend.length === 0 ? (
               <div className="py-12 text-center text-sm text-muted-foreground">
-                No trend data available yet.
+                暂无趋势数据。
               </div>
             ) : (
               <ChartContainer height={260}>
@@ -308,7 +308,7 @@ export default function AdminUsagePage() {
                   />
                   <Bar
                     dataKey="invocations"
-                    name="Invocations"
+                    name="调用次数"
                     fill={CHART_COLORS[0]}
                     radius={[4, 4, 0, 0]}
                     maxBarSize={48}
@@ -318,26 +318,26 @@ export default function AdminUsagePage() {
             )}
           </div>
 
-          {/* Per-agent breakdown */}
+          {/* 各智能体明细 */}
           <div className="rounded-xl bg-card ring-1 ring-foreground/10">
             <div className="px-4 py-3">
-              <h2 className="text-sm font-semibold">Per-Agent Breakdown</h2>
+              <h2 className="text-sm font-semibold">各智能体明细</h2>
             </div>
             <Separator />
             {stats.per_agent.length === 0 ? (
               <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-                No agent usage data available.
+                暂无智能体用量数据。
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead>Agent</TableHead>
-                    <TableHead className="text-right">Invocations</TableHead>
-                    <TableHead className="text-right">Tokens In</TableHead>
-                    <TableHead className="text-right">Tokens Out</TableHead>
-                    <TableHead className="text-right">Avg Duration</TableHead>
-                    <TableHead className="w-[120px]">Volume</TableHead>
+                    <TableHead>智能体</TableHead>
+                    <TableHead className="text-right">调用次数</TableHead>
+                    <TableHead className="text-right">输入 Token</TableHead>
+                    <TableHead className="text-right">输出 Token</TableHead>
+                    <TableHead className="text-right">平均耗时</TableHead>
+                    <TableHead className="w-[120px]">占比</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -377,25 +377,25 @@ export default function AdminUsagePage() {
             )}
           </div>
 
-          {/* Daily detail table */}
+          {/* 每日明细表 */}
           <div className="rounded-xl bg-card ring-1 ring-foreground/10">
             <div className="px-4 py-3">
-              <h2 className="text-sm font-semibold">Daily Trend (Last 7 Days)</h2>
+              <h2 className="text-sm font-semibold">近 7 日趋势</h2>
             </div>
             <Separator />
             {stats.daily_trend.length === 0 ? (
               <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-                No trend data available.
+                暂无趋势数据。
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead>Date</TableHead>
-                    <TableHead className="text-right">Invocations</TableHead>
-                    <TableHead className="text-right">Tokens In</TableHead>
-                    <TableHead className="text-right">Tokens Out</TableHead>
-                    <TableHead className="text-right">Total Tokens</TableHead>
+                    <TableHead>日期</TableHead>
+                    <TableHead className="text-right">调用次数</TableHead>
+                    <TableHead className="text-right">输入 Token</TableHead>
+                    <TableHead className="text-right">输出 Token</TableHead>
+                    <TableHead className="text-right">Token 合计</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

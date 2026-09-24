@@ -1,8 +1,6 @@
-"""Regression tests for the LLM-controlled LIMIT clamp (audit fix P0-1).
+"""模型控制 LIMIT 的边界回归测试。
 
-Every tool that interpolates ``limit`` into an SQL string now routes it
-through ``shared.tool_inputs.clamp_limit``. This test pins the contract
-so a future refactor can't quietly widen the attack surface.
+所有 SQL 插值前必须经过 clamp_limit，避免重构扩大输入攻击面。
 """
 
 from __future__ import annotations
@@ -40,18 +38,18 @@ def test_clamp_rejects_non_numeric() -> None:
 
 
 def test_clamp_coerces_numeric_string() -> None:
-    # LLM frequently passes "5" instead of 5 for typed int args.
+    # 模型可能把整数 5 作为字符串 "5" 返回。
     assert clamp_limit("5") == 5
-    assert clamp_limit("5000") == 100  # still clamped
+    assert clamp_limit("5000") == 100  # 仍受上限约束。
 
 
 def test_clamp_respects_explicit_maximum_over_value() -> None:
-    # If both value and maximum are huge, cap wins.
+    # 输入与 maximum 都很大时，最终硬上限仍生效。
     assert clamp_limit(10_000_000, maximum=50) == 50
 
 
 def test_clamp_float_like_strings_fall_back_to_default() -> None:
-    # "10.5" is not a valid int literal; fall back to default.
+    # 10.5 不是整数文本，应退回默认值。
     assert clamp_limit("10.5") == 10
 
 
@@ -75,9 +73,7 @@ def test_clamp_boundaries(value, expected) -> None:
 
 
 def test_every_tool_imports_clamp_limit() -> None:
-    """If a future change re-interpolates `limit` into SQL without the
-    clamp, the import will be missing — this test catches the drift.
-    """
+    """检查工具仍导入 clamp_limit，捕获绕过该入口的结构漂移。"""
     import pathlib
 
     expected = {

@@ -1,11 +1,7 @@
-"""Tests for orchestrator/events.py.
+"""编排事件适配测试。
 
-Exercises adapt_workflow_event against real MAF WorkflowEvent streams from
-the two production workflows (return_replace's fan-out-free sequential+HITL
-graph, pre_purchase's fan-out/fan-in) rather than hand-built mocks — the
-WorkflowEvent shape (which fields are populated for which .type, and that
-source_executor_id raises outside request_info events) was verified this
-way before writing the adapter, so the tests use the same ground truth.
+用两条真实 MAF 生产工作流的事件流验证字段形态和类型分派，
+避免手工事件替身遗漏框架约束。
 """
 
 from __future__ import annotations
@@ -51,12 +47,9 @@ async def test_low_value_return_produces_node_enter_exit_pairs_and_run_started()
 
 @pytest.mark.asyncio
 async def test_silent_event_types_are_dropped_not_forwarded() -> None:
-    """started/status/superstep_* must not leak through as noise frames.
+    """started、status 和 superstep 事件不应变成无意义界面帧。
 
-    Verified directly against a live run: "status" and "superstep_started"/
-    "superstep_completed" carry no executor_id and no data — nothing a
-    viewer could render meaningfully — so the adapter returns None for them
-    and this test confirms none of the *adapted* events carry that shape.
+    这些事件缺少可展示的执行器和数据，适配器应返回 None。
     """
     wf = ReturnAndReplaceWorkflow(TOOLS_HAPPY)._build_maf_workflow()
     state = WorkflowState(user_email="a@b.com", order_id="o1", order_total=50.0)
@@ -104,8 +97,8 @@ async def test_fan_out_fan_in_produces_multiple_concurrent_node_enters() -> None
     events = await _collect_adapted(wf, ResearchState(product_id="sku-1"))
 
     enter_ids = [e.node_id for e in events if e.kind == "node_enter"]
-    # The three research branches must all appear, proving the adapter
-    # doesn't collapse or drop concurrent executor_invoked events.
+    # 三个调研分支都必须出现，
+    # 证明适配器未合并或丢失并发调用事件。
     assert len(enter_ids) >= 3
     assert len(set(enter_ids)) == len(enter_ids), "fan-out node ids must be distinct, not deduplicated away"
 
@@ -133,8 +126,7 @@ def test_adapt_step_maps_tool_call_fields() -> None:
 
 
 def test_adapt_step_handles_missing_agent_key() -> None:
-    """Steps recorded before routes.py's setdefault("agent", ...) runs (e.g.
-    a unit test that never touches the route layer) must not raise."""
+    """在路由补充 agent 字段之前记录的步骤，也不能导致异常。"""
     step = {"tool_name": "check_stock", "tool_input": {}, "tool_output": None, "status": "success", "duration_ms": 5}
     event = adapt_step(step)
     assert event.agent is None

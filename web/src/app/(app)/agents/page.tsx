@@ -19,13 +19,12 @@ export default function AgentsIndexPage() {
       className="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6 lg:px-8"
     >
       <SectionHeader
-        eyebrow="Multi-agent platform"
-        title="Specialist Agents"
+        eyebrow="多智能体平台"
+        title="专业智能体"
       />
       <p className="max-w-2xl text-sm text-muted-foreground">
-        Six specialist agents collaborate to handle every part of the shopping
-        experience. Each has a dedicated tool set and is called by the
-        Orchestrator via the A2A protocol.
+        六个专业智能体协同处理购物体验的各个环节。每个智能体都有专属工具集，
+        并由编排器通过 A2A 协议调用。
       </p>
 
       <motion.div
@@ -65,10 +64,10 @@ export default function AgentsIndexPage() {
 
                 <div className="mt-4 flex items-center justify-between">
                   <span className="text-xs text-muted-foreground">
-                    {agent.tools.length} tools
+                    {agent.tools.length} 个工具
                   </span>
                   <span className="inline-flex items-center gap-1 text-xs font-medium text-primary opacity-0 transition-opacity group-hover/card:opacity-100">
-                    View details <ArrowRight className="size-3" />
+                    查看详情 <ArrowRight className="size-3" />
                   </span>
                 </div>
               </Link>

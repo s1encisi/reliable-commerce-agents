@@ -1,8 +1,8 @@
 // ---------------------------------------------------------------------------
-// Product image helpers
+// 商品图片辅助函数
 // ---------------------------------------------------------------------------
 
-/** Curated Unsplash URLs keyed by category for fallback images */
+/** 按分类整理的 Unsplash 图片地址，用作兜底图片 */
 const CATEGORY_FALLBACK_IMAGES: Record<string, string> = {
   electronics:
     "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=400&h=400&fit=crop",
@@ -19,15 +19,15 @@ const DEFAULT_FALLBACK =
   "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&h=400&fit=crop";
 
 /**
- * Returns an image URL for a product.
+ * 返回某件商品的图片地址。
  *
- * Priority:
- *  1. `imageUrl` — stored on the product record (Unsplash URL from seed)
- *  2. `category` — curated category fallback
- *  3. Generic product fallback
+ * 优先级：
+ *  1. `imageUrl` —— 保存在商品记录上（种子数据里的 Unsplash 地址）
+ *  2. `category` —— 按分类整理的兜底图片
+ *  3. 通用商品兜底图片
  *
- * The `width` and `height` params are appended to Unsplash URLs when an
- * explicit imageUrl is provided (replacing any existing w/h query params).
+ * 当提供了显式的 imageUrl 时，`width` 与 `height` 参数会写入该 Unsplash
+ * 地址（替换掉原有的 w/h 查询参数）。
  */
 export function productImageUrl(
   productId: string,
@@ -37,7 +37,7 @@ export function productImageUrl(
   category?: string | null,
 ): string {
   if (imageUrl) {
-    // Replace w= and h= query params with requested dimensions
+    // 用请求的尺寸替换掉 w= 与 h= 查询参数
     return imageUrl
       .replace(/w=\d+/, `w=${width}`)
       .replace(/h=\d+/, `h=${height}`);
@@ -58,7 +58,7 @@ export function productImageUrl(
 }
 
 /**
- * Returns a curated fallback image for a product category.
+ * 返回某个商品分类对应的兜底图片。
  */
 export function categoryImageUrl(category: string, width = 400, height = 400): string {
   const fallback =

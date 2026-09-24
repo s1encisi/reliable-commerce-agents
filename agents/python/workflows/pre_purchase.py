@@ -1,14 +1,14 @@
-"""Pre-Purchase Research Workflow — MAF Concurrent orchestration.
+"""购前调研工作流 —— MAF 并发编排。
 
-Runs three parallel data-gathering tool calls (reviews, stock, price
-history), fans the results into a sequential shipping estimate that
-depends on stock, then synthesizes a final recommendation.
+并行运行三个数据采集工具调用（评论、库存、价格
+历史），将结果扇入到一个依赖库存的顺序式运费估算，
+最后综合出最终建议。
 
-Refactored from a custom ``asyncio.gather`` state machine to a MAF
-``WorkflowBuilder`` with ``add_fan_out_edges`` + ``add_fan_in_edges``
-per ``plans/refactor/08-pre-purchase-concurrent.md``. The public API —
-class, dataclass, and ``execute(state) -> state`` signature — is
-preserved so callers don't need to change.
+已按 ``plans/refactor/08-pre-purchase-concurrent.md`` 从自定义的
+``asyncio.gather`` 状态机重构为 MAF ``WorkflowBuilder``，使用
+``add_fan_out_edges`` + ``add_fan_in_edges``。公共 API ——
+类、dataclass 以及 ``execute(state) -> state`` 签名 —— 均保持不变，
+调用方无需改动。
 """
 
 from __future__ import annotations
@@ -26,28 +26,28 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ResearchState:
-    """Carries the in-flight workflow state from executor to executor."""
+    """在各执行器之间传递工作流的进行中状态。"""
 
     product_id: str
     user_region: str = "east"
 
-    # Populated by fan-out executors
+    # 由扇出执行器填充
     reviews: dict = field(default_factory=dict)
     stock: dict = field(default_factory=dict)
     price_history: dict = field(default_factory=dict)
     shipping: dict = field(default_factory=dict)
 
-    # Final output
+    # 最终输出
     recommendation: str = ""
     completed_steps: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
 
-# ─────────────────────── Executors ───────────────────────
+# ─────────────────────── 执行器 ───────────────────────
 
 
 class _FanOutExecutor(Executor):
-    """Start node — broadcasts the initial state to the three gatherers."""
+    """起始节点 —— 将初始状态广播给三个采集器。"""
 
     def __init__(self) -> None:
         super().__init__(id="fan-out")
@@ -58,7 +58,7 @@ class _FanOutExecutor(Executor):
 
 
 class _ReviewsExecutor(Executor):
-    """Calls analyze_sentiment and attaches reviews to state."""
+    """调用 analyze_sentiment 并把评论挂到状态上。"""
 
     def __init__(self, tools: dict[str, Any]) -> None:
         super().__init__(id="reviews")
@@ -68,10 +68,9 @@ class _ReviewsExecutor(Executor):
     async def run(self, state: ResearchState, ctx: WorkflowContext[ResearchState]) -> None:
         fn = self._tools.get("analyze_sentiment")
         if fn is None:
-            # A missing tool used to be a silent no-op: no error, no log, no entry
-            # in completed_steps — indistinguishable from a tool that ran and found
-            # nothing. That is how this workflow shipped answering from half its
-            # inputs while looking healthy.
+            # 工具缺失过去是静默的空操作：没有报错、没有日志、completed_steps
+            # 里也没有记录 —— 与"工具跑了但什么也没找到"完全无法区分。这个工作流
+            # 就是这样在上线后只用了一半输入作答，表面上却看起来一切正常。
             state.errors.append("reviews: tool 'analyze_sentiment' is not registered")
             logger.warning("pre_purchase.tool_missing name=analyze_sentiment")
         else:
@@ -85,7 +84,7 @@ class _ReviewsExecutor(Executor):
 
 
 class _StockExecutor(Executor):
-    """Calls check_stock."""
+    """调用 check_stock。"""
 
     def __init__(self, tools: dict[str, Any]) -> None:
         super().__init__(id="stock")
@@ -108,7 +107,7 @@ class _StockExecutor(Executor):
 
 
 class _PriceHistoryExecutor(Executor):
-    """Calls get_price_history over the last 90 days."""
+    """调用 get_price_history，覆盖最近 90 天。"""
 
     def __init__(self, tools: dict[str, Any]) -> None:
         super().__init__(id="price-history")
@@ -131,8 +130,8 @@ class _PriceHistoryExecutor(Executor):
 
 
 class _MergeAndShipExecutor(Executor):
-    """Fan-in barrier: merges the three parallel state snapshots and,
-    if stock is confirmed, runs the shipping estimate sequentially."""
+    """扇入屏障：合并三份并行的状态快照，并且
+    如果库存已确认，则顺序执行运费估算。"""
 
     def __init__(self, tools: dict[str, Any]) -> None:
         super().__init__(id="merge-and-ship")
@@ -147,9 +146,9 @@ class _MergeAndShipExecutor(Executor):
         merged = _merge_states(inputs)
 
         if not merged.stock.get("in_stock"):
-            # Not an error: shipping an out-of-stock item has nothing to estimate.
-            # Recorded so a reader can tell "we did not check" from "we checked and
-            # found nothing", which the recommendation text cannot distinguish.
+            # 这不是错误：缺货商品没什么可估算运费的。
+            # 之所以记录，是为了让读者能区分"我们没检查"与"我们检查了但什么也没找到"，
+            # 因为建议文本本身无法区分这两种情况。
             merged.errors.append("shipping: skipped, product is out of stock")
         else:
             fn = self._tools.get("estimate_shipping")
@@ -171,7 +170,7 @@ class _MergeAndShipExecutor(Executor):
 
 
 class _SynthesisExecutor(Executor):
-    """Terminal node — builds the recommendation string and yields it."""
+    """终端节点 —— 生成建议字符串并输出。"""
 
     def __init__(self) -> None:
         super().__init__(id="synthesis")
@@ -186,11 +185,11 @@ class _SynthesisExecutor(Executor):
         await ctx.yield_output(state)
 
 
-# ─────────────────────── Helpers ───────────────────────
+# ─────────────────────── 辅助函数 ───────────────────────
 
 
 def _merge_states(inputs: list[ResearchState]) -> ResearchState:
-    """Combine three partial ResearchStates into one."""
+    """将三份部分 ResearchState 合并为一份。"""
     merged = ResearchState(product_id=inputs[0].product_id, user_region=inputs[0].user_region)
     for partial in inputs:
         if partial.reviews:
@@ -209,11 +208,11 @@ def _merge_states(inputs: list[ResearchState]) -> ResearchState:
 def _build_recommendation(state: ResearchState) -> str:
     parts: list[str] = []
 
-    # Key names come from the TOOLS, which are the contract. This block read
-    # `sentiment` and `total_reviews`; analyze_sentiment returns
-    # `overall_sentiment` and `average_rating`. Because every line here is
-    # guard-claused, the mismatch produced no error — just a permanently
-    # missing line, on every run, since the workflow was written.
+    # 键名来自 TOOLS，而 TOOLS 才是契约。这段代码过去读的是
+    # `sentiment` 和 `total_reviews`；而 analyze_sentiment 返回的是
+    # `overall_sentiment` 和 `average_rating`。由于这里每一行都有
+    # 守卫条件，这种不匹配没有产生任何错误 —— 只是永久性地少了一行，
+    # 每一次运行都如此，从工作流写下那天起就是。
     if state.reviews.get("overall_sentiment"):
         rating = state.reviews.get("average_rating")
         detail = f" ({rating}/5 avg)" if rating else ""
@@ -229,8 +228,8 @@ def _build_recommendation(state: ResearchState) -> str:
     elif state.price_history.get("trend"):
         parts.append(f"Price trend: {state.price_history['trend']}")
 
-    # Same again: estimate_shipping returns `shipping_options`, not `options`,
-    # and each entry carries `delivery_window` rather than `days`.
+    # 同上：estimate_shipping 返回的是 `shipping_options`，而不是 `options`，
+    # 并且每一项携带的是 `delivery_window` 而不是 `days`。
     if state.shipping.get("shipping_options"):
         cheapest = min(
             state.shipping["shipping_options"],
@@ -244,23 +243,21 @@ def _build_recommendation(state: ResearchState) -> str:
 
     recommendation = " | ".join(parts)
 
-    # Say what could not be checked.
+    # 说明哪些内容没能检查。
     #
-    # Every line above is guard-claused on its data being present, which is
-    # correct — but it means a probe that failed and a probe that found nothing
-    # produce the same output: silence. This workflow shipped returning
-    # "Stock: 348 units available | Price trend: stable" from a four-executor
-    # fan-out, and nothing in the answer said the other two had not run.
+    # 上面每一行都以其数据存在作为守卫条件，这本身没错 —— 但这意味着
+    # 一个失败的探测和一个什么都没找到的探测产出相同的输出：沉默。这个
+    # 工作流曾经在四路扇出的情况下返回
+    # "Stock: 348 units available | Price trend: stable"，而答案中没有任何
+    # 地方说明另外两路根本没有运行。
     #
-    # A short answer that admits what is missing is honest. One that quietly
-    # omits it is the actual user-facing harm, because it reads as a complete
-    # picture.
-    # Checked against the DATA, not completed_steps. A probe can run to
-    # completion and still return nothing usable — an empty dict, or a payload
-    # without the one key the line above needs — and `completed_steps` records
-    # only that it ran. Keying the caveat off that produced the original defect
-    # in a subtler form: all four steps "completed", two contributed nothing,
-    # and the answer was still a confident 48 characters with no caveat.
+    # 一个承认缺失内容的简短答案是诚实的。悄悄省略它的答案才是真正对
+    # 用户造成伤害的，因为它读起来像是一幅完整的图景。
+    # 这里对照的是 DATA，而不是 completed_steps。一个探测可以执行到完成，
+    # 却仍然返回不可用的东西 —— 一个空 dict，或者缺少上面那行所需唯一键
+    # 的载荷 —— 而 `completed_steps` 只记录了它执行过。以此为依据来给出
+    # 提示，会把最初的缺陷以一种更隐蔽的形式重现：四个步骤全都"完成"，
+    # 两个什么都没贡献，而答案仍然是自信的 48 个字符，没有任何提示。
     contributed = {
         "reviews": bool(state.reviews.get("overall_sentiment")),
         "stock": bool(state.stock),
@@ -274,15 +271,14 @@ def _build_recommendation(state: ResearchState) -> str:
     return recommendation
 
 
-# ─────────────────────── Public API ───────────────────────
+# ─────────────────────── 公共 API ───────────────────────
 
 
 class PrePurchaseWorkflow:
-    """MAF-backed parallel research workflow.
+    """基于 MAF 的并行调研工作流。
 
-    Construct once with the tools dict, then call ``execute(state)`` as
-    many times as you like; each call builds a fresh MAF workflow under
-    the covers.
+    用 tools 字典构造一次，之后可以按需多次调用 ``execute(state)``；
+    每次调用在内部都会构建一个全新的 MAF 工作流。
     """
 
     def __init__(self, tools: dict[str, Any]) -> None:
@@ -305,7 +301,7 @@ class PrePurchaseWorkflow:
         )
 
     async def execute(self, state: ResearchState) -> ResearchState:
-        """Run the workflow and return the final populated state."""
+        """运行工作流并返回最终填充完毕的状态。"""
         workflow = self._build_maf_workflow()
 
         final_state = state

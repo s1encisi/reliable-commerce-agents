@@ -31,7 +31,7 @@ import {
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
-// Types
+// 类型
 // ---------------------------------------------------------------------------
 
 interface TierBenefits {
@@ -54,13 +54,19 @@ interface Profile {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// 辅助函数
 // ---------------------------------------------------------------------------
 
 const TIER_COLORS: Record<string, { bg: string; text: string; accent: string }> = {
   bronze: { bg: "bg-orange-50 dark:bg-orange-500/15", text: "text-orange-800 dark:text-orange-300", accent: "#CD7F32" },
   silver: { bg: "bg-muted", text: "text-muted-foreground", accent: "#C0C0C0" },
   gold: { bg: "bg-amber-50 dark:bg-amber-500/15", text: "text-amber-800 dark:text-amber-300", accent: "#FFD700" },
+};
+
+const TIER_LABELS: Record<string, string> = {
+  bronze: "青铜",
+  silver: "白银",
+  gold: "黄金",
 };
 
 const ROLE_COLORS: Record<string, string> = {
@@ -70,23 +76,30 @@ const ROLE_COLORS: Record<string, string> = {
   admin: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300",
 };
 
+const ROLE_LABELS: Record<string, string> = {
+  customer: "普通用户",
+  power_user: "高级会员",
+  seller: "商家",
+  admin: "管理员",
+};
+
 const TIER_THRESHOLDS: Record<string, { next: string; amount: number } | null> = {
-  bronze: { next: "Silver", amount: 1000 },
-  silver: { next: "Gold", amount: 3000 },
+  bronze: { next: "白银", amount: 1000 },
+  silver: { next: "黄金", amount: 3000 },
   gold: null,
 };
 
 function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat("zh-CN", {
     style: "currency",
-    currency: "USD",
+    currency: "CNY",
     minimumFractionDigits: 2,
   }).format(amount);
 }
 
 function formatDate(dateStr: string): string {
   try {
-    return new Date(dateStr).toLocaleDateString("en-US", {
+    return new Date(dateStr).toLocaleDateString("zh-CN", {
       year: "numeric",
       month: "long",
       day: "numeric",
@@ -97,8 +110,9 @@ function formatDate(dateStr: string): string {
 }
 
 function getInitials(name: string): string {
-  return name
-    .split(" ")
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) return (parts[0] ?? "").slice(0, 2);
+  return parts
     .map((part) => part[0])
     .join("")
     .toUpperCase()
@@ -106,14 +120,15 @@ function getInitials(name: string): string {
 }
 
 function formatRole(role: string): string {
-  return role
-    .split("_")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
+  return ROLE_LABELS[role] ?? role;
+}
+
+function formatTier(tier: string): string {
+  return TIER_LABELS[tier] ?? tier;
 }
 
 // ---------------------------------------------------------------------------
-// Page
+// 页面
 // ---------------------------------------------------------------------------
 
 export default function ProfilePage() {
@@ -142,7 +157,7 @@ export default function ProfilePage() {
       const data = await api.getProfile();
       setProfile(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load profile");
+      setError(err instanceof Error ? err.message : "个人资料加载失败");
     } finally {
       setLoading(false);
     }
@@ -154,7 +169,7 @@ export default function ProfilePage() {
       const rows = await api.getUserMemories();
       setMemories(rows ?? []);
     } catch {
-      // non-fatal — memories section just stays empty
+      // 非致命错误 —— 记忆区域保持为空即可
     } finally {
       setMemoriesLoading(false);
     }
@@ -181,7 +196,7 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
+      {/* 页头 */}
       <div className="border-b border-border bg-card">
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
@@ -189,22 +204,22 @@ export default function ProfilePage() {
               <User className="size-5 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">My Profile</h1>
+              <h1 className="text-2xl font-bold text-foreground">个人中心</h1>
               <p className="text-sm text-muted-foreground">
-                Your account details and loyalty status
+                您的账号信息与会员等级
               </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Content */}
+      {/* 内容区 */}
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {loading && (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="size-6 animate-spin text-primary" />
             <span className="ml-2 text-sm text-muted-foreground">
-              Loading profile...
+              正在加载个人资料…
             </span>
           </div>
         )}
@@ -217,11 +232,11 @@ export default function ProfilePage() {
 
         {!loading && !error && profile && (
           <div className="space-y-8">
-            {/* Profile header card */}
+            {/* 资料头卡 */}
             <Card>
               <CardContent className="pt-6">
                 <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
-                  {/* Avatar */}
+                  {/* 头像 */}
                   <div
                     className="flex size-20 shrink-0 items-center justify-center rounded-full text-2xl font-bold text-white"
                     style={{ backgroundColor: TIER_COLORS[profile.loyalty_tier]?.accent ?? "#64748b" }}
@@ -247,20 +262,20 @@ export default function ProfilePage() {
                       {profile.email}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Member since {formatDate(profile.member_since)}
+                      注册于 {formatDate(profile.member_since)}
                     </p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Stats cards */}
+            {/* 统计卡片 */}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {/* Loyalty Tier */}
+              {/* 会员等级 */}
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Loyalty Tier
+                    会员等级
                   </CardTitle>
                   <Crown
                     className="size-4"
@@ -269,19 +284,19 @@ export default function ProfilePage() {
                 </CardHeader>
                 <CardContent>
                   <div
-                    className="text-2xl font-bold capitalize"
+                    className="text-2xl font-bold"
                     style={{ color: TIER_COLORS[profile.loyalty_tier]?.accent ?? "#64748b" }}
                   >
-                    {profile.loyalty_tier}
+                    {formatTier(profile.loyalty_tier)}
                   </div>
                 </CardContent>
               </Card>
 
-              {/* Total Spend */}
+              {/* 累计消费 */}
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Total Spend
+                    累计消费
                   </CardTitle>
                   <DollarSign className="size-4 text-emerald-500" />
                 </CardHeader>
@@ -292,11 +307,11 @@ export default function ProfilePage() {
                 </CardContent>
               </Card>
 
-              {/* Orders */}
+              {/* 订单数 */}
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Orders
+                    订单数
                   </CardTitle>
                   <Package className="size-4 text-sky-500" />
                 </CardHeader>
@@ -307,11 +322,11 @@ export default function ProfilePage() {
                 </CardContent>
               </Card>
 
-              {/* Reviews */}
+              {/* 评价数 */}
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Reviews
+                    评价数
                   </CardTitle>
                   <MessageSquare className="size-4 text-amber-500" />
                 </CardHeader>
@@ -323,7 +338,7 @@ export default function ProfilePage() {
               </Card>
             </div>
 
-            {/* Loyalty Benefits */}
+            {/* 会员权益 */}
             <Card>
               <CardHeader>
                 <div className="flex items-center gap-2">
@@ -332,66 +347,66 @@ export default function ProfilePage() {
                     style={{ color: TIER_COLORS[profile.loyalty_tier]?.accent ?? "#64748b" }}
                   />
                   <CardTitle className="text-base font-semibold text-foreground">
-                    Loyalty Benefits
+                    会员权益
                   </CardTitle>
                   <Badge
-                    className={`${TIER_COLORS[profile.loyalty_tier]?.bg ?? "bg-muted"} ${TIER_COLORS[profile.loyalty_tier]?.text ?? "text-muted-foreground"} border-0 capitalize`}
+                    className={`${TIER_COLORS[profile.loyalty_tier]?.bg ?? "bg-muted"} ${TIER_COLORS[profile.loyalty_tier]?.text ?? "text-muted-foreground"} border-0`}
                   >
-                    {profile.loyalty_tier} Tier
+                    {formatTier(profile.loyalty_tier)}会员
                   </Badge>
                 </div>
               </CardHeader>
               <Separator />
               <CardContent className="pt-6">
                 <div className="space-y-4">
-                  {/* Discount */}
+                  {/* 折扣 */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <DollarSign className="size-4 text-muted-foreground" />
-                      <span>Order Discount</span>
+                      <span>下单折扣</span>
                     </div>
                     <span className="text-sm font-medium text-foreground">
                       {profile.tier_benefits.discount_pct > 0
-                        ? `${profile.tier_benefits.discount_pct}% on all orders`
-                        : "Not available"}
+                        ? `全部订单 ${profile.tier_benefits.discount_pct}% 折扣`
+                        : "暂不可用"}
                     </span>
                   </div>
 
-                  {/* Free Shipping */}
+                  {/* 免运费 */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Package className="size-4 text-muted-foreground" />
-                      <span>Free Shipping</span>
+                      <span>免运费</span>
                     </div>
                     <span className="text-sm font-medium text-foreground">
                       {profile.tier_benefits.free_shipping_threshold != null
-                        ? `Free shipping on orders over ${formatCurrency(profile.tier_benefits.free_shipping_threshold)}`
-                        : "Not available"}
+                        ? `订单满 ${formatCurrency(profile.tier_benefits.free_shipping_threshold)} 免运费`
+                        : "暂不可用"}
                     </span>
                   </div>
 
-                  {/* Priority Support */}
+                  {/* 优先客服 */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Shield className="size-4 text-muted-foreground" />
-                      <span>Priority Support</span>
+                      <span>优先客服</span>
                     </div>
                     <span className="flex items-center gap-1 text-sm font-medium">
                       {profile.tier_benefits.priority_support ? (
                         <>
                           <Check className="size-4 text-emerald-500" />
-                          <span className="text-emerald-700">Included</span>
+                          <span className="text-emerald-700">已包含</span>
                         </>
                       ) : (
                         <>
                           <X className="size-4 text-muted-foreground" />
-                          <span className="text-muted-foreground">Not available</span>
+                          <span className="text-muted-foreground">暂不可用</span>
                         </>
                       )}
                     </span>
                   </div>
 
-                  {/* Tier progress */}
+                  {/* 升级进度 */}
                   {TIER_THRESHOLDS[profile.loyalty_tier] && (
                     <>
                       <Separator />
@@ -399,7 +414,7 @@ export default function ProfilePage() {
                         <TrendingUp className="mt-0.5 size-4 text-primary" />
                         <div className="flex-1">
                           <p className="text-sm font-medium text-muted-foreground">
-                            Progress to {TIER_THRESHOLDS[profile.loyalty_tier]!.next}
+                            升级进度：距 {TIER_THRESHOLDS[profile.loyalty_tier]!.next}
                           </p>
                           {(() => {
                             const threshold = TIER_THRESHOLDS[profile.loyalty_tier]!.amount;
@@ -415,8 +430,8 @@ export default function ProfilePage() {
                                 </div>
                                 <p className="mt-1 text-xs text-muted-foreground">
                                   {remaining > 0
-                                    ? `Spend ${formatCurrency(remaining)} more to reach ${TIER_THRESHOLDS[profile.loyalty_tier]!.next}`
-                                    : `You've qualified for ${TIER_THRESHOLDS[profile.loyalty_tier]!.next}!`}
+                                    ? `再消费 ${formatCurrency(remaining)} 即可升级至 ${TIER_THRESHOLDS[profile.loyalty_tier]!.next}`
+                                    : `您已满足升级至 ${TIER_THRESHOLDS[profile.loyalty_tier]!.next} 的条件！`}
                                 </p>
                               </>
                             );
@@ -429,11 +444,11 @@ export default function ProfilePage() {
               </CardContent>
             </Card>
 
-            {/* Account Details */}
+            {/* 账号信息 */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-base font-semibold text-foreground">
-                  Account Details
+                  账号信息
                 </CardTitle>
               </CardHeader>
               <Separator />
@@ -442,7 +457,7 @@ export default function ProfilePage() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Mail className="size-4 text-muted-foreground" />
-                      <span>Email</span>
+                      <span>邮箱</span>
                     </div>
                     <span className="text-sm font-medium text-foreground">
                       {profile.email}
@@ -452,7 +467,7 @@ export default function ProfilePage() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Shield className="size-4 text-muted-foreground" />
-                      <span>Role</span>
+                      <span>角色</span>
                     </div>
                     <Badge
                       className={`${ROLE_COLORS[profile.role] ?? "bg-muted text-muted-foreground"} border-0`}
@@ -464,7 +479,7 @@ export default function ProfilePage() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <User className="size-4 text-muted-foreground" />
-                      <span>User ID</span>
+                      <span>用户 ID</span>
                     </div>
                     <span className="font-mono text-xs text-muted-foreground">
                       {profile.id.slice(0, 8)}...{profile.id.slice(-4)}
@@ -474,18 +489,18 @@ export default function ProfilePage() {
               </CardContent>
             </Card>
 
-            {/* AI Memory */}
+            {/* AI 记忆 */}
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Brain className="size-5 text-primary" />
                     <CardTitle className="text-base font-semibold text-foreground">
-                      AI Memory
+                      AI 记忆
                     </CardTitle>
                   </div>
                   <span className="text-xs text-muted-foreground">
-                    What the agents remember about you
+                    智能体记住的关于您的信息
                   </span>
                 </div>
               </CardHeader>
@@ -494,13 +509,13 @@ export default function ProfilePage() {
                 {memoriesLoading ? (
                   <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
                     <Loader2 className="size-4 animate-spin" />
-                    <span>Loading memories...</span>
+                    <span>正在加载记忆…</span>
                   </div>
                 ) : memories.length === 0 ? (
                   <div className="rounded-lg border border-dashed border-border py-8 text-center">
                     <Brain className="mx-auto mb-2 size-8 text-muted-foreground/40" />
                     <p className="text-sm text-muted-foreground">
-                      No memories yet. Chat with the product or review agents to build your profile.
+                      暂无记忆。与商品或评价智能体对话即可逐步建立您的画像。
                     </p>
                   </div>
                 ) : (
@@ -513,11 +528,11 @@ export default function ProfilePage() {
                         <div className="flex-1 space-y-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <Badge
-                              className="border-0 bg-sky-100 text-sky-700 text-xs capitalize"
+                              className="border-0 bg-sky-100 text-sky-700 text-xs"
                             >
                               {memory.category}
                             </Badge>
-                            <span className="flex items-center gap-0.5" title={`Importance: ${memory.importance}/10`}>
+                            <span className="flex items-center gap-0.5" title={`重要性：${memory.importance}/10`}>
                               {Array.from({ length: Math.min(5, Math.ceil(memory.importance / 2)) }).map((_, i) => (
                                 <Star key={i} className="size-3 fill-amber-400 text-amber-400" />
                               ))}
@@ -532,7 +547,7 @@ export default function ProfilePage() {
                           onClick={() => handleDeleteMemory(memory.id)}
                           disabled={deletingId === memory.id}
                           className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
-                          title="Forget this memory"
+                          title="删除该记忆"
                         >
                           {deletingId === memory.id ? (
                             <Loader2 className="size-4 animate-spin" />

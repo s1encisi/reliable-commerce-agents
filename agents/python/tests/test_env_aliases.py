@@ -1,13 +1,7 @@
-"""
-Phase 7 Refactor 01 — Env var alignment tests.
+"""环境变量别名与默认值测试。
 
-Verifies:
-- AZURE_OPENAI_KEY and AZURE_OPENAI_API_KEY both bind to the same field
-  (existing name wins when both are set).
-- AZURE_OPENAI_DEPLOYMENT and AZURE_OPENAI_DEPLOYMENT_NAME aliases work
-  the same way.
-- New MAF_* feature flags have the documented safe defaults.
-- AGENT_REGISTRY JSON parsing surfaces a clean error on malformed input.
+覆盖 Azure 密钥和部署名的新旧别名优先级、MAF 功能默认配置以及
+注册表非法 JSON 的明确错误。
 """
 
 from __future__ import annotations
@@ -16,10 +10,9 @@ import importlib
 
 
 def _reload_settings(monkeypatch, **env) -> object:
-    """Reload shared.config with a specific env snapshot so we can verify
-    defaults without depending on the developer's real .env file."""
-    # Clear every Azure / MAF / LLM var the Settings class reads, then set
-    # only what the test wants.
+    """按指定环境快照重载配置，避免依赖开发者真实 .env。"""
+    # 清空 Settings 读取的 Azure、MAF 和 LLM 变量，
+    # 只设置测试需要的值。
     for key in (
         "LLM_PROVIDER",
         "OPENAI_API_KEY",
@@ -44,17 +37,17 @@ def _reload_settings(monkeypatch, **env) -> object:
     for key, value in env.items():
         monkeypatch.setenv(key, value)
 
-    # Also disable the .env file so the dev's config can't leak in.
+    # 同时停用 .env 加载，防止本机配置混入。
     from shared import config as config_mod
 
     importlib.reload(config_mod)
     monkeypatch.setitem(config_mod.Settings.model_config, "env_file", None)
-    # monkeypatch.setattr (not a bare assignment) so the original singleton —
-    # reflecting the real .env — is restored at teardown. A bare
-    # `config_mod.settings = ...` here previously left every later test in
-    # the process reading a credential-stripped, .env-disabled Settings
-    # instance, since `shared.config` is a shared module and this reassigned
-    # its live `settings` attribute with no cleanup.
+    # 使用 monkeypatch.setattr，确保结束时恢复原单例。
+    # 直接赋值不会自动还原，
+    # 可能让后续测试继续使用
+    # 已移除凭据并禁用 .env 的配置，
+    # 因为 shared.config 是共享模块，
+    # 属性修改会跨用例存活。
     new_settings = config_mod.Settings()
     monkeypatch.setattr(config_mod, "settings", new_settings)
     return new_settings
@@ -66,7 +59,7 @@ def test_azure_key_alias_accepts_api_key(monkeypatch) -> None:
 
 
 def test_azure_key_original_name_wins_over_alias(monkeypatch) -> None:
-    """When both names are set, the repo-native AZURE_OPENAI_KEY takes priority."""
+    """两个密钥名同时存在时，AZURE_OPENAI_KEY 优先。"""
     settings = _reload_settings(
         monkeypatch,
         AZURE_OPENAI_KEY="original",

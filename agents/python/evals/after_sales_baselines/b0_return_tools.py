@@ -1,4 +1,4 @@
-"""Shared return tools — eligibility checks, returns, refunds."""
+"""共享退货工具——资格校验、退货、退款。"""
 
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ async def check_return_eligibility(
                 "reason": f"Order must be in 'delivered' status to initiate a return. Current status: {order['status']}.",
             }
 
-        # Check if already returned
+        # 检查是否已经退过货
         existing_return = await conn.fetchrow(
             "SELECT id, status FROM returns WHERE order_id = $1",
             order_id,
@@ -60,7 +60,7 @@ async def check_return_eligibility(
                 "return_id": str(existing_return["id"]),
             }
 
-        # Check 30-day delivery window
+        # 检查 30 天送达窗口
         delivered_entry = await conn.fetchrow(
             """SELECT timestamp FROM order_status_history
                WHERE order_id = $1 AND status = 'delivered'
@@ -82,7 +82,7 @@ async def check_return_eligibility(
                 }
             days_remaining = 30 - days_since
         else:
-            # No delivery timestamp in history — fall back to order created_at
+            # 历史记录中没有送达时间戳——回退到订单的 created_at
             days_remaining = 30
 
         return {
@@ -121,9 +121,9 @@ async def initiate_return(
 
     pool = get_pool()
     async with pool.acquire() as conn:
-        # Lock the order row + the existence-check on `returns` together
-        # so two concurrent agents can't both observe "no return yet"
-        # and create one each.
+        # 把订单行锁与 `returns` 表上的存在性检查放在一起加锁，
+        # 这样两个并发的智能体就无法同时观察到"尚无退货记录"
+        # 而各自创建一条。
         async with conn.transaction():
             order = await conn.fetchrow(
                 """SELECT o.id, o.user_id, o.status, o.total
@@ -201,8 +201,8 @@ async def process_refund(
 
     pool = get_pool()
     async with pool.acquire() as conn:
-        # Lock the return row before re-checking status. Without this a
-        # double-click on "issue refund" can fund the customer twice.
+        # 在重新检查状态之前先锁住退货行。没有这一步，
+        # 对"发放退款"的一次双击就可能给客户重复打款。
         async with conn.transaction():
             ret = await conn.fetchrow(
                 """SELECT r.id, r.order_id, r.status, r.refund_method, r.refund_amount
@@ -249,7 +249,7 @@ async def get_return_status(
 
     pool = get_pool()
     async with pool.acquire() as conn:
-        # Verify order ownership
+        # 校验订单归属
         order_check = await conn.fetchrow(
             """SELECT o.id FROM orders o
                JOIN users u ON o.user_id = u.id

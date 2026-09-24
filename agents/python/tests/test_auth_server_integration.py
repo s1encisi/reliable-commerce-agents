@@ -1,10 +1,7 @@
-"""Full token-endpoint round trips against the real authlib call chain.
+"""真实 authlib 调用链的令牌端点往返测试。
 
-Builds ``OAuthAuthorizationServer`` directly (not through the Starlette
-app + lifespan, which reads the process-wide ``shared.config.settings``
-singleton) against the real testcontainers Postgres, exercising it exactly
-the way ``main.py``'s route does: ``asyncio.to_thread`` + the sync bridge.
-Never mocks the DB; no LLM involved in this phase.
+直接构建 OAuthAuthorizationServer，使用真实测试 PostgreSQL，
+通过 to_thread 和同步桥接调用；绕开读取全局配置的应用生命周期。
 """
 
 from __future__ import annotations
@@ -32,8 +29,7 @@ ISSUER = "http://test-auth-server"
 
 @pytest_asyncio.fixture(autouse=True)
 async def _db_pool(clean_db: asyncpg.Pool, monkeypatch: pytest.MonkeyPatch) -> asyncpg.Pool:
-    """Inject clean_db into shared.db — the grant classes' authenticate_user
-    etc. use the repo-standard global get_pool(), not a passed-in pool."""
+    """把 clean_db 注入共享池，供授权类通过 get_pool 访问。"""
     monkeypatch.setattr(shared_db, "_pool", clean_db)
     return clean_db
 
@@ -72,8 +68,7 @@ async def _seed_user(pool, email, password, role="customer") -> str:
 
 @pytest.fixture(autouse=True)
 async def _bind_loop():
-    """Must be async — runs inside pytest-asyncio's active loop (see
-    ``test_auth_server_grants.py`` for why a sync fixture can't do this)."""
+    """必须使用异步夹具，在 pytest-asyncio 活动循环内执行。"""
     _bridge.bind_main_loop()
 
 
@@ -112,7 +107,7 @@ class TestClientCredentialsGrant:
 
         decoded = joserfc_jwt.decode(body["access_token"], signing_key)
         assert decoded.header["typ"] == "at+jwt"
-        assert decoded.header["kid"]  # kid is present so a multi-key JWKS can pick the right one
+        assert decoded.header["kid"]  # 响应需包含 kid，让多个 JWKS 密钥可被正确选择。
         claims = decoded.claims
         assert claims["iss"] == ISSUER
         assert claims["sub"] == "product-discovery"
@@ -149,8 +144,7 @@ class TestClientCredentialsGrant:
         assert body["error"] == "unauthorized_client"
 
     async def test_out_of_scope_request_is_trimmed_not_rejected(self, clean_db, server):
-        """Requesting a scope the client isn't allowed intersects down,
-        per RFC 6749 — it does not error, per this AS's Client.get_allowed_scope."""
+        """本服务器按 Client.get_allowed_scope 取请求范围与许可范围的交集。"""
         srv, signing_key = server
         await _seed_client(clean_db, "narrow", "sekrit", ["client_credentials"], ["agent:invoke"], ["ecommerce-agents"])
         await srv.client_store.load(clean_db)
@@ -193,15 +187,15 @@ class TestResourceOwnerPasswordCredentialsGrant:
         assert status == 200
         assert "refresh_token" in body
         decoded = joserfc_jwt.decode(body["access_token"], signing_key)
-        # ~18 orchestrator routes read user_id straight off the token payload
-        # (a real gap caught by live Docker verification, not by unit tests
-        # alone) — must be the `users.id` UUID, not the OAuth `sub` (email).
+        # 编排器路由直接读取令牌中的 user_id，
+        # 该字段应通过集成链路验证，
+        # 值必须是 users.id 的 UUID，不能用 sub 邮箱替代。
         assert decoded.claims["user_id"] == user_id
         assert decoded.claims["sub"] == "alice@example.com"
         assert decoded.claims["role"] == "admin"
         assert decoded.claims["aud"] == ["ecommerce-orchestrator"]
 
-        # the refresh token was actually persisted, hashed
+        # 刷新令牌已实际保存为哈希。
         row = await clean_db.fetchrow(
             "SELECT subject FROM oauth_tokens WHERE token_hash = $1", hash_token(body["refresh_token"])
         )
@@ -250,8 +244,7 @@ class TestRefreshTokenGrant:
         return body["refresh_token"]
 
     async def test_refresh_does_not_rotate_the_token(self, clean_db, server):
-        """Correction #6 — the browser's single stored refresh token must
-        keep working; a rotating grant would break the frontend contract."""
+        """浏览器保存的单个刷新令牌必须持续有效；轮换会破坏现有前端契约。"""
         srv, signing_key = server
         refresh_token = await self._issue_initial_tokens(clean_db, srv)
 
@@ -262,11 +255,11 @@ class TestRefreshTokenGrant:
         )
 
         assert status == 200
-        assert "refresh_token" not in body  # non-rotating: no new one issued
+        assert "refresh_token" not in body  # 不轮换：不会签发新刷新令牌。
         decoded = joserfc_jwt.decode(body["access_token"], signing_key)
         assert decoded.claims["sub"] == "carol@example.com"
 
-        # the same refresh token must still validate a second time
+        # 同一刷新令牌第二次仍应通过校验。
         status2, body2, _headers2 = await asyncio.to_thread(
             srv.handle_token_request,
             {"grant_type": "refresh_token", "refresh_token": refresh_token},

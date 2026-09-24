@@ -1,11 +1,11 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Question or idea
-    url: https://github.com/nitin27may/e-commerce-agents/discussions
-    about: For anything that is not a bug report or a concrete feature request — start a discussion.
-  - name: Documentation
-    url: https://nitinksingh.com/e-commerce-agents/
-    about: Concepts, all 34 tutorial chapters, and the architecture reference, with every diagram rendered.
-  - name: Security vulnerability
-    url: https://github.com/nitin27may/e-commerce-agents/security/advisories/new
-    about: Report privately. Please do not open a public issue.
+  - name: 提问或想法
+    url: https://github.com/s1encisi/reliable-commerce-agents/discussions
+    about: 任何不属于缺陷报告或具体功能建议的内容 —— 发起一个讨论。
+  - name: 文档
+    url: https://s1encisi.github.io/reliable-commerce-agents/
+    about: 概念、全部 34 个教程章节与架构参考，所有配图均已渲染。
+  - name: 安全漏洞
+    url: https://github.com/s1encisi/reliable-commerce-agents/security/advisories/new
+    about: 请私下报告。不要开公开 issue。

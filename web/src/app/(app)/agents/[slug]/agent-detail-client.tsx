@@ -11,6 +11,7 @@ import { ToolGrid } from "@/components/agents/tool-grid";
 import { ExamplePrompts } from "@/components/agents/example-prompts";
 import { AgentStatsStrip } from "@/components/agents/agent-stats-strip";
 
+/** 单个智能体的运行时统计，对应后端 `getAgentStats()` 返回的一行。 */
 type AgentStat = {
   agent_name: string;
   request_count: number;
@@ -22,6 +23,13 @@ interface Props {
   slug: string;
 }
 
+/**
+ * 智能体详情页的客户端外壳。
+ *
+ * 负责拉取该智能体的运行时统计（请求数、平均耗时、Token 消耗），并把
+ * 首屏区块组装起来；静态资料（简介、工具清单、示例提问）来自 `@/lib/agents`，
+ * 不依赖网络。
+ */
 export function AgentDetailClient({ slug }: Props) {
   const reduce = useReducedMotion();
   const [stats, setStats] = useState<AgentStat[] | null>(null);

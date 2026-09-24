@@ -1,11 +1,9 @@
-"""The authlib ``AuthorizationServer`` Starlette bridge.
+"""将 authlib.AuthorizationServer 桥接到 Starlette。
 
-authlib ships Flask/Django integrations but no Starlette/FastAPI one, so
-this implements the small required surface directly: ``create_oauth2_request``,
-``create_json_request``, ``handle_response``, ``query_client``, and
-``save_token``. The token endpoint itself (parsing the incoming Starlette
-request, running this synchronous call chain in a worker thread) lives in
-``main.py`` — this module only needs a plain, already-parsed request.
+authlib 没有内置 Starlette/FastAPI 集成，因此这里实现其所需的
+create_oauth2_request、create_json_request、handle_response、query_client
+及 save_token 接口。main.py 负责解析请求并在线程中执行同步调用链；
+本模块接收的是已经解析的普通请求对象。
 """
 
 from __future__ import annotations
@@ -31,13 +29,11 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class SimpleRequest:
-    """Plain, already-parsed request handed to authlib's sync call chain.
+    """传给 authlib 同步调用链的已解析请求。
 
-    Built from the real Starlette request *before* entering synchronous
-    code, since authlib never awaits anything. ``headers`` must be a
-    case-insensitive mapping (e.g. ``httpx.Headers``) — authlib's client
-    auth extraction looks up ``Authorization`` with that exact case, and
-    ASGI delivers header names lowercase.
+    必须在进入同步代码前构建，因为 authlib 不等待异步操作。headers 必须
+    不区分大小写，例如 httpx.Headers：ASGI 提供小写键，而 authlib 按
+    Authorization 取值。
     """
 
     method: str
@@ -72,21 +68,21 @@ class OAuthAuthorizationServer(_BaseAuthorizationServer):
         self.register_grant(ResourceOwnerPasswordCredentialsGrant)
         self.register_grant(RefreshTokenGrant)
 
-    # ── framework integration ───────────────────────────────────────
+    # 框架集成
 
     def query_client(self, client_id: str):
         return self.client_store.get(client_id)
 
     def send_signal(self, name: str, *args, **kwargs) -> None:
-        # authlib's hook for a framework signal system (e.g. Flask's
-        # blinker). Nothing subscribes here, so this is intentionally a
-        # no-op rather than the base class's NotImplementedError.
+        # 这是 authlib 对接框架信号系统的钩子，例如 Flask 的 blinker。
+        # 本项目没有订阅者，因此这里有意保持空操作，
+        # 避免触发基类的 NotImplementedError。
         return None
 
     def save_token(self, token: dict, request: OAuth2Request) -> None:
         refresh_token = token.get("refresh_token")
         if not refresh_token:
-            return  # client_credentials, and non-rotating refresh_token grants, mint none
+            return  # client_credentials 和不轮换的 refresh_token 授权不会生成新刷新令牌。
 
         client = request.client
         user = getattr(request, "user", None)
@@ -105,26 +101,26 @@ class OAuthAuthorizationServer(_BaseAuthorizationServer):
                 expires_at,
             )
 
-        # save_token runs inside the same worker thread as the rest of the
-        # synchronous authlib call chain — bridge back to the main loop
-        # exactly like the grant callbacks do.
+        # save_token 与 authlib 同步调用链的其他部分在同一个工作线程运行。
+        # 因此需要桥接回主事件循环，
+        # 方式与授权回调一致。
         run_coro_sync(_persist())
 
     def create_oauth2_request(self, request: SimpleRequest) -> OAuth2Request:
         req = OAuth2Request(request.method, request.uri, headers=request.headers)
-        # ``form`` needs the raw dict for grants that read it directly
-        # (e.g. RefreshTokenGrant reads request.form.get("refresh_token"));
-        # set it post-construction to avoid the constructor's deprecated
-        # ``body=`` kwarg path.
+        # 部分授权处理器会直接读取 form，所以它必须保留原始字典。
+        # 例如 RefreshTokenGrant 会读取 request.form.get("refresh_token")。
+        # 在对象构造后再设置它，
+        # 避免使用已废弃的 body= 构造参数。
         req._body = request.form
         req.payload = BasicOAuth2Payload(request.form)
         return req
 
     def create_json_request(self, request: SimpleRequest) -> JsonRequest:
-        # Unused today — this AS only exposes the token endpoint (no
-        # dynamic client registration/introspection), which goes through
-        # create_oauth2_request. Kept minimal but functional for when a
-        # future endpoint needs it.
+        # 此适配接口当前未被令牌端点使用，
+        # 令牌端点经过 create_oauth2_request。
+        # 保留最小可用实现，
+        # 供后续需要 JSON 请求适配的端点复用。
         class _DictPayload:
             def __init__(self, data: dict):
                 self._data = data
@@ -140,9 +136,9 @@ class OAuthAuthorizationServer(_BaseAuthorizationServer):
     def handle_response(self, status: int, body, headers):
         return status, body, headers
 
-    # ── entry point for main.py ─────────────────────────────────────
+    # main.py 使用的入口
 
     def handle_token_request(self, form: dict, headers: object, uri: str = "/oauth/token"):
-        """Synchronous entry point — call via ``asyncio.to_thread`` from the route."""
+        """同步入口；路由应通过 asyncio.to_thread 调用。"""
         request = SimpleRequest(method="POST", uri=uri, form=form, headers=headers)
         return self.create_token_response(request)

@@ -20,9 +20,7 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { pageEnter, listStagger, listItem, instant } from "@/lib/motion";
 
-const REPO_URL = "https://github.com/nitin27may/e-commerce-agents";
-const SERIES_URL =
-  "https://nitinksingh.com/posts/building-a-multi-agent-e-commerce-platform-the-complete-guide/";
+const REPO_URL = "https://github.com/s1encisi/reliable-commerce-agents";
 
 interface AgentCard {
   name: string;
@@ -31,20 +29,20 @@ interface AgentCard {
 }
 
 const AGENTS: AgentCard[] = [
-  { name: "Product Discovery", blurb: "Semantic search & recommendations over a pgvector catalog.", icon: ShoppingBag },
-  { name: "Order Management", blurb: "Place, track, cancel, and return orders end to end.", icon: Package },
-  { name: "Pricing & Promotions", blurb: "Live deals, coupons, and price breakdowns.", icon: BadgePercent },
-  { name: "Reviews & Sentiment", blurb: "Summarized reviews and sentiment signals.", icon: Star },
-  { name: "Inventory & Fulfillment", blurb: "Stock checks and shipping/fulfillment status.", icon: Boxes },
-  { name: "Customer Support", blurb: "Help, escalation, and account questions.", icon: LifeBuoy },
+  { name: "商品发现", blurb: "基于 pgvector 商品库的语义检索与推荐。", icon: ShoppingBag },
+  { name: "订单管理", blurb: "下单、跟踪、取消与退货全流程处理。", icon: Package },
+  { name: "定价与促销", blurb: "实时优惠、优惠券与价格明细。", icon: BadgePercent },
+  { name: "评论与情感分析", blurb: "评论摘要与情感倾向信号。", icon: Star },
+  { name: "库存与履约", blurb: "库存查询与发货、履约状态。", icon: Boxes },
+  { name: "客户支持", blurb: "帮助、升级处理与账户问题。", icon: LifeBuoy },
 ];
 
 const STACK = [
   "Microsoft Agent Framework",
-  "A2A protocol",
+  "A2A 协议",
   "Next.js 16",
   "PostgreSQL + pgvector",
-  "OpenTelemetry → Aspire",
+  "OpenTelemetry → Jaeger",
 ];
 
 export function Landing() {
@@ -52,14 +50,14 @@ export function Landing() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted">
-      {/* Nav */}
+      {/* 顶部导航 */}
       <header className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5 sm:px-6">
         <div className="flex items-center gap-2">
           <div className="flex size-8 items-center justify-center rounded-lg bg-primary">
             <Store className="size-4 text-primary-foreground" />
           </div>
           <span className="text-sm font-semibold tracking-tight">
-            E-Commerce Agents
+            可靠电商多智能体平台
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -69,12 +67,12 @@ export function Landing() {
             <ArrowRight className="size-3.5" />
           </Button>
           <Button render={<Link href="/login" />} size="sm">
-            Sign in
+            登录
           </Button>
         </div>
       </header>
 
-      {/* Hero */}
+      {/* 主视觉 */}
       <motion.section
         variants={reduce ? instant : pageEnter}
         initial="hidden"
@@ -83,27 +81,25 @@ export function Landing() {
       >
         <span className="inline-flex items-center gap-1.5 rounded-full border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
           <Cpu className="size-3.5 text-primary" />
-          6 specialist agents · A2A orchestration
+          6 个专业智能体 · A2A 编排
         </span>
         <h1 className="mt-5 text-balance text-4xl font-bold tracking-tight sm:text-5xl">
-          A multi-agent platform for{" "}
-          <span className="text-primary">e-commerce</span>
+          面向<span className="text-primary">电商业务</span>的多智能体平台
         </h1>
         <p className="mx-auto mt-4 max-w-xl text-pretty text-base text-muted-foreground sm:text-lg">
-          Product discovery, orders, pricing, reviews, inventory, and support —
-          specialist AI agents that collaborate over the A2A protocol, built on
-          the Microsoft Agent Framework.
+          商品发现、订单、定价、评论、库存与客服 —— 专业智能体通过 A2A 协议协作，
+          基于 Microsoft Agent Framework 构建。
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
           <Button render={<Link href="/shop" />} size="lg">
-            Try the demo <ArrowRight className="size-4" />
+            立即体验 <ArrowRight className="size-4" />
           </Button>
           <Button
-            render={<Link href={SERIES_URL} />}
+            render={<Link href={REPO_URL} />}
             variant="outline"
             size="lg"
           >
-            Read the series
+            查看源码
           </Button>
         </div>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
@@ -118,14 +114,14 @@ export function Landing() {
         </div>
       </motion.section>
 
-      {/* Architecture flow */}
+      {/* 架构链路 */}
       <section className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
         <div className="grid items-stretch gap-3 sm:grid-cols-4">
           {[
-            { label: "Next.js Frontend", sub: "Chat + storefront", icon: Store },
-            { label: "Orchestrator", sub: "Routes via A2A", icon: Workflow },
-            { label: "6 Specialist Agents", sub: "Domain tools", icon: Cpu },
-            { label: "PostgreSQL + Redis", sub: "pgvector + cache", icon: Database },
+            { label: "Next.js 前端", sub: "对话 + 商城", icon: Store },
+            { label: "编排器", sub: "经 A2A 路由", icon: Workflow },
+            { label: "6 个专业智能体", sub: "领域工具", icon: Cpu },
+            { label: "PostgreSQL + Redis", sub: "pgvector + 缓存", icon: Database },
           ].map((n, i) => (
             <div key={n.label} className="relative">
               <div className="flex h-full flex-col items-center rounded-xl bg-card p-4 text-center ring-1 ring-foreground/10">
@@ -141,13 +137,13 @@ export function Landing() {
         </div>
       </section>
 
-      {/* Agents grid */}
+      {/* 智能体一览 */}
       <section className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
         <h2 className="text-center text-xl font-bold tracking-tight">
-          Meet the agents
+          认识这些智能体
         </h2>
         <p className="mt-1 text-center text-sm text-muted-foreground">
-          Each is an independent microservice with its own tools and prompt.
+          每个都是独立微服务，拥有自己的工具与提示词。
         </p>
         <motion.div
           variants={reduce ? undefined : listStagger}
@@ -171,26 +167,25 @@ export function Landing() {
         </motion.div>
       </section>
 
-      {/* CTA */}
+      {/* 行动号召 */}
       <section className="mx-auto max-w-3xl px-4 py-12 text-center sm:px-6">
         <div className="rounded-2xl bg-card p-8 ring-1 ring-foreground/10">
           <h2 className="text-xl font-bold tracking-tight">
-            See the agents collaborate
+            看看智能体如何协作
           </h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-            Sign in with a seeded demo account and ask the concierge to find a
-            product, track an order, or apply a coupon.
+            使用预置的演示账号登录，让智能助手帮你找商品、查订单或使用优惠券。
           </p>
           <Button render={<Link href="/shop" />} size="lg" className="mt-5">
-            Launch the demo <ArrowRight className="size-4" />
+            启动演示 <ArrowRight className="size-4" />
           </Button>
         </div>
       </section>
 
       <footer className="mx-auto max-w-6xl px-4 py-8 text-center text-xs text-muted-foreground sm:px-6">
-        Companion demo for the AI article series on{" "}
-        <Link href="https://nitinksingh.com" className="text-primary hover:underline">
-          nitinksingh.com
+        可靠电商多智能体平台 ·{" "}
+        <Link href={REPO_URL} className="text-primary hover:underline">
+          开源仓库
         </Link>
       </footer>
     </div>

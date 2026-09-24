@@ -323,7 +323,7 @@ CREATE TABLE usage_logs (
     user_id UUID REFERENCES users(id),
     agent_name VARCHAR(100) NOT NULL,
     session_id UUID,
-    trace_id VARCHAR(64),               -- OTel trace_id for correlation with Aspire
+    trace_id VARCHAR(64),               -- OTel trace_id，用于关联 Jaeger 追踪
     input_summary TEXT,
     tokens_in INTEGER DEFAULT 0,
     tokens_out INTEGER DEFAULT 0,
@@ -453,11 +453,10 @@ CREATE TABLE IF NOT EXISTS workflow_checkpoints (
     payload        JSONB NOT NULL,           -- encoded WorkflowCheckpoint dict
     usage_log_id   UUID REFERENCES usage_logs(id) ON DELETE SET NULL,
     created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    -- The three columns below exist for MAF .NET's checkpoint store, which keys on
-    -- (session_id, checkpoint_id) rather than an id alone. Without session_id a .NET
-    -- resume cannot even construct the lookup key. All three are nullable/defaulted, so
-    -- the Python stack — which INSERTs an explicit column list — is unaffected and the
-    -- two stacks keep sharing this table.
+    -- 以下列保留既有检查点数据的会话、父节点与顺序信息。
+    -- session_id 可与 checkpoint_id 一同用于定位检查点。
+    -- 可空列和默认值兼容 Python 使用显式列清单的 INSERT。
+    -- 本次仅更新说明，保留现有数据库结构与历史数据。
     session_id            TEXT,
     parent_checkpoint_id  UUID REFERENCES workflow_checkpoints(checkpoint_id) ON DELETE SET NULL,
     -- Ordering is load-bearing, not cosmetic: MAF resumes the checkpoint its index
@@ -595,3 +594,37 @@ CREATE TABLE IF NOT EXISTS after_sales_operation_events (
 
 COMMIT;
 -- END M3 MIGRATION 001
+
+-- 增量迁移：不删除或重建任何业务数据。
+CREATE TABLE IF NOT EXISTS agent_tasks (
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id),
+    goal TEXT NOT NULL,
+    constraints JSONB NOT NULL DEFAULT '[]',
+    plan JSONB,
+    results JSONB NOT NULL DEFAULT '{}',
+    status TEXT NOT NULL DEFAULT 'pending',
+    revision INTEGER NOT NULL DEFAULT 0,
+    planning_attempts INTEGER NOT NULL DEFAULT 0,
+    active_step TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CHECK (planning_attempts BETWEEN 0 AND 2)
+);
+CREATE INDEX IF NOT EXISTS idx_agent_tasks_user_updated ON agent_tasks(user_id, updated_at DESC);
+
+ALTER TABLE agent_memories ADD COLUMN IF NOT EXISTS source_kind TEXT NOT NULL DEFAULT 'legacy_unverified';
+ALTER TABLE agent_memories ADD COLUMN IF NOT EXISTS source_ref TEXT;
+ALTER TABLE agent_memories ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMPTZ;
+
+
+CREATE TABLE IF NOT EXISTS conversation_contexts (
+    conversation_id UUID PRIMARY KEY REFERENCES conversations(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id),
+    snapshot JSONB NOT NULL,
+    revision BIGINT NOT NULL DEFAULT 1,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_conversation_contexts_user ON conversation_contexts(user_id);
+
+ALTER TABLE agent_tasks ADD COLUMN IF NOT EXISTS receipt_history JSONB NOT NULL DEFAULT '[]';

@@ -1,13 +1,7 @@
-"""Orchestrator /api/auth/login and /api/auth/refresh — AUTH_MODE=oauth broker.
+"""oauth 模式登录与刷新代理测试。
 
-Local-mode behavior is unchanged (untouched code path). These tests cover the
-new relay path: the orchestrator brokers ROPC/refresh_token grants against
-the auth-server rather than minting HS256 tokens itself.
-``shared.oauth.service_client.request_token`` is monkeypatched (this is an
-httpx call to a separate service, not our DB/LLM) — the real broker-to-AS
-round trip over HTTP is exercised in ``test_auth_server_integration.py``;
-this file is about the route's own branching and response-shape contract.
-Real Postgres via ``clean_db`` for the `users` row lookup.
+替换授权服务器 HTTP 调用，验证路由分支和响应契约；用户查询使用
+真实 PostgreSQL。本地 HS256 行为保持原路径。
 """
 
 from __future__ import annotations
@@ -111,7 +105,7 @@ async def test_refresh_relays_and_returns_access_token_only(monkeypatch):
     assert resp.status_code == 200
     body = resp.json()
     assert body == {"access_token": "new-access-token"}
-    assert "refresh_token" not in body  # non-rotating: never hand back a new one
+    assert "refresh_token" not in body  # 不轮换，不返回新刷新令牌。
 
 
 async def test_refresh_rejects_invalid_token(monkeypatch):

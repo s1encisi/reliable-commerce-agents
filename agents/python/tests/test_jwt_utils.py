@@ -1,4 +1,4 @@
-"""Unit tests for shared.jwt_utils (Track D). Pure crypto — no DB/LLM."""
+"""JWT 工具纯密码学测试，无数据库或模型。"""
 
 from __future__ import annotations
 

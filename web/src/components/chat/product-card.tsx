@@ -24,13 +24,12 @@ interface ProductData {
   on_sale?: boolean;
 }
 
-// Reuses the app's existing categorical chart palette (chart-1..5, already
-// OKLCH design tokens) rather than one-off Tailwind color literals — a
-// category tag is exactly the "distinguish N categorical values" case those
-// tokens exist for. `books` reuses the Stage 1 `warning` token instead
-// (matching amber hue, and there's no 5th chart slot to spare); `sports`
-// drifts from its old literal orange since no chart slot is orange-hued —
-// disclosed, not a like-for-like recolor.
+// 复用应用已有的分类图表配色（chart-1..5，本身已是 OKLCH 设计令牌），
+// 而不是另写一次性的 Tailwind 颜色字面量——分类标签正是这些令牌存在的
+// 场景：「区分 N 个分类取值」。`books` 改用第一阶段的 `warning` 令牌
+// （色相接近琥珀色，且没有第 5 个图表槽位可用）；`sports` 与其原先的
+// 橙色字面量有所偏离，因为没有任何图表槽位是橙色系——此处如实说明，
+// 并非等价替换。
 const CATEGORY_COLORS: Record<string, string> = {
   electronics: "bg-chart-1/10 text-chart-1 border-chart-1/30 dark:bg-chart-1/15",
   clothing: "bg-chart-3/10 text-chart-3 border-chart-3/30 dark:bg-chart-3/15",
@@ -45,14 +44,12 @@ interface ChatProductCardProps {
 }
 
 /**
- * Product/order ids are Postgres UUIDs. The LLM composing a card block is
- * instructed to copy the real id from the tool result, but it occasionally
- * fabricates a name-derived slug ("sony-wh1000xm5-001") instead. Those ids
- * 404 against /api/cart/items and /products/[id], which surfaced as an
- * "Add to Cart" button that only ever flipped to "Retry". Treat anything
- * that isn't a UUID as no id at all: the card still renders (with Compare /
- * Reviews, which work off the name), it just doesn't offer actions that are
- * guaranteed to fail.
+ * 商品/订单 id 是 Postgres UUID。负责生成卡片的 LLM 已被要求从工具返回
+ * 结果中原样复制真实 id，但它偶尔会自己编一个由名称派生的 slug
+ * （如 "sony-wh1000xm5-001"）。这类 id 请求 /api/cart/items 与
+ * /products/[id] 都会 404，表现为「加入购物车」按钮只会变成「重试」。
+ * 因此把任何不是 UUID 的值一律视为没有 id：卡片照常渲染（仍可对比 /
+ * 查看评论，这两项靠名称工作），只是不再提供注定失败的操作按钮。
  */
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -68,8 +65,8 @@ export function ChatProductCard({ data, onAction }: ChatProductCardProps) {
 
   const productId = data.id && UUID_RE.test(data.id) ? data.id : undefined;
 
-  // "Added" derives from cart state so it persists across re-renders and
-  // reflects reality (e.g. after navigating back to the conversation).
+  // 「已加入」由购物车状态推导而来，因此能跨重新渲染保持，并反映真实
+  // 情况（例如从别的页面返回该会话之后）。
   const inCart =
     !!productId && !!cart?.items?.some((i) => i.product_id === productId);
   const showAdded = inCart || optimisticAdded;
@@ -85,9 +82,9 @@ export function ChatProductCard({ data, onAction }: ChatProductCardProps) {
 
   return (
     <div className="rounded-xl border border-border bg-card shadow-sm max-w-md overflow-hidden transition-shadow hover:shadow-md">
-      {/* Top: image + info */}
+      {/* 上部：图片 + 信息 */}
       <div className="flex gap-3 p-3 pb-2">
-        {/* Image */}
+        {/* 图片 */}
         <div className="size-20 shrink-0 rounded-lg overflow-hidden bg-muted flex items-center justify-center">
           {productId ? (
             <img
@@ -101,7 +98,7 @@ export function ChatProductCard({ data, onAction }: ChatProductCardProps) {
           )}
         </div>
 
-        {/* Info */}
+        {/* 信息 */}
         <div className="flex flex-1 flex-col gap-0.5 min-w-0">
           <h4 className="text-sm font-semibold text-foreground line-clamp-2 leading-tight">
             {data.name}
@@ -127,26 +124,26 @@ export function ChatProductCard({ data, onAction }: ChatProductCardProps) {
             </p>
           )}
 
-          {/* Price */}
+          {/* 价格 */}
           <div className="flex items-center gap-1.5 mt-auto pt-0.5">
             {data.price != null && (
               <span className="text-base font-bold text-primary">
-                ${data.price.toFixed(2)}
+                ¥{data.price.toFixed(2)}
               </span>
             )}
             {hasDiscount && (
               <span className="text-xs text-muted-foreground line-through">
-                ${data.original_price!.toFixed(2)}
+                ¥{data.original_price!.toFixed(2)}
               </span>
             )}
             {hasDiscount && discountPct > 0 && (
               <Badge className="bg-destructive text-white border-0 text-[9px] px-1.5 py-0">
-                {discountPct}% OFF
+                省 {discountPct}%
               </Badge>
             )}
           </div>
 
-          {/* Rating */}
+          {/* 评分 */}
           {data.rating != null && (
             <div className="flex items-center gap-1">
               <div className="flex items-center">
@@ -170,7 +167,7 @@ export function ChatProductCard({ data, onAction }: ChatProductCardProps) {
         </div>
       </div>
 
-      {/* Action buttons */}
+      {/* 操作按钮 */}
       {(productId || onAction) && (
         <div className="flex items-center gap-2 border-t border-border px-3 py-2">
           {productId && !isAuthenticated && (
@@ -184,7 +181,7 @@ export function ChatProductCard({ data, onAction }: ChatProductCardProps) {
               }}
             >
               <LogIn className="mr-1 size-3" />
-              Sign in to buy
+              登录后购买
             </Button>
           )}
           {productId && isAuthenticated && (
@@ -201,16 +198,16 @@ export function ChatProductCard({ data, onAction }: ChatProductCardProps) {
               onClick={(e) => {
                 e.stopPropagation();
                 if (!productId) return;
-                // Optimistic — flip UI immediately, fire the network call
-                // in the background so the chat stays responsive.
+                // 乐观更新——先立即切换 UI，网络请求放到后台，
+                // 保证对话界面保持响应。
                 setError(false);
                 setOptimisticAdded(true);
                 addItem(productId)
                   .then(() => {
-                    // Mirror the typed-message flow: ask the chat to show
-                    // the updated cart so a checkout card renders.
+                    // 与手动输入消息的流程保持一致：让对话展示更新后的
+                    // 购物车，从而渲染出结算卡片。
                     if (onAction && data.name) {
-                      onAction(`I just added ${data.name} to my cart. Show me my updated cart.`);
+                      onAction(`我刚把 ${data.name} 加入购物车，给我看看更新后的购物车。`);
                     }
                   })
                   .catch(() => {
@@ -227,7 +224,7 @@ export function ChatProductCard({ data, onAction }: ChatProductCardProps) {
               ) : (
                 <ShoppingCart className="mr-1 size-3" />
               )}
-              {error ? "Retry" : showAdded ? "Added" : "Add to Cart"}
+              {error ? "重试" : showAdded ? "已加入" : "加入购物车"}
             </Button>
           )}
           {productId && (
@@ -238,7 +235,7 @@ export function ChatProductCard({ data, onAction }: ChatProductCardProps) {
             >
               <Button size="sm" variant="outline" className="h-7 text-xs">
                 <ExternalLink className="mr-1 size-3" />
-                Details
+                详情
               </Button>
             </Link>
           )}
@@ -249,11 +246,11 @@ export function ChatProductCard({ data, onAction }: ChatProductCardProps) {
               className="h-7 text-xs"
               onClick={(e) => {
                 e.stopPropagation();
-                onAction(`Compare the ${data.name} with similar products`);
+                onAction(`把 ${data.name} 和同类商品对比一下`);
               }}
             >
               <GitCompare className="mr-1 size-3" />
-              Compare
+              对比
             </Button>
           )}
           {onAction && data.name && (
@@ -263,11 +260,11 @@ export function ChatProductCard({ data, onAction }: ChatProductCardProps) {
               className="h-7 text-xs"
               onClick={(e) => {
                 e.stopPropagation();
-                onAction(`What are the reviews like for the ${data.name}?`);
+                onAction(`${data.name} 的评论怎么样？`);
               }}
             >
               <MessageSquare className="mr-1 size-3" />
-              Reviews
+              查看评论
             </Button>
           )}
         </div>

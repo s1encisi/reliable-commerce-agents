@@ -1,8 +1,8 @@
-"""One return transaction shared by tools, REST, approval execution and workflows.
+"""由工具、REST、审批执行与工作流共用的同一个退货事务。
 
-Always lock the owned order before checking existing returns and delivery evidence.
-No model/network calls or human waits occur while the transaction holds the lock.
-Operation IDs and recovery across a lost COMMIT response are the subsequent M3 work.
+在检查既有退货记录与送达证据之前，始终先锁定所属订单。
+事务持有锁期间不会发生任何模型/网络调用，也不会等待人工。
+操作 ID 以及丢失 COMMIT 响应后的恢复属于后续 M3 的工作。
 """
 
 from datetime import UTC, datetime
@@ -55,16 +55,16 @@ async def _load_snapshot(conn: asyncpg.Connection, order_id: UUID, email: str, *
         return None
     existing = await conn.fetchval("SELECT id FROM returns WHERE order_id = $1 LIMIT 1", order_id)
     if lock:
-        # Protect existing evidence against concurrent corrections/deletions.
-        # New child rows also need the FK's key-share lock on our locked order.
+        # 保护既有证据，避免并发的更正/删除。
+        # 新增的子行也需要在我们已锁定的订单上取得外键的键共享锁。
         history = await conn.fetch(
             "SELECT status, timestamp FROM order_status_history WHERE order_id = $1 FOR SHARE",
             order_id,
         )
         events = [row for row in history if row["status"] == "delivered"]
     else:
-        # Two distinct values suffice to establish disagreement. NULL must not
-        # be hidden by a valid event when determining eligibility.
+        # 两个不同的值就足以确立"记录相互矛盾"。在判定资格时，
+        # NULL 不能被某个有效事件掩盖。
         events = await conn.fetch(
             """SELECT DISTINCT timestamp FROM order_status_history
                WHERE order_id = $1 AND status = 'delivered' ORDER BY timestamp NULLS FIRST LIMIT 2""",
@@ -125,7 +125,7 @@ async def check_eligibility(order_id: str) -> dict[str, Any]:
 
 
 async def prepare_approval_input(tool_input: dict[str, Any], email: str) -> dict[str, Any]:
-    """Validate before queueing and bind the immutable server-stored request."""
+    """在入队之前先校验，并绑定服务端存储的不可变请求。"""
     request = InitiateReturnInput.model_validate(tool_input)
     async with get_pool().acquire() as conn:
         snapshot = await _load_snapshot(conn, request.order_id, email, lock=False)
@@ -144,8 +144,8 @@ async def _commit_return(request: InitiateReturnInput, email: str) -> dict[str, 
             snapshot = await _load_snapshot(conn, request.order_id, email, lock=True)
             if snapshot is None:
                 return failure("ORDER_NOT_FOUND", "Order not found or access denied.")
-            # Read the clock AFTER waiting for the order lock, not at transaction
-            # start: a lock wait itself can cross the return deadline.
+            # 在等到订单锁*之后*才读取时钟，而不是在事务开始时读取：
+            # 等待锁这件事本身就可能跨过退货截止时间。
             now = utc_now()
             decision = evaluate_return(snapshot, now=now)
             if not decision.eligible:

@@ -3,25 +3,25 @@ import { render, screen } from "@testing-library/react";
 import { StatTile } from "./stat-tile";
 
 describe("StatTile", () => {
-  it("renders label and value", () => {
-    render(<StatTile label="In Stock" value={42} />);
-    expect(screen.getByText("In Stock")).toBeInTheDocument();
+  it("渲染标签与数值", () => {
+    render(<StatTile label="库存" value={42} />);
+    expect(screen.getByText("库存")).toBeInTheDocument();
     expect(screen.getByText("42")).toBeInTheDocument();
   });
 
-  it("colors the value via tone", () => {
-    render(<StatTile label="Risk Level" value="High" tone="destructive" />);
-    expect(screen.getByText("High").className).toContain("text-destructive");
+  it("通过 tone 为数值着色", () => {
+    render(<StatTile label="风险等级" value="高" tone="destructive" />);
+    expect(screen.getByText("高").className).toContain("text-destructive");
   });
 
-  it("has no tone color by default", () => {
-    render(<StatTile label="Reviews" value={128} />);
+  it("默认不带色调", () => {
+    render(<StatTile label="评论数" value={128} />);
     expect(screen.getByText("128").className).not.toContain("text-success");
     expect(screen.getByText("128").className).not.toContain("text-destructive");
   });
 
-  it("renders an optional hint", () => {
-    render(<StatTile label="Sentiment" value="Positive" tone="success" hint="last 30 days" />);
-    expect(screen.getByText("last 30 days")).toBeInTheDocument();
+  it("渲染可选的说明", () => {
+    render(<StatTile label="情感倾向" value="正面" tone="success" hint="最近 30 天" />);
+    expect(screen.getByText("最近 30 天")).toBeInTheDocument();
   });
 });

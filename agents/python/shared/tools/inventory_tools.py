@@ -1,4 +1,4 @@
-"""Shared inventory tools used by Product Discovery and Inventory & Fulfillment agents."""
+"""商品发现与库存履约智能体共用的库存工具。"""
 
 from __future__ import annotations
 

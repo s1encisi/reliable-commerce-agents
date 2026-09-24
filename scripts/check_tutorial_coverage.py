@@ -1,28 +1,24 @@
 #!/usr/bin/env python3
-"""Generate — and in CI, verify — the language-coverage table in tutorials/README.md.
+"""生成 —— 并在 CI 中校验 —— tutorials/README.md 里的章节覆盖表。
 
-tutorials/README.md has claimed for a while that its status table "is generated
-from what is actually on disk, so if this paragraph ever drifts, believe the
-table." That was not true: the table was hand-maintained, and it drifted. It
-described chapters 12-20 as having .NET code with tests pending long after some
-of them had neither, and it listed 20b as ported when the folder held only a
-README.
+tutorials/README.md 长期声称它的状态表「由磁盘上的真实情况生成，因此这段说明
+一旦与表不符，以表为准」。这句话曾经不成立：表是手工维护的，而且确实漂移了。
+旧表把第 12–20 章标为已有代码、测试待补，而其中若干章当时没有代码和测试。
 
-This script makes the claim true. It walks the chapter directories, derives each
-chapter's status from files that actually exist, and rewrites the table between
-the markers in tutorials/README.md.
+本脚本让这句话成立。它遍历各章目录，从**真实存在**的文件推导每章状态，并重写
+tutorials/README.md 中两个标记之间的表格。
 
-Status is derived, never declared:
+状态是推导出来的，从不靠声明：
 
-    Runnable · tested in CI   code + a test project/dir
-    Runnable · tests pending  code, no tests
-    Not ported                no code for that language
-    Guide only                the chapter ships no runnable code by design
+    可运行 · CI 已测试    有代码，且有测试目录
+    可运行 · 测试待补      有代码，无测试
+    仅指南                该章按设计不提供可运行代码
+    规划中                该章尚未落地
 
-Usage:
-    python scripts/check_tutorial_coverage.py            # print the table
-    python scripts/check_tutorial_coverage.py --write    # rewrite README.md
-    python scripts/check_tutorial_coverage.py --check    # CI: exit 1 if stale
+用法：
+    python scripts/check_tutorial_coverage.py            # 打印表格
+    python scripts/check_tutorial_coverage.py --write    # 重写 README.md
+    python scripts/check_tutorial_coverage.py --check    # CI：表格过期则退出码 1
 """
 
 from __future__ import annotations
@@ -40,27 +36,17 @@ README = TUTORIALS_DIR / "README.md"
 BEGIN_MARKER = "<!-- BEGIN GENERATED COVERAGE TABLE -->"
 END_MARKER = "<!-- END GENERATED COVERAGE TABLE -->"
 
-TESTED = "Runnable · tested in CI"
-UNTESTED = "Runnable · tests pending"
-NOT_PORTED = "Not ported"
-GUIDE_ONLY = "Guide only"
-PLANNED = "Planned"
+TESTED = "可运行 · CI 已测试"
+UNTESTED = "可运行 · 测试待补"
+NO_CODE = "无代码"
+GUIDE_ONLY = "仅指南"
+PLANNED = "规划中"
 
-# Chapters that ship no runnable code on purpose. Everything else is judged by
-# what is on disk, so a chapter cannot quietly claim coverage it does not have.
+# 按设计不提供可运行代码的章节。其余章节一律按磁盘上的实际内容判定，
+# 因此某章无法悄悄声称自己拥有并不存在的覆盖。
 NO_CODE_BY_DESIGN = {
     "00-setup": GUIDE_ONLY,
     "21-capstone-tour": PLANNED,
-}
-
-# Chapters whose .NET side is qualified by an SDK gap rather than by our own
-# backlog. The footnote is attached regardless of the derived status, because
-# the gap is the thing a reader needs to know — chapter 16 HAS a .NET project
-# and tests, and the project is a status stub while the tests are a tripwire
-# that fails the day Magentic ships for .NET.
-DOCUMENTED_STUBS = {
-    "16-magentic-orchestration": "magentic",
-    "20b-devui": "devui",
 }
 
 
@@ -68,8 +54,7 @@ DOCUMENTED_STUBS = {
 class Chapter:
     slug: str
     title: str
-    python: str
-    dotnet: str
+    status: str
 
     @property
     def number(self) -> str:
@@ -86,32 +71,20 @@ def _has_python_tests(chapter_dir: Path) -> bool:
     return tests.is_dir() and any(tests.glob("test_*.py"))
 
 
-def _has_dotnet_code(chapter_dir: Path) -> bool:
-    dn = chapter_dir / "dotnet"
-    # Only project files directly in dotnet/, not the test project underneath —
-    # a tests-only folder is not a runnable chapter.
-    return dn.is_dir() and any(dn.glob("*.csproj"))
-
-
-def _has_dotnet_tests(chapter_dir: Path) -> bool:
-    tests = chapter_dir / "dotnet" / "tests"
-    return tests.is_dir() and any(tests.glob("*.Tests.csproj"))
-
-
 def _status(has_code: bool, has_tests: bool) -> str:
     if not has_code:
-        return NOT_PORTED
+        return NO_CODE
     return TESTED if has_tests else UNTESTED
 
 
 def _title(chapter_dir: Path) -> str:
-    """The chapter title, taken from its README's H1."""
+    """章节标题，取自其 README 的一级标题。"""
     readme = chapter_dir / "README.md"
     for line in readme.read_text(encoding="utf-8").splitlines():
         if line.startswith("# "):
             heading = line[2:].strip()
-            # "Chapter 22 — Group-Chat Debate (…)" -> "Group-Chat Debate (…)"
-            return re.sub(r"^Chapter\s+\d+[a-z]?\s*[—–-]\s*", "", heading)
+            # "第 22 章 · 群聊辩论（…）" -> "群聊辩论（…）"
+            return re.sub(r"^第\s*\d+[a-z]?\s*章\s*[·—–-]\s*", "", heading)
     return chapter_dir.name
 
 
@@ -129,15 +102,13 @@ def discover() -> list[Chapter]:
         slug = chapter_dir.name
 
         if slug in NO_CODE_BY_DESIGN:
-            status = NO_CODE_BY_DESIGN[slug]
-            chapters.append(Chapter(slug, _title(chapter_dir), status, status))
+            chapters.append(Chapter(slug, _title(chapter_dir), NO_CODE_BY_DESIGN[slug]))
             continue
 
         chapters.append(Chapter(
             slug,
             _title(chapter_dir),
             _status(_has_python_code(chapter_dir), _has_python_tests(chapter_dir)),
-            _status(_has_dotnet_code(chapter_dir), _has_dotnet_tests(chapter_dir)),
         ))
 
     return chapters
@@ -145,36 +116,29 @@ def discover() -> list[Chapter]:
 
 def render(chapters: list[Chapter]) -> str:
     lines = [
-        "| # | Chapter | Python | .NET |",
-        "|---|---------|--------|------|",
+        "| # | 章节 | 状态 |",
+        "|---|------|------|",
     ]
 
     for chapter in chapters:
-        dotnet = chapter.dotnet
-        if chapter.slug in DOCUMENTED_STUBS:
-            dotnet = f"{dotnet} [^{DOCUMENTED_STUBS[chapter.slug]}]"
-
         lines.append(
-            f"| {chapter.number} | [{chapter.title}](./{chapter.slug}/) "
-            f"| {chapter.python} | {dotnet} |"
+            f"| {chapter.number} | [{chapter.title}](./{chapter.slug}/) | {chapter.status} |"
         )
 
     return "\n".join(lines)
 
 
 def summarize(chapters: list[Chapter]) -> str:
-    def count(attr: str, status: str) -> int:
-        return sum(1 for c in chapters if getattr(c, attr) == status)
-
-    with_code = [c for c in chapters if c.slug not in NO_CODE_BY_DESIGN]
+    def count(status: str) -> int:
+        return sum(1 for c in chapters if c.status == status)
 
     return (
-        f"{len(chapters)} chapters — "
-        f"Python: {count('python', TESTED)} tested, {count('python', UNTESTED)} untested, "
-        f"{count('python', NOT_PORTED)} not ported · "
-        f".NET: {count('dotnet', TESTED)} tested, {count('dotnet', UNTESTED)} untested, "
-        f"{count('dotnet', NOT_PORTED)} not ported "
-        f"(of {len(with_code)} chapters that ship code)"
+        f"共 {len(chapters)} 章 —— "
+        f"可运行且 CI 已测试 {count(TESTED)} 章，"
+        f"可运行但测试待补 {count(UNTESTED)} 章，"
+        f"无代码 {count(NO_CODE)} 章，"
+        f"仅指南 {count(GUIDE_ONLY)} 章，"
+        f"规划中 {count(PLANNED)} 章"
     )
 
 
@@ -185,8 +149,8 @@ def _splice(text: str, table: str) -> str:
     )
     if not pattern.search(text):
         raise SystemExit(
-            f"{README} is missing the {BEGIN_MARKER} / {END_MARKER} markers — "
-            "add them around the coverage table before running this script."
+            f"{README} 缺少 {BEGIN_MARKER} / {END_MARKER} 标记 —— "
+            "请先在覆盖表两侧加上这两个标记，再运行本脚本。"
         )
     return pattern.sub(lambda m: f"{m.group(1)}{table}{m.group(2)}", text)
 
@@ -194,8 +158,8 @@ def _splice(text: str, table: str) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     group = parser.add_mutually_exclusive_group()
-    group.add_argument("--write", action="store_true", help="rewrite tutorials/README.md in place")
-    group.add_argument("--check", action="store_true", help="exit 1 if the committed table is stale")
+    group.add_argument("--write", action="store_true", help="就地重写 tutorials/README.md")
+    group.add_argument("--check", action="store_true", help="已提交的表格过期则退出码 1")
     args = parser.parse_args()
 
     chapters = discover()
@@ -213,23 +177,23 @@ def main() -> int:
     if args.write:
         if updated != current:
             README.write_text(updated, encoding="utf-8")
-            print(f"updated {README.relative_to(REPO_ROOT)}")
+            print(f"已更新 {README.relative_to(REPO_ROOT)}")
         else:
-            print(f"{README.relative_to(REPO_ROOT)} already up to date")
+            print(f"{README.relative_to(REPO_ROOT)} 已是最新")
         print(summarize(chapters))
         return 0
 
     if updated != current:
         print(
-            "tutorials/README.md's coverage table does not match what is on disk.\n"
-            "Run: python scripts/check_tutorial_coverage.py --write\n",
+            "tutorials/README.md 的覆盖表与磁盘实际内容不一致。\n"
+            "请运行：python scripts/check_tutorial_coverage.py --write\n",
             file=sys.stderr,
         )
-        print("Expected:\n", file=sys.stderr)
+        print("期望内容：\n", file=sys.stderr)
         print(table, file=sys.stderr)
         return 1
 
-    print(f"coverage table is up to date — {summarize(chapters)}")
+    print(f"覆盖表已是最新 —— {summarize(chapters)}")
     return 0
 
 

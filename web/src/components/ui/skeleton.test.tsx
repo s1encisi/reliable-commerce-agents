@@ -3,7 +3,7 @@ import { render } from "@testing-library/react";
 import { Skeleton } from "./skeleton";
 
 describe("Skeleton", () => {
-  it("renders with the pulse animation and merges className", () => {
+  it("带脉冲动画渲染，并合并 className", () => {
     const { container } = render(<Skeleton className="h-4 w-32" />);
     const el = container.querySelector('[data-slot="skeleton"]');
     expect(el).toBeInTheDocument();

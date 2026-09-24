@@ -1,81 +1,68 @@
-name: Bug report
-description: Something does not work the way the docs say it should
+name: 缺陷报告
+description: 某些东西没有按文档描述的方式工作
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        Most reports against this repo turn out to hinge on **which stack** and
-        **which model provider** — so those two questions are required. Answering
-        them up front is usually the difference between one reply and four.
-
-  - type: dropdown
-    id: stack
-    attributes:
-      label: Which backend?
-      options:
-        - Python (docker-compose.yml — the default)
-        - .NET (docker-compose.dotnet.yml)
-        - Both
-        - Not sure
-    validations:
-      required: true
+        针对本仓库的大多数报告，最终都取决于**哪个模型提供方**以及**如何启动** ——
+        所以这两个问题设为必填。提前回答它们，通常就是「一次回复」与「来回四次」的区别。
 
   - type: dropdown
     id: howrun
     attributes:
-      label: How did you start it?
+      label: 你是如何启动它的？
       options:
-        - ./scripts/dev.sh --demo (prebuilt images from GHCR)
-        - ./scripts/dev.sh (built from source)
-        - ./scripts/dev.ps1 (Windows)
-        - docker compose directly
-        - Running a service outside Docker
+        - ./scripts/dev.sh --demo（从 GHCR 拉取预构建镜像）
+        - ./scripts/dev.sh（从源码构建）
+        - ./scripts/dev.ps1（Windows）
+        - 直接使用 docker compose
+        - 在 Docker 之外运行某个服务
     validations:
       required: true
 
   - type: dropdown
     id: provider
     attributes:
-      label: Which model provider?
-      description: A local model that cannot reliably call tools is the single most common cause of "the agent makes things up".
+      label: 使用哪个模型提供方？
+      description: 一个无法可靠调用工具的本地模型，是「智能体胡编乱造」最常见的原因。
       options:
         - OpenAI
         - Azure OpenAI
-        - Ollama or another OpenAI-compatible endpoint (LLM_BASE_URL)
-        - LLM_PROVIDER=replay (recorded fixtures)
+        - Ollama 或其他 OpenAI 兼容端点（LLM_BASE_URL）
+        - LLM_PROVIDER=replay（已录制的 fixture）
     validations:
       required: true
 
   - type: textarea
     id: expected
     attributes:
-      label: What did you expect, and what happened instead?
+      label: 你期望什么，实际发生了什么？
     validations:
       required: true
 
   - type: textarea
     id: repro
     attributes:
-      label: Steps to reproduce
+      label: 复现步骤
       placeholder: |
-        1. cp .env.minimal .env, set OPENAI_API_KEY
+        1. cp .env.minimal .env，设置 OPENAI_API_KEY
         2. ./scripts/dev.sh --demo
-        3. Ask "..." in the chat
+        3. 在聊天中问「...」
     validations:
       required: true
 
   - type: textarea
     id: logs
     attributes:
-      label: Logs
+      label: 日志
       description: |
-        `docker compose logs orchestrator --tail 100`, plus the specialist involved.
-        Redact your API key before pasting.
+        `docker compose logs orchestrator --tail 100`，以及涉及的那个专业智能体。
+        粘贴前请先抹掉你的 API key。
       render: shell
 
   - type: input
     id: version
     attributes:
-      label: Version or commit
-      placeholder: "v1.1.0, or the output of: git rev-parse --short HEAD"
+      label: 版本或提交号
+      placeholder: "v1.1.0，或以下命令的输出：git rev-parse --short HEAD"

@@ -1,10 +1,6 @@
-"""Phase 6.3 — Redis-backed sliding-window rate limiting.
+"""真实 Redis 上的滑动窗口限流测试。
 
-Real Redis throughout (``redis_client``, a testcontainers-backed instance)
-— never mocked, per this repo's standing policy for stateful external
-dependencies. Covers the core sliding-window primitive directly, then the
-``rate_limit_chat`` FastAPI dependency end to end (identity keying,
-fail-open on Redis errors, the 429 response shape).
+覆盖原子窗口操作、用户身份键、Redis 故障放行及 429 响应契约。
 """
 
 from __future__ import annotations
@@ -45,7 +41,7 @@ async def test_request_over_the_limit_raises(redis_client: redis_asyncio.Redis) 
 async def test_different_keys_are_independent(redis_client: redis_asyncio.Redis) -> None:
     for _ in range(3):
         await check_rate_limit(redis_client, "k3-a", max_requests=3, window_s=60)
-    # A different key must not be affected by k3-a's usage.
+    # 其他键不应受 k3-a 用量影响。
     await check_rate_limit(redis_client, "k3-b", max_requests=3, window_s=60)
 
 
@@ -55,17 +51,16 @@ async def test_window_expiry_allows_requests_again(redis_client: redis_asyncio.R
     with pytest.raises(RateLimitExceededError):
         await check_rate_limit(redis_client, "k4", max_requests=2, window_s=0.2)
 
-    await asyncio.sleep(0.3)  # let the sliding window fully roll past
+    await asyncio.sleep(0.3)  # 等待旧记录全部滑出窗口。
 
-    # Now allowed again — the old entries have aged out of the window.
+    # 旧记录过期后应重新允许请求。
     await check_rate_limit(redis_client, "k4", max_requests=2, window_s=0.2)
 
 
 async def test_concurrent_requests_at_the_boundary_never_exceed_the_limit(
     redis_client: redis_asyncio.Redis,
 ) -> None:
-    """20 concurrent callers, limit 5 — the atomic Lua script must let exactly
-    5 through, not more, even though they all race the same key at once."""
+    """20 个并发请求、上限 5；原子 Lua 脚本必须恰好放行 5 个。"""
     results = await asyncio.gather(
         *[check_rate_limit(redis_client, "k5", max_requests=5, window_s=60) for _ in range(20)],
         return_exceptions=True,
@@ -90,7 +85,7 @@ async def test_dependency_is_a_noop_when_disabled(
         return {"ok": True}
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        for _ in range(100):  # would trip any real limit if the dependency weren't a no-op
+        for _ in range(100):  # 若依赖未关闭，这一请求量会触发真实限额。
             resp = await client.get("/probe")
             assert resp.status_code == 200
 
@@ -142,12 +137,12 @@ async def test_dependency_keys_anonymous_traffic_by_ip(
         second = await client.get("/probe")
         assert second.status_code == 429
 
-    key = "ratelimit:chat:ip:127.0.0.1"  # httpx's ASGITransport default test client address
+    key = "ratelimit:chat:ip:127.0.0.1"  # ASGITransport 的默认测试客户端地址。
     assert await redis_client.zcard(key) == 1
 
 
 async def test_dependency_fails_open_when_redis_is_unreachable(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A Redis outage must not take chat down with it."""
+    """Redis 故障不能导致聊天整体不可用。"""
     import shared.rate_limit as rate_limit_module
 
     class _BrokenRedis:
@@ -172,8 +167,7 @@ async def test_dependency_fails_open_when_redis_is_unreachable(monkeypatch: pyte
 async def test_dependency_reraises_http_exception_from_inside_check(
     redis_client: redis_asyncio.Redis, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Guards the except-chain shape: a plain HTTPException (429) must propagate
-    as itself, not get swallowed by the bare `except Exception` fail-open branch."""
+    """429 HTTPException 必须原样传播，不能被通用异常放行分支吞掉。"""
     import shared.rate_limit as rate_limit_module
 
     monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", True)

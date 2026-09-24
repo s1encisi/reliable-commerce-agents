@@ -1,10 +1,10 @@
 """
-Shared pytest fixtures for ecommerce-mcp-inventory tests.
+ecommerce-mcp-inventory 测试的共享 pytest fixture。
 
-Policy:
-- Never mock the database. DB tests use `postgres_pool` which provisions a
-  real Postgres container via testcontainers.
-- Uses the same production schema (docker/postgres/init.sql) as the main test suite.
+策略：
+- 绝不 mock 数据库。数据库测试使用 `postgres_pool`，它通过 testcontainers
+  提供一个真实的 Postgres 容器。
+- 使用与主测试套件相同的生产 schema（docker/postgres/init.sql）。
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ import pytest
 import pytest_asyncio
 from testcontainers.postgres import PostgresContainer
 
-REPO_ROOT = Path(__file__).resolve().parents[5]  # agents/python/packages/mcp-inventory/tests -> repo root
+REPO_ROOT = Path(__file__).resolve().parents[5]  # agents/python/packages/mcp-inventory/tests -> 仓库根目录
 INIT_SQL = REPO_ROOT / "docker" / "postgres" / "init.sql"
 
 

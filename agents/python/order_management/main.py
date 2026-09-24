@@ -1,4 +1,4 @@
-"""Order Management agent — entry point."""
+"""订单管理智能体 —— 入口点。"""
 
 from order_management.agent import AGENT_TOOLS, create_order_management_agent
 from shared.agent_host import create_agent_app

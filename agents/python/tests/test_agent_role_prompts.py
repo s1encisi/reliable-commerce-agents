@@ -1,12 +1,8 @@
-"""Regression test for the dead role-aware-prompt bug (Phase 0.3 Task A).
+"""角色相关提示词回归测试。
 
-Previously every ``agent.py`` imported a module-level ``SYSTEM_PROMPT``
-constant that ``prompts.py`` evaluated once at import time with the default
-role "customer" baked in — sellers and admins were served customer
-instructions no matter what ``current_user_role`` held. The fix makes each
-``create_*_agent()`` call ``get_system_prompt(current_user_role.get())`` at
-construction time, and agents are already rebuilt per request, so the
-composed prompt must vary with the ContextVar. No LLM/DB.
+旧实现导入时按 customer 固定系统提示词，管理员和商家也收到客户
+指令。工厂现在每次按 current_user_role 组合，测试确认角色变化会
+改变提示词；无需模型或数据库。
 """
 
 from __future__ import annotations
@@ -19,7 +15,7 @@ from shared.context import current_user_role
 
 @pytest.fixture(autouse=True)
 def _openai_dummy(monkeypatch: pytest.MonkeyPatch) -> None:
-    # create_chat_client only checks the key is non-empty; no network at build time.
+    # 客户端构建只检查密钥非空，不访问网络。
     monkeypatch.setattr(settings, "LLM_PROVIDER", "openai", raising=False)
     monkeypatch.setattr(settings, "OPENAI_API_KEY", "test-key", raising=False)
 
@@ -38,9 +34,9 @@ def test_order_management_agent_uses_seller_prompt_for_seller_role() -> None:
     current_user_role.set("seller")
     instructions = _instructions(create_order_management_agent())
 
-    assert "When a seller asks about orders, show orders containing products they sell" in instructions
-    assert "This user is a customer" not in instructions
-    assert "an admin with full access to all data and agents" not in instructions
+    assert "当商家询问订单时，请展示包含他所售商品的订单" in instructions
+    assert "该用户是客户" not in instructions
+    assert "管理员，拥有对全部数据和全部智能体的完整访问权限" not in instructions
 
 
 def test_order_management_agent_uses_admin_prompt_for_admin_role() -> None:
@@ -49,9 +45,9 @@ def test_order_management_agent_uses_admin_prompt_for_admin_role() -> None:
     current_user_role.set("admin")
     instructions = _instructions(create_order_management_agent())
 
-    assert "an admin with full access to all data and agents" in instructions
-    assert "This user is a customer" not in instructions
-    assert "When a seller asks about orders" not in instructions
+    assert "管理员，拥有对全部数据和全部智能体的完整访问权限" in instructions
+    assert "该用户是客户" not in instructions
+    assert "当商家询问订单时" not in instructions
 
 
 def test_order_management_agent_falls_back_to_customer_prompt_when_role_unset() -> None:
@@ -60,6 +56,6 @@ def test_order_management_agent_falls_back_to_customer_prompt_when_role_unset() 
     current_user_role.set("")
     instructions = _instructions(create_order_management_agent())
 
-    assert "This user is a customer" in instructions
+    assert "该用户是客户" in instructions
 
     current_user_role.set("customer")

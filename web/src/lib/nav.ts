@@ -19,7 +19,7 @@ export interface NavItem {
   icon: LucideIcon;
   adminOnly?: boolean;
   sellerOnly?: boolean;
-  /** Shown for the cart count badge. */
+  /** 是否在购物车数量徽章中展示。 */
   cartBadge?: boolean;
 }
 
@@ -29,40 +29,40 @@ export interface NavGroup {
 }
 
 /**
- * Grouped navigation, shared by the sidebar and the command palette.
- * WorkGraph-influenced grouping (Workspace / Agents / …) adapted to shopping.
+ * 分组导航，由侧边栏与命令面板共用。
+ * 分组思路受 WorkGraph 启发（工作区 / 智能体 / …），并按购物场景做了调整。
  */
 export const NAV_GROUPS: NavGroup[] = [
   {
-    label: "Shop",
+    label: "购物",
     items: [
-      { label: "Home", href: "/home", icon: LayoutDashboard },
-      { label: "Chat", href: "/chat", icon: MessageSquare },
-      { label: "Agents", href: "/agents", icon: Bot },
-      { label: "Products", href: "/products", icon: ShoppingBag },
-      { label: "Cart", href: "/cart", icon: ShoppingCart, cartBadge: true },
-      { label: "Orders", href: "/orders", icon: Package },
-      { label: "Runs", href: "/runs", icon: Activity },
+      { label: "首页", href: "/home", icon: LayoutDashboard },
+      { label: "对话", href: "/chat", icon: MessageSquare },
+      { label: "智能体", href: "/agents", icon: Bot },
+      { label: "商品", href: "/products", icon: ShoppingBag },
+      { label: "购物车", href: "/cart", icon: ShoppingCart, cartBadge: true },
+      { label: "订单", href: "/orders", icon: Package },
+      { label: "运行记录", href: "/runs", icon: Activity },
     ],
   },
   {
-    label: "Account",
+    label: "账户",
     items: [
-      { label: "Profile", href: "/profile", icon: User },
-      { label: "Seller", href: "/seller", icon: BarChart3, sellerOnly: true },
+      { label: "个人中心", href: "/profile", icon: User },
+      { label: "商家", href: "/seller", icon: BarChart3, sellerOnly: true },
     ],
   },
   {
-    label: "Admin",
+    label: "管理",
     items: [
-      { label: "Overview", href: "/admin", icon: Shield, adminOnly: true },
-      { label: "Approvals", href: "/admin/approvals", icon: CheckCircle, adminOnly: true },
-      { label: "Usage", href: "/admin/usage", icon: BarChart3, adminOnly: true },
+      { label: "概览", href: "/admin", icon: Shield, adminOnly: true },
+      { label: "审批", href: "/admin/approvals", icon: CheckCircle, adminOnly: true },
+      { label: "用量统计", href: "/admin/usage", icon: BarChart3, adminOnly: true },
     ],
   },
 ];
 
-/** Filter nav by the current user's role flags. */
+/** 按当前用户的角色标识过滤导航项。 */
 export function visibleGroups(opts: {
   isAdmin: boolean;
   isSeller: boolean;
@@ -77,12 +77,12 @@ export function visibleGroups(opts: {
   })).filter((group) => group.items.length > 0);
 }
 
-/** A flat label for the current path, used by the top-bar breadcrumb. */
+/** 当前路径对应的扁平化标签，供顶栏面包屑使用。 */
 export function labelForPath(pathname: string): string {
   const flat = NAV_GROUPS.flatMap((g) => g.items);
-  // Longest matching href wins (so /admin/usage beats /admin).
+  // 匹配最长的 href（因此 /admin/usage 优先于 /admin）。
   const match = flat
     .filter((i) => pathname === i.href || pathname.startsWith(i.href + "/"))
     .sort((a, b) => b.href.length - a.href.length)[0];
-  return match?.label ?? "Home";
+  return match?.label ?? "首页";
 }

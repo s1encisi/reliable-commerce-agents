@@ -1,22 +1,20 @@
-"""Return and Replace Workflow — MAF Sequential orchestration with HITL gate.
+"""退货与换货工作流 —— 带人工参与（HITL）闸门的 MAF 顺序编排。
 
-Step chain: check-eligibility → hitl-gate → initiate-return →
-search-replacements → apply-discount → finalize.
+步骤链：check-eligibility → hitl-gate → initiate-return →
+search-replacements → apply-discount → finalize。
 
-The eligibility service supplies the common approval policy: approval is
-required when HITL is enabled or the trusted order total exceeds
-``settings.RETURN_HITL_THRESHOLD``. The gate emits a bound snapshot through
-``ctx.request_info`` before any return is created. Resume restores the owner
-and exact parameters; the shared service checks current eligibility again.
+资格校验服务提供通用的审批策略：当启用 HITL，或者可信订单总额超过
+``settings.RETURN_HITL_THRESHOLD`` 时，就需要审批。闸门会在创建任何退货之前，
+通过 ``ctx.request_info`` 发出一个已绑定参数的快照。恢复执行时会还原归属人
+和精确参数；共享服务会再次检查当前资格。
 
-Refactored from a custom sequential state machine to a MAF
-``WorkflowBuilder`` per ``plans/refactor/09-return-replace-sequential-hitl.md``.
-Public API — class, dataclass, ``execute(state) -> state`` signature — is
-preserved so callers don't have to change.
+已按 ``plans/refactor/09-return-replace-sequential-hitl.md`` 从自定义的顺序状态机
+重构为 MAF ``WorkflowBuilder``。公共 API —— 类、dataclass、``execute(state) -> state``
+签名 —— 均保持不变，调用方无需改动。
 
-Note: do NOT add ``from __future__ import annotations`` here. MAF's
-``@response_handler`` resolves parameter types via ``inspect.signature``
-at import time; stringified annotations break that resolution.
+注意：这里不要添加 ``from __future__ import annotations``。MAF 的
+``@response_handler`` 会在导入时通过 ``inspect.signature`` 解析参数类型；
+字符串化的注解会破坏该解析。
 """
 
 import logging
@@ -41,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class WorkflowState:
-    """Carries the in-flight workflow state from executor to executor."""
+    """在各执行器之间传递工作流的进行中状态。"""
 
     user_email: str
     order_id: str
@@ -54,25 +52,25 @@ class WorkflowState:
     operation_id: "str | None" = None
     existing_operation: "dict | None" = None
 
-    # Populated along the chain
+    # 沿链路逐步填充
     return_eligible: bool = False
     return_id: "str | None" = None
     refund_amount: float = 0.0
     replacement_products: list = field(default_factory=list)
     applied_discount: "dict | None" = None
 
-    # HITL state
+    # HITL 状态
     hitl_requested: bool = False
     hitl_approved: "bool | None" = None
 
-    # Execution tracking
+    # 执行追踪
     completed_steps: list = field(default_factory=list)
     errors: list = field(default_factory=list)
 
 
 @dataclass
 class ReturnApprovalRequest:
-    """Payload emitted by the HITL gate for high-value returns."""
+    """HITL 闸门针对高价值退货发出的载荷。"""
 
     order_id: str
     order_total: float
@@ -84,7 +82,7 @@ class ReturnApprovalRequest:
     operation_id: "str | None" = None
 
 
-# ─────────────────────── Executors ───────────────────────
+# ─────────────────────── 执行器 ───────────────────────
 
 
 class _CheckEligibilityExecutor(Executor):
@@ -129,7 +127,7 @@ class _CheckEligibilityExecutor(Executor):
                 await ctx.yield_output(state)
                 return
         state.order_total = float(result.get("total", state.order_total))
-        state.refund_amount = state.order_total  # estimate, not an issued refund
+        state.refund_amount = state.order_total  # 估算值，并非已发放的退款
         state.order_revision = result.get("order_revision", "")
         state.requires_approval = result.get("requires_approval")
         state.outcome = result.get("outcome", "READY" if state.return_eligible else "REJECTED")
@@ -177,8 +175,8 @@ class _InitiateReturnExecutor(Executor):
             ReturnApproval.from_dict(state.approval) if state.approval else None
         )
         operation_token = current_operation_id.set(state.operation_id)
-        # An admin may resume a request on its owner's behalf. The owner comes
-        # from the persisted checkpoint; it is not supplied by the model.
+        # 管理员可以代替请求归属人恢复该请求。归属人来自
+        # 已持久化的检查点，而不是由模型提供。
         identity_token = None
         if current_user_role.get() == "admin" and state.user_email:
             identity_token = current_user_email.set(state.user_email)
@@ -252,7 +250,7 @@ class _SearchReplacementsExecutor(Executor):
 
 
 class _HitlGateExecutor(Executor):
-    """Pauses the workflow via ``ctx.request_info`` for high-value orders."""
+    """针对高价值订单，通过 ``ctx.request_info`` 暂停工作流。"""
 
     def __init__(self, threshold: float) -> None:
         super().__init__(id="hitl-gate")
@@ -261,8 +259,8 @@ class _HitlGateExecutor(Executor):
     @handler
     async def run(self, state: WorkflowState, ctx: WorkflowContext[WorkflowState, WorkflowState]) -> None:
         state.completed_steps.append("hitl_gate")
-        # Production eligibility supplies the common approval policy. Older
-        # external tools may omit it; the value threshold remains a fallback.
+        # 生产环境的资格校验会提供通用审批策略。较早的外部工具可能
+        # 不提供它；此时仍以金额阈值作为兜底。
         required = (
             state.requires_approval if state.requires_approval is not None else state.order_total > self._threshold
         )
@@ -283,11 +281,11 @@ class _HitlGateExecutor(Executor):
                     (utc_now() + APPROVAL_TTL).isoformat(),
                 ).to_dict()
             except ValueError:
-                # Compatibility with non-DB tools. The real submission service
-                # refuses absent/invalid authorization and invalid arguments.
+                # 兼容非数据库工具。真正的提交服务会拒绝缺失/无效的授权
+                # 以及非法参数。
                 state.approval = None
-            # Emit a snapshot so callers observing the stream can see the
-            # pause state before the request_info event pauses execution.
+            # 发出一个快照，好让观察事件流的调用方能在 request_info 事件
+            # 暂停执行之前看到暂停状态。
             await ctx.yield_output(state)
             await ctx.request_info(
                 ReturnApprovalRequest(
@@ -314,8 +312,8 @@ class _HitlGateExecutor(Executor):
         ctx: WorkflowContext[WorkflowState, WorkflowState],
     ) -> None:
         approved = bool(response)
-        # Preserve the exact owner, reason and policy binding before executing
-        # the first write. No return existed when this checkpoint was saved.
+        # 在执行第一次写入之前，保留精确的归属人、原因和策略绑定。
+        # 保存该检查点时还不存在任何退货。
         resumed = WorkflowState(
             user_email=original_request.user_email,
             order_id=original_request.order_id,
@@ -391,15 +389,14 @@ class _FinalizeExecutor(Executor):
         await ctx.yield_output(state)
 
 
-# ─────────────────────── Public API ───────────────────────
+# ─────────────────────── 公共 API ───────────────────────
 
 
 class ReturnAndReplaceWorkflow:
-    """MAF-backed sequential return workflow with HITL approval gate.
+    """基于 MAF 的顺序式退货工作流，带 HITL 审批闸门。
 
-    Construct once with the tools dict, then call ``execute(state)`` as
-    many times as you like; each call builds a fresh MAF workflow under
-    the covers.
+    用 tools 字典构造一次，之后可以按需多次调用 ``execute(state)``；
+    每次调用在内部都会构建一个全新的 MAF 工作流。
     """
 
     def __init__(self, tools: dict) -> None:
@@ -424,11 +421,10 @@ class ReturnAndReplaceWorkflow:
         )
 
     async def execute(self, state: WorkflowState) -> WorkflowState:
-        """Run the workflow and return the final state snapshot.
+        """运行工作流并返回最终的状态快照。
 
-        When the HITL gate fires, execution pauses waiting for a response
-        and the most recent state snapshot is returned (with
-        ``hitl_requested=True`` and ``hitl_approved=None``).
+        当 HITL 闸门触发时，执行会暂停等待响应，并返回最近的状态快照
+        （带有 ``hitl_requested=True`` 和 ``hitl_approved=None``）。
         """
         workflow = self._build_maf_workflow()
 
@@ -439,8 +435,8 @@ class ReturnAndReplaceWorkflow:
                 if isinstance(data, WorkflowState):
                     final_state = data
 
-        # Mirror the happy-path invariant: if no HITL was requested,
-        # treat the run as implicitly approved.
+        # 与顺利路径的不变式保持一致：如果没有请求 HITL，
+        # 则视为隐式通过审批。
         if not final_state.hitl_requested and final_state.hitl_approved is None and final_state.outcome == "SUCCEEDED":
             final_state.hitl_approved = True
 

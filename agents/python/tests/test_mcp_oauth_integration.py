@@ -1,18 +1,7 @@
-"""Phase D integration: a real AS-issued MCP resource token authenticating a
-real product-MCP ``JwksTokenVerifier`` + FastMCP app.
+"""真实 MCP 资源令牌与 FastMCP 应用的认证集成测试。
 
-Uses the same ``OAuthAuthorizationServer`` direct-construction harness as
-``test_auth_server_integration.py``/``test_inter_agent_oauth_integration.py``
-(real testcontainers Postgres via ``clean_db``, real authlib grant machinery)
-to mint a genuine ``mcp:product``-scoped client-credentials token, then feeds
-it through the real ``ecommerce_mcp_product.auth.JwksTokenVerifier`` (JWKS
-fetch monkeypatched to the in-process AS's own signing key — same convention
-as ``test_rs256_verifier.py``) and a real (independently-built) FastMCP app.
-Confirms: a correctly-scoped real token authenticates; the same call with no
-token is rejected 401 + WWW-Authenticate; with ``MCP_AUTH_ENABLED=false`` the
-server behaves exactly as today (regression guard, covered by the existing
-``test_product_server.py`` registration-smoke tests, re-asserted here for
-locality).
+真实数据库和 authlib 签发 mcp:product 令牌，只替换 JWKS 获取。
+验证正确令牌通过、缺令牌返回 401 与认证提示，以及关闭认证时的兼容行为。
 """
 
 from __future__ import annotations
@@ -84,8 +73,7 @@ async def server(clean_db):
 
 @pytest.fixture
 def verifier(server, monkeypatch):
-    """A real ``JwksTokenVerifier`` whose JWKS fetch is pointed at the
-    in-process AS's own signing key — no real network call."""
+    """真实 JWKS 校验器使用本进程签名密钥，不访问网络。"""
     _srv, signing_key = server
     v = JwksTokenVerifier(
         jwks_url=f"{ISSUER}/.well-known/jwks.json",
@@ -160,8 +148,7 @@ async def test_unauthenticated_call_rejected(verifier):
 
 
 async def test_wrong_audience_real_token_rejected(clean_db, server, verifier):
-    """A real token minted for the orchestrator's api:chat scope must not
-    authenticate an mcp:product-scoped resource call."""
+    """编排器 api:chat 令牌不能访问 mcp:product 资源。"""
     srv, _signing_key = server
     await _seed_client(
         clean_db, "orchestrator", "orch-secret", ["client_credentials"], ["api:chat"], ["ecommerce-orchestrator"]
@@ -182,6 +169,5 @@ async def test_wrong_audience_real_token_rejected(clean_db, server, verifier):
 
 
 def test_mcp_auth_disabled_is_unchanged_regression_guard():
-    """MCP_AUTH_ENABLED=false (the default, unset in this test process) must
-    leave the real module-level server bare — no token_verifier/auth wired."""
+    """MCP_AUTH_ENABLED=false 时，不应安装令牌校验器或认证配置。"""
     assert bare_mcp._token_verifier is None

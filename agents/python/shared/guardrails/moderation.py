@@ -1,24 +1,11 @@
-"""Coarse local content-moderation classifier for outbound agent text.
+"""对模型输出执行粗粒度的本地内容审核。
 
-Distinct from ``shared/guardrails/sanitize.py``: sanitization defangs
-adversarial *instructions* hiding inside untrusted input (a review body
-telling the model to "ignore previous instructions") so they never
-influence the next turn. This module classifies the model's own *output*
-text against content-policy categories (self-harm, violence, hate/
-harassment, sexual content) — a different problem. An agent that
-correctly resists every injection attempt can still generate harmful text
-on its own, especially once handoff/group-chat modes let agents draft
-free-form prose (a seller response, a review summary) rather than just
-relaying tool data.
+与净化输入中的恶意指令不同，这里检查模型自己生成的自伤、暴力、
+仇恨、骚扰和色情等内容。即使抵御了注入，自由生成文本仍可能有风险。
 
-Pure functions: no I/O, no LLM call, no external API. Deliberately a
-small set of high-precision phrase patterns, mirroring
-``sanitize.py``'s own stated philosophy (low false-positive over
-exhaustive recall) — this is a coarse first-pass filter, not a trained
-classifier, and will miss anything phrased less directly than these
-patterns. Documented as a real limitation, not glossed over: see
-``docs/concepts/10-guardrails.md`` for the layered-defense framing this
-is one honestly-scoped layer of.
+全部是纯函数，不执行 I/O、模型或外部 API 调用。少量规则优先降低
+误报，不追求完整召回；这不是训练分类器，间接措辞可能漏检。
+详见 docs/concepts/10-guardrails.md 的分层防护说明。
 """
 
 from __future__ import annotations
@@ -58,7 +45,7 @@ _PATTERNS: dict[ModerationCategory, tuple[re.Pattern[str], ...]] = {
 
 
 def classify(text: str) -> set[ModerationCategory]:
-    """Return every category whose patterns match ``text``. Empty set = clean."""
+    """返回文本命中的所有类别；空集合表示未命中规则。"""
     hits: set[ModerationCategory] = set()
     for category, patterns in _PATTERNS.items():
         if any(p.search(text) for p in patterns):

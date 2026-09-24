@@ -2,7 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 
 const API_URL = "http://localhost:8080";
 
-// Test users from seed data
+// 来自种子数据的测试用户
 const USERS = {
   customer: { email: "alice.johnson@gmail.com", password: "customer123", name: "Alice Johnson", role: "customer" },
   admin: { email: "admin.demo@gmail.com", password: "admin123", name: "Admin User", role: "admin" },
@@ -12,21 +12,21 @@ const USERS = {
 };
 
 // ---------------------------------------------------------------------------
-// Helpers
+// 辅助函数
 // ---------------------------------------------------------------------------
 
 async function login(page: Page, email: string, password: string) {
   await page.goto("/login");
   await page.fill('input[type="email"]', email);
   await page.fill('input[type="password"]', password);
-  await page.getByRole("button", { name: /log\s*in|sign\s*in/i }).click();
-  // Wait for redirect to chat or app page
+  await page.getByRole("button", { name: /登录/ }).click();
+  // 等待跳转到对话页或应用页
   await page.waitForURL(/\/(chat|products|$)/, { timeout: 10000 });
 }
 
 async function ensureLoggedOut(page: Page) {
   await page.goto("/login");
-  // Clear localStorage
+  // 清空 localStorage
   await page.evaluate(() => {
     localStorage.removeItem("ecommerce_user");
     localStorage.removeItem("ecommerce_access_token");
@@ -35,248 +35,248 @@ async function ensureLoggedOut(page: Page) {
 }
 
 // ---------------------------------------------------------------------------
-// 1. AUTH TESTS
+// 1. 登录鉴权测试
 // ---------------------------------------------------------------------------
 
-test.describe("Authentication", () => {
+test.describe("登录鉴权", () => {
   test.beforeEach(async ({ page }) => {
     await ensureLoggedOut(page);
   });
 
-  test("unauthenticated visitors get the public storefront, not a login wall", async ({ page }) => {
-    // The root used to redirect to /login. It no longer does: the storefront is
-    // deliberately public so the shopping assistant can be used without an account,
-    // so this asserts the sign-in affordance is offered rather than forced.
+  test("未登录访客看到公开店铺页，而不是登录墙", async ({ page }) => {
+    // 根路由过去会跳转到 /login，现在不会了：店铺页被有意设为公开，这样
+    // 无需账号也能使用购物助手，因此这里断言的是「提供了登录入口」而不是
+    // 「强制登录」。
     await page.goto("/");
-    await expect(page.getByRole("link", { name: /sign in|log in/i }).first()).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole("link", { name: /登录/ }).first()).toBeVisible({ timeout: 10000 });
   });
 
-  test("login with valid customer credentials", async ({ page }) => {
+  test("用有效的顾客凭据登录", async ({ page }) => {
     await login(page, USERS.customer.email, USERS.customer.password);
-    // Should be on chat page
+    // 应位于对话页
     await expect(page).toHaveURL(/\/chat/);
   });
 
-  test("login with valid admin credentials", async ({ page }) => {
+  test("用有效的管理员凭据登录", async ({ page }) => {
     await login(page, USERS.admin.email, USERS.admin.password);
     await expect(page).toHaveURL(/\/chat/);
   });
 
-  test("login with invalid credentials shows error", async ({ page }) => {
+  test("用无效凭据登录会显示错误", async ({ page }) => {
     await page.goto("/login");
     await page.fill('input[type="email"]', "wrong@gmail.com");
     await page.fill('input[type="password"]', "wrongpass");
-    await page.getByRole("button", { name: /log\s*in|sign\s*in/i }).click();
-    // Should show error message
-    // Asserts the contract — an error is surfaced and the user is not let in — rather
-    // than the exact wording. The old regex (/invalid|not found|error/) missed the
-    // form's own fallback, "Login failed. Please try again.", which contains none of
-    // those words, so a correctly-rejected login read as a broken one.
+    await page.getByRole("button", { name: /登录/ }).click();
+    // 应显示错误提示
+    // 这里断言的是契约——错误被呈现出来且用户没被放进去——而不是具体措辞。
+    // 旧的正则（/invalid|not found|error/）漏掉了表单自身的兜底文案
+    // 「登录失败，请稍后重试。」，它一个关键词都不含，于是一次被正确拒绝的
+    // 登录被读成了登录损坏。
     await expect(page.locator(".text-destructive").first()).toBeVisible({ timeout: 15000 });
     await expect(page).toHaveURL(/\/login/);
   });
 
-  test("signup creates new account", async ({ page }) => {
-    // Use crypto-random suffix to avoid duplicate email across test runs
+  test("注册会创建新账号", async ({ page }) => {
+    // 使用加密随机后缀，避免多次测试运行之间出现重复邮箱
     const unique = `pw_test_${Date.now()}_${Math.random().toString(36).slice(2, 8)}@gmail.com`;
     await page.goto("/signup");
-    await page.locator("#name").fill("Test User");
+    await page.locator("#name").fill("测试用户");
     await page.locator("#email").fill(unique);
     await page.locator("#password").fill("testpass123");
-    await page.getByRole("button", { name: /create account|sign\s*up/i }).click();
+    await page.getByRole("button", { name: /创建账号|注册/ }).click();
     await page.waitForURL(/\/chat/, { timeout: 15000 });
   });
 });
 
 // ---------------------------------------------------------------------------
-// 2. CUSTOMER ROLE TESTS (Alice)
+// 2. 顾客角色测试（Alice）
 // ---------------------------------------------------------------------------
 
-test.describe("Customer Role (Alice)", () => {
+test.describe("顾客角色（Alice）", () => {
   test.beforeEach(async ({ page }) => {
     await ensureLoggedOut(page);
     await login(page, USERS.customer.email, USERS.customer.password);
   });
 
-  test("chat page loads with conversation panel", async ({ page }) => {
+  test("对话页加载并显示会话面板", async ({ page }) => {
     await page.goto("/chat");
-    await expect(page.getByText(/conversations|new chat/i).first()).toBeVisible();
+    await expect(page.getByText(/会话|新对话/).first()).toBeVisible();
     await expect(page.locator("textarea").first()).toBeVisible();
   });
 
-  test("can send a chat message", async ({ page }) => {
+  test("可以发送对话消息", async ({ page }) => {
     await page.goto("/chat");
     const input = page.locator("textarea").first();
-    await input.fill("Hello, what can you help me with?");
+    await input.fill("你好，你能帮我做什么？");
     await input.press("Enter");
-    // User message should appear in the chat area
-    await expect(page.getByText("Hello, what can you help me with?").last()).toBeVisible({ timeout: 5000 });
-    // Wait for response (may be error fallback if no API key)
+    // 用户消息应出现在对话区域
+    await expect(page.getByText("你好，你能帮我做什么？").last()).toBeVisible({ timeout: 5000 });
+    // 等待回答（若未配置 API key，可能是错误兜底文案）
     await page.waitForTimeout(5000);
-    // Should have a response (either real or error fallback)
-    const hasResponse = await page.getByText(/help|apologize|error|assist|issue/i).last().isVisible().catch(() => false);
+    // 应当有回答（真实的或错误兜底文案）
+    const hasResponse = await page.getByText(/帮助|抱歉|错误|无法|问题/).last().isVisible().catch(() => false);
     expect(hasResponse).toBeTruthy();
   });
 
-  test("products page shows product grid", async ({ page }) => {
+  test("商品页显示商品网格", async ({ page }) => {
     await page.goto("/products");
     await page.waitForLoadState("networkidle");
-    // Should show products
-    await expect(page.getByText(/products|showing/i).first()).toBeVisible({ timeout: 10000 });
-    // Should have category filters
+    // 应显示商品
+    await expect(page.getByText(/商品目录|共 .* 件商品/).first()).toBeVisible({ timeout: 10000 });
+    // 应有分类筛选
     await expect(page.getByText("Electronics").first()).toBeVisible();
   });
 
-  test("product detail page shows specs and reviews", async ({ page }) => {
+  test("商品详情页显示参数与评论", async ({ page }) => {
     await page.goto("/products");
     await page.waitForLoadState("networkidle");
-    // Click first product
+    // 点击第一个商品
     const firstProduct = page.locator("a[href*='/products/']").first();
     if (await firstProduct.isVisible()) {
       await firstProduct.click();
       await page.waitForURL(/\/products\//);
-      // Should show product details
-      await expect(page.getByText(/description|specs|stock|reviews/i).first()).toBeVisible({ timeout: 5000 });
+      // 应显示商品详情
+      await expect(page.getByText(/商品描述|规格参数|库存情况/).first()).toBeVisible({ timeout: 5000 });
     }
   });
 
-  test("orders page shows order list", async ({ page }) => {
+  test("订单页显示订单列表", async ({ page }) => {
     await page.goto("/orders");
     await page.waitForLoadState("networkidle");
-    // Should show orders or empty state
-    const hasOrders = await page.getByText(/order|shipped|delivered/i).first().isVisible().catch(() => false);
-    const hasEmpty = await page.getByText(/no orders/i).first().isVisible().catch(() => false);
+    // 应显示订单或空状态
+    const hasOrders = await page.getByText(/订单|已发货|已送达/).first().isVisible().catch(() => false);
+    const hasEmpty = await page.getByText(/暂无订单/).first().isVisible().catch(() => false);
     expect(hasOrders || hasEmpty).toBeTruthy();
   });
 
-  test("order detail page shows timeline", async ({ page }) => {
+  test("订单详情页显示时间线", async ({ page }) => {
     await page.goto("/orders");
     await page.waitForLoadState("networkidle");
     const firstOrder = page.locator("a[href*='/orders/']").first();
     if (await firstOrder.isVisible()) {
       await firstOrder.click();
       await page.waitForURL(/\/orders\//);
-      await expect(page.getByText(/status|timeline|items|shipping/i).first()).toBeVisible({ timeout: 5000 });
+      await expect(page.getByText(/订单状态|订单摘要|物流/).first()).toBeVisible({ timeout: 5000 });
     }
   });
 
-  test("agent catalog page shows the agents", async ({ page }) => {
-    // /marketplace was removed; the catalog is /agents. ui-smoke.spec.ts already
-    // records that removal — these tests kept pointing at the deleted route.
+  test("智能体目录页展示各智能体", async ({ page }) => {
+    // /marketplace 已被移除；目录页是 /agents。ui-smoke.spec.ts 已经记录了
+    // 这次移除——而这些用例一直指向那个已被删除的路由。
     await page.goto("/agents");
     await page.waitForLoadState("networkidle");
-    // Wait for agent cards to load — match display names or category text
-    await expect(page.getByText(/Product Discovery|Order Management|Marketplace|agent/i).first()).toBeVisible({ timeout: 15000 });
+    // 等待智能体卡片加载——匹配展示名或分类文案
+    await expect(page.getByText(/商品发现|订单管理|智能体/).first()).toBeVisible({ timeout: 15000 });
   });
 
-  test("profile page shows user info and loyalty tier", async ({ page }) => {
+  test("个人中心页显示用户信息与会员等级", async ({ page }) => {
     await page.goto("/profile");
     await page.waitForLoadState("networkidle");
     await expect(page.getByText(USERS.customer.name).first()).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText(/gold|loyalty/i).first()).toBeVisible();
+    await expect(page.getByText(/黄金|会员等级/).first()).toBeVisible();
   });
 
-  test("sidebar navigation works", async ({ page }) => {
+  test("侧边栏导航可用", async ({ page }) => {
     await page.goto("/chat");
-    // Navigate to Products
-    await page.getByRole("link", { name: /products/i }).first().click();
+    // 跳转到商品页
+    await page.getByRole("link", { name: /商品/ }).first().click();
     await expect(page).toHaveURL(/\/products/);
-    // Navigate to Orders
-    await page.getByRole("link", { name: /orders/i }).first().click();
+    // 跳转到订单页
+    await page.getByRole("link", { name: /订单/ }).first().click();
     await expect(page).toHaveURL(/\/orders/);
-    // Navigate to the agent catalog
-    await page.getByRole("link", { name: /^agents$/i }).first().click();
+    // 跳转到智能体目录
+    await page.getByRole("link", { name: /^智能体$/ }).first().click();
     await expect(page).toHaveURL(/\/agents/);
-    // Admin link should NOT be visible for customer
-    await expect(page.getByRole("link", { name: /admin/i })).not.toBeVisible();
+    // 顾客不应看到管理端链接
+    await expect(page.getByRole("link", { name: /概览/ })).not.toBeVisible();
   });
 });
 
 // ---------------------------------------------------------------------------
-// 3. ADMIN ROLE TESTS
+// 3. 管理员角色测试
 // ---------------------------------------------------------------------------
 
-test.describe("Admin Role", () => {
+test.describe("管理员角色", () => {
   test.beforeEach(async ({ page }) => {
     await ensureLoggedOut(page);
     await login(page, USERS.admin.email, USERS.admin.password);
   });
 
-  test("admin sidebar shows Admin link", async ({ page }) => {
+  test("管理端侧边栏显示管理入口", async ({ page }) => {
     await page.goto("/chat");
-    await expect(page.getByRole("link", { name: /admin/i }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: /概览/ }).first()).toBeVisible();
   });
 
-  test("admin dashboard shows metrics", async ({ page }) => {
+  test("管理端仪表盘显示指标", async ({ page }) => {
     await page.goto("/admin");
     await page.waitForLoadState("networkidle");
-    // Admin dashboard — match any metric label or "admin" heading
-    await expect(page.getByText(/dashboard|usage|overview|admin|total|invocation|token|agent|request/i).first()).toBeVisible({ timeout: 15000 });
+    // 管理端仪表盘——匹配任一指标标签或「管理看板」标题
+    await expect(page.getByText(/管理看板|总 Token 数|活跃智能体|待处理请求/).first()).toBeVisible({ timeout: 15000 });
   });
 
-  test("admin approvals page loads", async ({ page }) => {
-    // Was /admin/requests, which 404s — the page is /admin/approvals.
+  test("管理端审批页可加载", async ({ page }) => {
+    // 过去写的是 /admin/requests，会 404——该页面是 /admin/approvals。
     await page.goto("/admin/approvals");
     await page.waitForLoadState("networkidle");
-    await expect(page.getByText(/approval|pending|request/i).first()).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(/审批队列|待处理|暂无请求/).first()).toBeVisible({ timeout: 10000 });
   });
 
-  test("admin usage page loads", async ({ page }) => {
+  test("管理端用量页可加载", async ({ page }) => {
     await page.goto("/admin/usage");
     await page.waitForLoadState("networkidle");
-    await expect(page.getByText(/usage|invocations|tokens/i).first()).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(/用量分析|调用次数|Token/).first()).toBeVisible({ timeout: 10000 });
   });
 
-  test("admin audit page loads", async ({ page }) => {
+  test("管理端审计页可加载", async ({ page }) => {
     await page.goto("/admin/audit");
     await page.waitForLoadState("networkidle");
-    // The page's heading is "Agent Runs" — it renders the run history rather than a
-    // generic audit log, so /audit|log/ matched nothing on a page that loads fine.
-    await expect(page.getByText(/agent runs|access denied/i).first()).toBeVisible({ timeout: 10000 });
+    // 该页面的标题是「智能体运行记录」——它渲染的是运行历史而不是通用审计
+    // 日志，因此 /audit|log/ 在一个加载正常的页面上什么也匹配不到。
+    await expect(page.getByText(/智能体运行记录|暂无运行记录/).first()).toBeVisible({ timeout: 10000 });
   });
 
-  test("admin can browse products and orders", async ({ page }) => {
+  test("管理员可以浏览商品与订单", async ({ page }) => {
     await page.goto("/products");
     await page.waitForLoadState("networkidle");
-    await expect(page.getByText(/products|showing/i).first()).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(/商品目录|共 .* 件商品/).first()).toBeVisible({ timeout: 10000 });
 
     await page.goto("/orders");
     await page.waitForLoadState("networkidle");
-    // Admin has orders too from seed data
+    // 管理员在种子数据里也有订单
     const content = await page.textContent("body");
     expect(content).toBeTruthy();
   });
 
-  test("admin profile shows admin role", async ({ page }) => {
+  test("管理员个人中心显示管理员角色", async ({ page }) => {
     await page.goto("/profile");
     await page.waitForLoadState("networkidle");
     await expect(page.getByText(USERS.admin.name).first()).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText(/admin/i).first()).toBeVisible();
+    await expect(page.getByText(/管理员/).first()).toBeVisible();
   });
 });
 
 // ---------------------------------------------------------------------------
-// 4. POWER USER ROLE TESTS
+// 4. 高级用户角色测试
 // ---------------------------------------------------------------------------
 
-test.describe("Power User Role", () => {
+test.describe("高级用户角色", () => {
   test.beforeEach(async ({ page }) => {
     await ensureLoggedOut(page);
     await login(page, USERS.powerUser.email, USERS.powerUser.password);
   });
 
-  test("power user can access chat", async ({ page }) => {
+  test("高级用户可以访问对话", async ({ page }) => {
     await page.goto("/chat");
     await expect(page.locator("textarea").first()).toBeVisible();
   });
 
-  test("power user can browse the agent catalog", async ({ page }) => {
+  test("高级用户可以浏览智能体目录", async ({ page }) => {
     await page.goto("/agents");
     await page.waitForLoadState("networkidle");
-    await expect(page.getByText(/Product Discovery|Order Management|Marketplace|agent/i).first()).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText(/商品发现|订单管理|智能体/).first()).toBeVisible({ timeout: 15000 });
   });
 
-  test("power user profile shows power_user role", async ({ page }) => {
+  test("高级用户个人中心显示高级会员角色", async ({ page }) => {
     await page.goto("/profile");
     await page.waitForLoadState("networkidle");
     await expect(page.getByText(USERS.powerUser.name).first()).toBeVisible({ timeout: 10000 });
@@ -284,27 +284,27 @@ test.describe("Power User Role", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 5. SELLER ROLE TESTS
+// 5. 商家角色测试
 // ---------------------------------------------------------------------------
 
-test.describe("Seller Role", () => {
+test.describe("商家角色", () => {
   test.beforeEach(async ({ page }) => {
     await ensureLoggedOut(page);
     await login(page, USERS.seller.email, USERS.seller.password);
   });
 
-  test("seller can access chat", async ({ page }) => {
+  test("商家可以访问对话", async ({ page }) => {
     await page.goto("/chat");
     await expect(page.locator("textarea").first()).toBeVisible();
   });
 
-  test("seller can browse products", async ({ page }) => {
+  test("商家可以浏览商品", async ({ page }) => {
     await page.goto("/products");
     await page.waitForLoadState("networkidle");
-    await expect(page.getByText(/products|showing/i).first()).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(/商品目录|共 .* 件商品/).first()).toBeVisible({ timeout: 10000 });
   });
 
-  test("seller profile shows seller role", async ({ page }) => {
+  test("商家个人中心显示商家角色", async ({ page }) => {
     await page.goto("/profile");
     await page.waitForLoadState("networkidle");
     await expect(page.getByText(USERS.seller.name).first()).toBeVisible({ timeout: 10000 });
@@ -312,34 +312,34 @@ test.describe("Seller Role", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 6. SECOND CUSTOMER (Bob) - CROSS-USER ISOLATION
+// 6. 第二位顾客（Bob）——跨用户隔离
 // ---------------------------------------------------------------------------
 
-test.describe("Cross-User Isolation (Bob)", () => {
+test.describe("跨用户隔离（Bob）", () => {
   test.beforeEach(async ({ page }) => {
     await ensureLoggedOut(page);
     await login(page, USERS.customer2.email, USERS.customer2.password);
   });
 
-  test("Bob sees his own orders, not Alice's", async ({ page }) => {
+  test("Bob 只看到自己的订单，看不到 Alice 的", async ({ page }) => {
     await page.goto("/orders");
     await page.waitForLoadState("networkidle");
-    // Bob has different orders than Alice
+    // Bob 的订单与 Alice 不同
     const content = await page.textContent("body");
     expect(content).toBeTruthy();
   });
 
-  test("Bob sees his own profile", async ({ page }) => {
+  test("Bob 看到自己的个人资料", async ({ page }) => {
     await page.goto("/profile");
     await page.waitForLoadState("networkidle");
     await expect(page.getByText(USERS.customer2.name).first()).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText(/silver/i).first()).toBeVisible(); // Bob is Silver tier
+    await expect(page.getByText(/白银/).first()).toBeVisible(); // Bob 是白银会员
   });
 
-  test("Bob cannot access admin pages", async ({ page }) => {
+  test("Bob 无法访问管理端页面", async ({ page }) => {
     await page.goto("/admin");
     await page.waitForLoadState("networkidle");
-    // Should show access denied or redirect
-    await expect(page.getByText(/denied|unauthorized|not authorized/i).first()).toBeVisible({ timeout: 5000 });
+    // 应显示无权访问或发生跳转
+    await expect(page.getByText(/无权访问|没有查看该页面的管理员权限/).first()).toBeVisible({ timeout: 5000 });
   });
 });

@@ -1,4 +1,4 @@
-"""Shared user tools used across multiple agents for personalization."""
+"""多个智能体共用的用户个性化工具。"""
 
 from __future__ import annotations
 

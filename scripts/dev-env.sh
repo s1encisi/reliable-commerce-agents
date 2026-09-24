@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Source this file from any directory: source /path/to/Demo/scripts/dev-env.sh
-# Add project tools and optional rootless Chromium libraries to this shell only.
+# 可在任意目录 source 本文件: source /path/to/Demo/scripts/dev-env.sh
+# 仅向当前 shell 追加项目工具目录与可选的免 root Chromium 运行库。
 _demo_env_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export PATH="$_demo_env_root/.local/bin:$HOME/.local/bin:$PATH"
 if [[ -d "$_demo_env_root/.local/browser-libs/usr/lib/x86_64-linux-gnu" ]]; then

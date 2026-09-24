@@ -1,32 +1,15 @@
 #!/usr/bin/env python3
-"""Assemble the published documentation site from the repo's own markdown.
+"""从仓库 Markdown 构建文档站点。
 
-The site at https://nitinksingh.com/e-commerce-agents/ is a *rendering* of this
-repository, never a second copy of it. That distinction is the whole design:
+仓库是内容来源，站点只是渲染结果。构建时向忽略的 _site_src 注入
+Jekyll 元数据，不向原文添加前置元数据。教程、文档及源码间的相对
+链接统一改写为站内路径或 GitHub 文件地址；--check 用于发现漂移。
 
-- **Nothing is committed for the site's benefit.** The obvious route — put
-  Jekyll front matter in all 100-odd markdown files — degrades the repo's own
-  reading experience, because GitHub renders front matter as a metadata table at
-  the top of every file. Every page here also already carries its title as an
-  H1, which just-the-docs would then render a second time. So front matter is
-  injected here, at build time, into a gitignored ``_site_src/``.
+使用方式：
+    uv run python scripts/build_docs_site.py
+    uv run python scripts/build_docs_site.py --check
 
-- **Links point in three directions and must all keep working.** Tutorials link
-  to sibling chapters, up to ``docs/``, and out to real source files under
-  ``agents/``. Docs link back to the root README. Publishing ``docs/`` alone
-  breaks one of those directions; publishing all three trees into one site means
-  every relative link has to be rewritten to either a site path or a GitHub blob
-  URL. That rewriting is the bulk of this script, and ``--check`` is what stops
-  it rotting.
-
-Reverse of ``scripts/migrate_tutorials_to_hugo.py``, which moved content *out*
-of the repo and left stubs behind — the decision Phase 4 spent weeks undoing.
-This one only ever reads.
-
-Usage::
-
-    uv run python scripts/build_docs_site.py           # build _site_src/
-    uv run python scripts/build_docs_site.py --check    # verify, exit non-zero
+构建命令写入生成目录，不执行远端发布。
 """
 
 from __future__ import annotations
@@ -42,40 +25,35 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = REPO_ROOT / "_site_src"
-GITHUB_BASE = "https://github.com/nitin27may/e-commerce-agents"
+GITHUB_BASE = "https://github.com/s1encisi/reliable-commerce-agents"
 GITHUB_BRANCH = "main"
 
-# Must stay in sync with `description:` in docs/_config.yml. Used as the
-# last-resort meta description and, more importantly, as the sentinel the
-# build checks for: a page still carrying it has no description of its own.
-SITE_DESCRIPTION = (
-    "Multi-agent orchestration with Microsoft Agent Framework — concepts, 34 tutorial "
-    "chapters, and a running reference implementation in Python and .NET."
-)
+# 与 docs/_config.yml 的 description 保持一致。
+# 作为最后兜底描述，也用于检查页面
+# 是否缺少自己的摘要。
+SITE_DESCRIPTION = "可靠电商多智能体平台：基于微软智能体框架，包含核心概念、34 章教程与 Python 参考实现。"
 
-# ── section taxonomy ──────────────────────────────────────────────────────
+# 章节分类
 #
-# Ordered by who is reading, not by how the files happen to sit on disk: a
-# reader who does not yet know what an agent is meets Concepts before
-# Architecture, and Reference — the matrices and the glossary — sits last
-# because nobody reads it front to back.
+# 按读者的学习路径排序，而非磁盘目录，
+# 先理解概念，再阅读架构，
+# 矩阵和术语等查询资料放在最后，
+# 便于按需查阅。
 
 
 @dataclass(frozen=True)
 class Section:
-    """One top-level nav section."""
+    """一个顶层导航章节。"""
 
     title: str
     nav_order: int
     summary: str
-    # Repo-relative markdown paths, in the order they should appear.
+    # 仓库相对的 markdown 路径，按应出现的顺序排列。
     pages: tuple[str, ...] = ()
-    # A real file to use as this section's landing page, when the repo already
-    # has one worth publishing. Tutorials and Concepts both do — their READMEs
-    # carry the learning-path table and the two reading paths, which a
-    # one-line synthesised summary would throw away. It also makes the 3
-    # chapter links to `../README.md` resolve to the site's own index instead
-    # of bouncing the reader out to GitHub.
+    # 当仓库里已经有一个值得发布的文件时，用它作为本章节的落地页。教程与
+    # Concepts 都有 —— 它们的 README 携带学习路径表和两条阅读路线，而一句
+    # 合成的摘要会把这些全部丢掉。这还能让 3 处指向 `../README.md` 的章节链接
+    # 解析到站点自身的首页，而不是把读者弹到 GitHub 上。
     index_source: str | None = None
 
 
@@ -83,7 +61,7 @@ SECTIONS: tuple[Section, ...] = (
     Section(
         "Getting Started",
         2,
-        "Run the stack, deploy it, and fix the things that commonly break first.",
+        "启动服务、了解部署方式，并排查常见问题。",
         (
             "docs/quick-start.md",
             "docs/configuration.md",
@@ -96,23 +74,21 @@ SECTIONS: tuple[Section, ...] = (
     Section(
         "Concepts",
         3,
-        "What an agent is, why anyone needs more than one, and what every term "
-        "in this repo means — written for a developer who is new to the AI side.",
-        (),  # populated from docs/concepts/ below
+        "从智能体基本概念出发，解释多智能体协作及项目术语。",
+        (),  # 从下方 docs/concepts/ 扫描填充。
         index_source="docs/concepts/README.md",
     ),
     Section(
         "Tutorials",
         4,
-        "Thirty-four chapters, each with a runnable example in Python and .NET, "
-        "building from one agent to the full capstone.",
-        (),  # populated from tutorials/ below
+        "34 章教程，从单个智能体逐步连接到完整项目，包含 Python 示例与配置指南。",
+        (),  # 从下方 tutorials/ 扫描填充。
         index_source="tutorials/README.md",
     ),
     Section(
         "Architecture",
         5,
-        "How the running application actually fits together.",
+        "了解运行中的应用如何连接各模块。",
         (
             "docs/architecture.md",
             "docs/agent-flows.md",
@@ -125,9 +101,11 @@ SECTIONS: tuple[Section, ...] = (
     Section(
         "Guides",
         6,
-        "Task-shaped walkthroughs for extending and operating the system.",
+        "面向具体任务的操作指引，用于扩展与运维这套系统。",
         (
             "docs/adding-an-agent.md",
+            "docs/agent-upgrade.md",
+            "docs/upgrade-verification.md",
             "docs/mcp-integration.md",
             "docs/telemetry.md",
             "docs/security-guide.md",
@@ -139,8 +117,7 @@ SECTIONS: tuple[Section, ...] = (
     Section(
         "Reference",
         7,
-        "Lookup material — parity between the two stacks, the per-agent control "
-        "matrix, the glossary, and the diagram style guide.",
+        "查询能力覆盖、智能体控制矩阵、术语表与绘图约定。",
         (
             "docs/parity-matrix.md",
             "docs/agent-audit-matrix.md",
@@ -158,12 +135,12 @@ SECTIONS: tuple[Section, ...] = (
     ),
 )
 
-# Tutorial tiers, copied from tutorials/README.md's own "Tiers" section rather
-# than renumbered here. The labels have to match exactly: a site nav reading
-# "Tier 7 — Missing Concepts" against a repo that calls the same five chapters
-# Tier 6 is worse than no grouping at all, because both look authoritative.
-# Setup, Capstone and the bonus chapter genuinely sit outside the tiers there,
-# so they keep their own headings instead of being folded into a neighbour.
+# 教程层级与 tutorials/README.md 一致，
+# 不能在站点中另行编号，
+# 否则同一组章节会得到不同层级名称，
+# 使两个入口互相矛盾。
+# 配置、完整项目导览和补充章节不属于数字层级，
+# 保留独立分组。
 TIERS: tuple[tuple[str, range], ...] = (
     ("Setup", range(0, 1)),
     ("Tier 1 — Core Agent", range(1, 5)),
@@ -181,23 +158,23 @@ TIERS: tuple[tuple[str, range], ...] = (
 
 @dataclass
 class Page:
-    """One markdown file on its way from the repo to the site."""
+    """由仓库源文档生成的一个站点页面。"""
 
-    source: Path  # repo-relative
-    out_path: Path  # relative to OUT_DIR
+    source: Path  # 相对仓库根目录。
+    out_path: Path  # 相对 OUT_DIR。
     title: str
     nav_order: int
     parent: str | None = None
     grand_parent: str | None = None
     has_children: bool = False
     body: str = ""
-    # Set for pages this script synthesises (section indexes), which have no
-    # source file to link back to.
+    # 脚本合成的章节索引没有源文件，
+    # 因此不生成原文回链。
     generated: bool = False
 
 
 def chapter_tier(slug: str) -> str:
-    """Map ``14-handoff-orchestration`` to its tier title."""
+    """将章节目录名映射到所属层级标题。"""
     match = re.match(r"(\d+)", slug)
     number = int(match.group(1)) if match else 99
     for title, span in TIERS:
@@ -207,10 +184,10 @@ def chapter_tier(slug: str) -> str:
 
 
 def chapter_sort_key(slug: str) -> tuple[int, str]:
-    """Order chapters numerically, keeping ``20b`` next to ``20``.
+    """按数字顺序排列章节，让 ``20b`` 紧跟在 ``20`` 后面。
 
-    Plain alphabetical sorting puts ``20b-devui`` *before* ``20-visualization``,
-    which reads as a numbering error to anyone scanning the nav.
+    单纯按字母排序会把 ``20b-devui`` 排到 ``20-visualization`` *前面*，在扫视
+    导航的人看来就像是编号出错。
     """
     match = re.match(r"(\d+)([a-z]*)", slug)
     if not match:
@@ -219,21 +196,10 @@ def chapter_sort_key(slug: str) -> tuple[int, str]:
 
 
 def read_title_and_body(path: Path) -> tuple[str, str]:
-    """Read a page's title from its H1, leaving the body intact.
+    """从 H1 提取标题，但保留正文中的 H1。
 
-    This used to strip the H1, on the theory that just-the-docs renders
-    ``title:`` as the page heading and leaving it in would show every title
-    twice. It does not. just-the-docs emits no ``<h1>`` of its own — the
-    heading you see on any of these pages comes from the markdown — so
-    stripping it published all 85 pages with **no ``<h1>`` at all**, which a
-    live crawl confirmed against every URL in the sitemap.
-
-    That is why the sibling sites were fine: mean-docker and
-    clean-architecture keep their markdown H1 and render one heading each.
-    Only the generated site had the problem, and only because of this function.
-
-    The title is still parsed out of the H1 for front matter, so ``title:`` and
-    the visible heading stay in agreement.
+    主题不会自动生成同等页面标题；删除原 H1 会使页面缺少一级标题。
+    元数据与可见标题都从同一原文解析，保持一致。
     """
     text = path.read_text(encoding="utf-8")
     title = path.stem.replace("-", " ").title()
@@ -247,12 +213,12 @@ def read_title_and_body(path: Path) -> tuple[str, str]:
 def collect_pages() -> list[Page]:
     pages: list[Page] = []
 
-    # ── Home ──
-    # Committed as docs/index.md rather than synthesised here: it is the one
-    # page whose prose is genuinely site-specific, and it should be reviewable
-    # in a diff like any other content. Jekyll serves index.md at / while
-    # GitHub keeps showing docs/README.md when browsing the folder, so the two
-    # coexist without either interfering.
+    # 首页
+    # 首页正文来自可审阅的 docs/index.md，
+    # 而不是由脚本合成整篇内容。
+    # Jekyll 在站点根路径提供 index.md，
+    # GitHub 目录浏览则展示 README.md，
+    # 两者可并存。
     _, home_body = read_title_and_body(REPO_ROOT / "docs/index.md")
     pages.append(
         Page(
@@ -314,8 +280,8 @@ def collect_pages() -> list[Page]:
         if section.title == "Tutorials":
             for tier_order, (tier_title, _) in enumerate(TIERS, start=1):
                 tier_slug = tier_title.split(" — ")[0].lower().replace(" ", "-")
-                # "Setup" / "Capstone" / "Bonus Pattern" have no "Tier N"
-                # prefix, so the split above already yields a usable slug.
+                # 独立分组没有数字层级前缀，
+                # 上面的分割即可得到可用路径片段。
                 pages.append(
                     Page(
                         source=Path(f"{slug}/{tier_slug}.md"),
@@ -324,7 +290,7 @@ def collect_pages() -> list[Page]:
                         nav_order=tier_order,
                         parent=section.title,
                         has_children=True,
-                        body=f"Chapters in {tier_title}.",
+                        body=f"{tier_title} 的教程章节。",
                         generated=True,
                     )
                 )
@@ -355,7 +321,7 @@ def collect_pages() -> list[Page]:
             path = REPO_ROOT / rel
             title, body = read_title_and_body(path)
             name = Path(rel).name
-            if name == "README.md":  # e.g. docs/workflows/README.md
+            if name == "README.md":  # 例如 docs/workflows/README.md。
                 name = f"{Path(rel).parent.name}.md"
             pages.append(
                 Page(
@@ -368,23 +334,51 @@ def collect_pages() -> list[Page]:
                 )
             )
 
+    # 路径仍使用稳定英文标识；仅在页面组装完成后本地化展示标题与导航。
+    display_titles = {
+        "Home": "首页",
+        "Getting Started": "快速开始",
+        "Concepts": "核心概念",
+        "Tutorials": "教程",
+        "Architecture": "系统架构",
+        "Guides": "操作指南",
+        "Reference": "参考资料",
+        "Setup": "环境配置",
+        "Tier 1 — Core Agent": "第 1 层 · 智能体基础",
+        "Tier 2 — Agent Internals": "第 2 层 · 智能体内部机制",
+        "Tier 3 — Workflow Foundations": "第 3 层 · 工作流基础",
+        "Tier 4 — Orchestrations": "第 4 层 · 编排模式",
+        "Tier 5 — Advanced": "第 5 层 · 进阶能力",
+        "Capstone": "完整项目导览",
+        "Bonus Pattern": "补充编排模式",
+        "Tier 6 — Missing Concepts": "第 6 层 · 专题能力",
+        "Tier 7 — Patterns Without Production Wiring": "第 7 层 · 尚未接入生产的模式",
+        "Cost Control": "成本控制",
+    }
+    for page in pages:
+        page.title = display_titles.get(page.title, page.title)
+        page.parent = display_titles.get(page.parent, page.parent)
+        page.grand_parent = display_titles.get(page.grand_parent, page.grand_parent)
+        if page.generated:
+            for original, translated in display_titles.items():
+                page.body = page.body.replace(original, translated)
+
     return pages
 
 
-# ── link rewriting ────────────────────────────────────────────────────────
+# ── 链接重写 ──────────────────────────────────────────────────────────────
 
 LINK_RE = re.compile(r"(!?)\[([^\]]*)\]\(([^)\s]+)(\s+\"[^\"]*\")?\)")
-# Raw HTML images. docs/frontend.md uses a <table> to put two screenshots side
-# by side, which markdown cannot express, so its <img src> never went through
-# LINK_RE. The page publishes at architecture/frontend.html while the images
-# copy to docs/images/, so a relative src resolved to architecture/images/ and
-# 404'd on the live site.
+# 原始 HTML 图片。docs/frontend.md 用 <table> 把两张截图并排放置，这是 markdown
+# 无法表达的，所以它的 <img src> 从不经过 LINK_RE。该页面发布为
+# architecture/frontend.html，而图片复制到 docs/images/，于是相对 src 会解析到
+# architecture/images/，在线上 404。
 HTML_IMG_RE = re.compile(r'(<img\b[^>]*?\bsrc=")([^"]+)(")', re.IGNORECASE)
 
 
 @dataclass
 class Rewriter:
-    """Rewrites one page's relative links into site or GitHub URLs."""
+    """把一个页面的相对链接重写为站点或 GitHub URL。"""
 
     by_source: dict[Path, Page]
     problems: list[str] = field(default_factory=list)
@@ -402,7 +396,7 @@ class Rewriter:
         return f"{GITHUB_BASE}/{kind}/{GITHUB_BRANCH}/{rel.as_posix()}"
 
     def resolve(self, source: Path, target: str) -> Path | None:
-        """Resolve a link target to a repo-relative path, or None if external."""
+        """将链接目标解析为仓库相对路径；外部链接返回 None。"""
         if target.startswith(("http://", "https://", "mailto:", "#", "{{")):
             return None
         base = (REPO_ROOT / source).parent
@@ -424,26 +418,25 @@ class Rewriter:
             if rel is None:
                 return match.group(0)
 
-            # Images: copied alongside the pages, so they keep a site path.
+            # 图片：与页面一起复制过去，因此保留站点路径。
             if bang or rel.suffix.lower() in {".png", ".jpg", ".jpeg", ".svg", ".gif"}:
                 return f"{bang}[{text}]({{{{ site.baseurl }}}}/{rel.as_posix()}{anchor}{title})"
 
-            # The root README is the site's home page, not a file to link out to.
+            # 根目录 README 就是站点首页，不是一个要向外链接的文件。
             if rel == Path("README.md"):
                 return f"[{text}]({{{{ site.baseurl }}}}/{anchor}{title})"
 
-            # A published page — either directly, or a directory whose README
-            # is published (``../02-add-tools/`` is written this way 98 times).
+            # 一个已发布的页面 —— 要么直接命中，要么其 README 被发布
+            # （``../02-add-tools/`` 这种写法出现了 98 次）。
             for candidate in (rel, rel / "README.md"):
                 if candidate in self.by_source:
                     url = self.site_url(self.by_source[candidate])
                     return f"[{text}]({url}{anchor}{title})"
 
-            # Everything else is real source the site does not publish: chapter
-            # code (``./python/main.py``), ``agents/``, ``scripts/``. Point at
-            # GitHub rather than emitting a link that 404s.
+            # 其余都是站点不发布的真实源码：章节代码（``./python/main.py``）、
+            # ``agents/``、``scripts/``。指向 GitHub，而不是产出一个会 404 的链接。
             if not (REPO_ROOT / rel).exists():
-                self.problems.append(f"{page.source}: link target does not exist: {target}")
+                self.problems.append(f"{page.source}: 链接目标不存在: {target}")
                 return match.group(0)
             return f"[{text}]({self.github_url(rel)}{anchor}{title})"
 
@@ -453,7 +446,7 @@ class Rewriter:
             if rel is None:
                 return match.group(0)
             if not (REPO_ROOT / rel).exists():
-                self.problems.append(f"{page.source}: image does not exist: {target}")
+                self.problems.append(f"{page.source}: 图片不存在: {target}")
                 return match.group(0)
             return f"{head}{{{{ site.baseurl }}}}/{rel.as_posix()}{tail}"
 
@@ -462,20 +455,20 @@ class Rewriter:
 
 # ─────────────────────────── SEO metadata ───────────────────────────────
 #
-# Every one of the 85 pages shipped with the same meta description — the
-# site-level fallback from _config.yml — because the generator emitted no
-# per-page `description`. Verified against the deployed site, not assumed:
-# the home page, a guide, a concept page and a tutorial chapter all served
-# byte-identical <meta name="description">, <meta property="og:description">
-# and JSON-LD `description`. To a search engine that is 85 near-duplicate
-# pages, which is the single worst thing a docs site can do to itself.
+# 每页应有自己的元描述，
+# 不能全部使用站点配置的兜底文字。
+# 否则首页、指南、概念页和教程
+# 都会产生相同摘要，
+# 连 Open Graph 与 JSON-LD 描述
+# 也无法区分页内容，
+# 降低检索结果的可辨识度。
 #
-# Canonicals, og:title, twitter:card and the sitemap were already correct
-# (jekyll-seo-tag + jekyll-sitemap), so this fills the gaps rather than
-# rebuilding what works.
+# 规范地址、分享标题和站点地图
+# 继续由现有 Jekyll 插件处理，
+# 这里只补充页面摘要。
 
-# Prose that is not a description: badge rows, blockquote callouts, tables,
-# fences, headings, list bullets, and the "This page is generated" footer.
+# 徽章、引用提示、表格、代码围栏、标题和列表
+# 不能作为普通首段摘要；生成页脚也应跳过。
 _SKIP_PREFIXES = ("#", ">", "|", "```", "~~~", "-", "*", "1.", "<!--", "{:", "!", "---")
 
 _MD_LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]*\)")
@@ -486,12 +479,9 @@ _WS_RE = re.compile(r"\s+")
 
 
 def extract_description(body: str, fallback: str) -> str:
-    """First real paragraph of a page, flattened to a meta description.
+    """将页面首个正文段落展平为元描述。
 
-    Deliberately taken from the page's own opening prose rather than
-    synthesised: the first paragraph of every page here already answers "what
-    is this page", because the chapter contract and the concepts template both
-    require it. Anything generated would be worse and would drift.
+    使用原文而非另行生成摘要，减少内容漂移。
     """
     para: list[str] = []
     for raw in body.splitlines():
@@ -516,8 +506,8 @@ def extract_description(body: str, fallback: str) -> str:
     if not text:
         return fallback
 
-    # ~155 chars is where Google truncates. Cut on a sentence if one lands in
-    # range, else on a word — never mid-word, and never with a dangling comma.
+    # 约 155 个字符是 Google 截断的位置。若范围内正好有句末标点就在那里切，否则
+    # 按词切 —— 绝不在词中间切，也绝不留下悬空的逗号。
     if len(text) <= 155:
         return text
     cut = text[:155]
@@ -528,10 +518,9 @@ def extract_description(body: str, fallback: str) -> str:
     return cut[: cut.rfind(" ")].rstrip(" ,;:—-") + "…"
 
 
-# Terms worth surfacing as keywords when a page actually discusses them.
-# Matched case-insensitively against the body, so a page only claims a keyword
-# it genuinely covers — a static per-section list would attach "guardrails" to
-# 85 pages and mean nothing.
+# 当页面确实讨论到某些概念时，值得作为关键词暴露出来。以大小写不敏感的方式
+# 匹配正文，因此页面只会声明自己真正涉及的关键词 —— 一份静态的按章节关键词表
+# 会把 "guardrails" 挂到全部 85 个页面上，毫无意义。
 _KEYWORD_TERMS = {
     "Microsoft Agent Framework": ("microsoft agent framework", "maf"),
     "multi-agent": ("multi-agent", "multi agent"),
@@ -548,7 +537,6 @@ _KEYWORD_TERMS = {
     "observability": ("opentelemetry", "observability", "telemetry"),
     "checkpoints": ("checkpoint",),
     "Python": ("python",),
-    ".NET": (".net", "c#"),
     "Azure OpenAI": ("azure openai",),
     "FastAPI": ("fastapi",),
     "PostgreSQL": ("postgres",),
@@ -557,7 +545,7 @@ _KEYWORD_TERMS = {
 
 
 def extract_keywords(title: str, body: str, section: str | None) -> list[str]:
-    """Keywords a page can actually support, in a stable order."""
+    """按稳定顺序提取页面实际支持的关键词。"""
     haystack = f"{title}\n{body}".lower()
     found = [kw for kw, needles in _KEYWORD_TERMS.items() if any(n in haystack for n in needles)]
     if section and section not in found:
@@ -566,11 +554,9 @@ def extract_keywords(title: str, body: str, section: str | None) -> list[str]:
 
 
 def seo_type(page: Page) -> str:
-    """schema.org type for jekyll-seo-tag's JSON-LD.
+    """为 Jekyll JSON-LD 选择 schema.org 类型。
 
-    Everything was `WebPage`, including 34 tutorial chapters and 14 concept
-    pages. `TechArticle` is the accurate type for both and is the one Google
-    documents for developer documentation.
+    教程和概念说明使用 TechArticle，其他页面按用途分类。
     """
     top = page.out_path.parts[0] if page.out_path.parts else ""
     return "TechArticle" if top in {"tutorials", "concepts", "guides", "architecture"} else "WebPage"
@@ -581,30 +567,17 @@ _HEADING_RE = re.compile(r"^#{2,6}\s+(.*?)\s*$", re.M)
 
 
 def label_mermaid_diagrams(body: str, page_title: str) -> str:
-    """Give every diagram an accessible title.
+    """为 Mermaid 图添加可访问标题。
 
-    The 71 Mermaid diagrams are the most distinctive thing in these docs and
-    were also the least accessible: they ship as ``<pre class="language-mermaid">``
-    and are rendered to SVG client-side, so a screen reader reaching the
-    finished graphic finds an unlabelled ``<svg>``.
-
-    Mermaid's own ``accTitle`` directive is the fix — it emits ``<title>`` into
-    the generated SVG and sets ``role="img"``, which is the standards-based
-    answer rather than an ARIA attribute bolted onto the wrapper. The label is
-    the nearest preceding heading, so it is real page structure rather than
-    anything invented; a diagram with no heading above it falls back to the
-    page title.
-
-    Only ``accTitle`` is injected, not ``accDescr``. A generated long
-    description would be guesswork, and a wrong one is worse for a screen
-    reader user than none.
+    用最近的前置标题生成 accTitle，让渲染 SVG 获得标题和图像角色；
+    没有局部标题时使用页面标题。只补充短标题，不臆造长说明。
     """
 
     def label_for(offset: int) -> str:
         headings = [m.group(1) for m in _HEADING_RE.finditer(body, 0, offset)]
         raw = headings[-1] if headings else page_title
-        # Directive values are terminated by the newline, so strip markup that
-        # would otherwise leak into the SVG title verbatim.
+        # 指令值在换行处结束，清理 Markdown 标记，
+        # 避免原样进入 SVG 标题。
         clean = _MD_CODE_RE.sub(r"\1", raw)
         clean = _MD_LINK_RE.sub(r"\1", clean)
         clean = _MD_EMPH_RE.sub(r"\1", clean)
@@ -615,20 +588,18 @@ def label_mermaid_diagrams(body: str, page_title: str) -> str:
         if "accTitle" in inner:
             return match.group(0)
         lines = inner.split("\n")
-        # accTitle must follow the *diagram-type* line. 47 of the 71 diagrams
-        # here open with a `%%{init: ...}%%` theme directive, and inserting
-        # after that instead put accTitle ahead of the diagram type, where
-        # Mermaid silently ignores it — the diagram still rendered, just with
-        # no title. Caught only by rendering all 71 in a real browser at the
-        # pinned version and counting <title> elements: 24 of 71.
+        # accTitle 必须紧跟在*图表类型*那一行之后。这里 71 张图里有 47 张以
+        # `%%{init: ...}%%` 主题指令开头，若插在它后面就会把 accTitle 放到图表
+        # 类型之前，Mermaid 会静默忽略它 —— 图照常渲染，只是没有标题。这个问题
+        # 只有在真实浏览器里以锁定版本渲染全部 71 张图并统计 <title> 元素个数时
+        # 才被发现：71 个里只有 24 个。
         in_directive = False
         for i, line in enumerate(lines):
             stripped = line.strip()
-            # `%%{init: ...}%%` theme blocks span *several* lines here, and only
-            # the first starts with `%%`. Skipping on that prefix alone dropped
-            # accTitle into the middle of the themeVariables object — which
-            # Mermaid tolerated well enough to still draw the diagram, so the
-            # only symptom was a missing <title>.
+            # `%%{init: ...}%%` 主题块在这里会跨*好几行*，且只有第一行以 `%%`
+            # 开头。仅凭这个前缀判断会跳过后续行，把 accTitle 丢进 themeVariables
+            # 对象中间 —— Mermaid 对此足够宽容，仍能画出图来，所以唯一的症状就是
+            # 少了一个 <title>。
             if stripped.startswith("%%{"):
                 in_directive = not stripped.endswith("}%%")
                 continue
@@ -639,7 +610,7 @@ def label_mermaid_diagrams(body: str, page_title: str) -> str:
             if not stripped or stripped.startswith("%%"):
                 continue
             indent = line[: len(line) - len(line.lstrip())]
-            # A colon terminates the directive value, so it cannot appear in it.
+            # 清理冒号，避免干扰指令解析。
             label = label_for(match.start()).replace(":", " -")
             lines.insert(i + 1, f"{indent}    accTitle: {label}")
             break
@@ -650,15 +621,13 @@ def label_mermaid_diagrams(body: str, page_title: str) -> str:
 
 @lru_cache(maxsize=None)
 def git_last_modified(source: str) -> str | None:
-    """Commit date of a page's source file, ISO-8601.
+    """页面源文件的提交日期，ISO-8601。
 
-    jekyll-sitemap emits ``<lastmod>`` from ``page.last_modified_at``, and
-    without it every ``<url>`` in the sitemap carries a location and nothing
-    else — a crawler is given no way to tell a chapter rewritten yesterday
-    from one untouched for a year, so recrawls are scheduled blind. Taken
-    from git rather than the filesystem because a fresh clone (CI) has
-    checkout time as mtime on every file, which would claim all 85 pages
-    changed simultaneously on every build.
+    jekyll-sitemap 会从 ``page.last_modified_at`` 生成 ``<lastmod>``；没有它，
+    sitemap 里每个 ``<url>`` 就只带一个地址、别无他物 —— 爬虫无从判断某个章节
+    是昨天刚改写还是一年没动过，重新抓取只能盲目排期。取自 git 而不是文件系统，
+    因为全新克隆（持续集成环境）里所有文件的 mtime 都是检出时间，那会声称全部
+    85 个页面在每次构建时同时发生变化。
     """
     try:
         out = subprocess.run(
@@ -675,8 +644,8 @@ def git_last_modified(source: str) -> str | None:
 
 
 def yaml_quote(value: str) -> str:
-    """Double-quoted YAML scalar. Descriptions are prose and routinely contain
-    colons, quotes and em dashes, any one of which breaks an unquoted scalar."""
+    """双引号包裹的 YAML 标量。description 是散文，经常包含冒号、引号和破折号，
+    其中任何一个都会破坏未加引号的标量。"""
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
@@ -689,9 +658,8 @@ def front_matter(page: Page, body: str = "") -> str:
     if page.has_children:
         lines.append("has_children: true")
 
-    # jekyll-seo-tag reads `description` for <meta name="description">,
-    # og:description and the JSON-LD description in one go, so this single key
-    # fixes all three at once.
+    # jekyll-seo-tag 会一次性用 `description` 填充 <meta name="description">、
+    # og:description 与 JSON-LD 的 description，所以这一个键同时修好了三处。
     description = extract_description(body, SITE_DESCRIPTION)
     lines.append(f"description: {yaml_quote(description)}")
 
@@ -701,8 +669,8 @@ def front_matter(page: Page, body: str = "") -> str:
 
     lines.append(f"seo:\n  type: {seo_type(page)}")
 
-    # Generated section indexes have no source file, so they legitimately have
-    # no modification date; jekyll-sitemap simply omits <lastmod> for those.
+    # 生成的章节索引没有源文件，因此合理地没有修改日期；jekyll-sitemap 对这类
+    # 页面直接省略 <lastmod>。
     if not page.generated:
         stamp = git_last_modified(page.source.as_posix())
         if stamp:
@@ -713,18 +681,18 @@ def front_matter(page: Page, body: str = "") -> str:
 
 
 def source_link(page: Page) -> str:
-    """A per-page pointer back to the real file.
+    """每个页面回指真实文件的一个指针。
 
-    just-the-docs' own "Edit this page on GitHub" is disabled in _config.yml
-    because it would point into ``_site_src/``, which exists only inside a
-    build. This is the honest replacement.
+    just-the-docs 自带的「Edit this page on GitHub」已在 _config.yml 中关闭，
+    因为它会指向 ``_site_src/`` —— 那个目录只存在于构建过程之中。这是它的诚实
+    替代品。
     """
     if page.generated:
         return ""
     return (
-        f"\n\n---\n\n*Source: "
+        f"\n\n---\n\n*源码: "
         f"[`{page.source.as_posix()}`]({GITHUB_BASE}/blob/{GITHUB_BRANCH}/{page.source.as_posix()})"
-        f" — this page is generated from the repository.*\n"
+        f" —— 本页由仓库生成。*\n"
     )
 
 
@@ -732,17 +700,15 @@ FENCE_RE = re.compile(r"^\s*(```|~~~)")
 
 
 def protect_liquid(body: str) -> str:
-    """Wrap fenced blocks that Liquid would otherwise chew on in ``{% raw %}``.
+    """把 Liquid 会啃掉的围栏代码块包进 ``{% raw %}``。
 
-    Jekyll runs Liquid over the whole page before kramdown decides anything is
-    code, so ``{{ ... }}`` inside a fence is interpolated and silently replaced
-    with nothing. Mermaid spells a hexagon node ``id{{label}}``, which means
-    ``guard{{ReviewInjectionGuard}}`` published as a bare ``guard`` with no
-    label at all. Four diagrams were losing nodes this way.
+    Jekyll 会在 kramdown 判定任何内容是代码之前，先对整页跑一遍 Liquid，所以
+    围栏内的 ``{{ ... }}`` 会被插值并静默替换为空。Mermaid 用 ``id{{label}}``
+    表示六边形节点，这意味着 ``guard{{ReviewInjectionGuard}}`` 会发布成一个
+    光秃秃的 ``guard``，标签完全消失。有四张图就是这样丢掉了节点。
 
-    Only fences that actually contain a Liquid-looking construct are wrapped,
-    and link rewriting never emits ``{{ site.baseurl }}`` inside a fence, so
-    there is nothing here that still needs evaluating.
+    只有真正含有疑似 Liquid 结构的围栏才会被包裹，而链接重写从不在围栏内输出
+    ``{{ site.baseurl }}``，所以这里没有任何东西仍需要被求值。
     """
     lines = body.split("\n")
     out: list[str] = []
@@ -762,35 +728,33 @@ def protect_liquid(body: str) -> str:
             continue
         (block if block is not None else out).append(line)
     if block is not None:
-        # Unterminated fence: emit it as-is rather than silently dropping it.
+        # 未闭合的围栏：原样输出，而不是静默丢弃。
         out.append("\n".join(block))
     return "\n".join(out)
 
 
 def check_diagram_labels(out_path: Path, body: str) -> list[str]:
-    """Every diagram must carry an ``accTitle``, and it must be in the right place.
+    """每张图都必须带 ``accTitle``，而且必须放在正确的位置。
 
-    Worth a dedicated check because the failure is invisible: an ``accTitle``
-    placed before the diagram-type line — or, as happened here, *inside* a
-    multi-line ``%%{init: ...}%%`` theme block — still renders a perfectly
-    normal-looking diagram, and simply produces no ``<title>``. Nothing about
-    the page looks wrong; the diagram is just unlabelled for anyone using a
-    screen reader.
+    值得单独做一项检查，因为这个失败是不可见的：放在图表类型行之前的
+    ``accTitle`` —— 或者像这里实际发生的那样，被放进多行 ``%%{init: ...}%%``
+    主题块*内部* —— 依然会渲染出一张看起来完全正常的图，只是不会产出任何
+    ``<title>``。页面看不出任何问题；只是对使用屏幕阅读器的人来说，这张图没有
+    标签。
 
-    That is exactly the bug this function exists to catch: the first version of
-    ``label_mermaid_diagrams`` labelled 24 of 71 diagrams and looked correct in
-    every rendered page. It was found by rendering all 71 in a real browser at
-    the pinned Mermaid version and counting ``<title>`` elements.
+    这正是本函数存在的意义所在：``label_mermaid_diagrams`` 的第一个版本只给
+    71 张图中的 24 张加了标签，而在任何渲染出来的页面里看起来都是对的。它是靠
+    在真实浏览器中以锁定的 Mermaid 版本渲染全部 71 张图并统计 ``<title>`` 元素
+    才被发现的。
     """
     problems: list[str] = []
     for match in _MERMAID_FENCE_RE.finditer(body):
         inner = match.group(2)
         lines = inner.split("\n")
         if "accTitle:" not in inner:
-            problems.append(f"{out_path}: a mermaid diagram has no accTitle")
+            problems.append(f"{out_path}: 有一张 mermaid 图缺少 accTitle")
             continue
-        # Find the diagram-type line the same way the injector does, then
-        # require accTitle to come after it.
+        # 用与注入器相同的方式找到图表类型行，然后要求 accTitle 在它之后。
         in_directive = False
         type_index = None
         for i, line in enumerate(lines):
@@ -809,21 +773,20 @@ def check_diagram_labels(out_path: Path, body: str) -> list[str]:
         acc_index = next((i for i, line in enumerate(lines) if line.strip().startswith("accTitle:")), None)
         if type_index is None or acc_index is None or acc_index <= type_index:
             problems.append(
-                f"{out_path}: accTitle is not after the diagram-type line, so Mermaid "
-                f"ignores it and the diagram renders with no accessible title"
+                f"{out_path}: accTitle 不在图表类型行之后，因此 Mermaid 会忽略它，图表渲染出来后没有可访问的标题"
             )
     return problems
 
 
 def ensure_h1(body: str, title: str) -> str:
-    """Guarantee the page opens with an H1.
+    """确保页面以 H1 开头。
 
-    Pages read from a source file already carry one. Generated section indexes
-    do not — their body is a hardcoded summary string — so without this they
-    would keep publishing headingless even after the strip was removed.
+    从源文件读取的页面本来就带有 H1。生成的章节索引则没有 —— 它们的正文是一段
+    硬编码的摘要字符串 —— 所以没有这个函数，即便去掉了剥离逻辑，它们仍会继续
+    发布没有标题的页面。
 
-    Only a *leading* H1 counts. A page whose first heading is an H2 has no
-    top-level heading, and prepending one is the fix, not a duplicate.
+    只有*位于开头*的 H1 才算数。首个标题是 H2 的页面没有顶层标题，此时补上一个
+    才是修复，而不是重复。
     """
     for line in body.splitlines():
         stripped = line.strip()
@@ -833,27 +796,25 @@ def ensure_h1(body: str, title: str) -> str:
     return f"# {title}\n\n{body}"
 
 
-# ── llms.txt ──────────────────────────────────────────────────────────────
+# 生成 llms.txt 索引。
 #
-# Written because the measured evidence says to. Over a 14-day window,
-# chatgpt.com sent 114 views to this repository -- more than Google (58) or
-# Bing (61) individually. Discovery is happening through model answers, and
-# the site published nothing shaped for that.
+# 写它是因为实测证据要求这么做。在 14 天的窗口内，chatgpt.com 给本仓库带来了
+# 114 次浏览 —— 比 Google（58）或 Bing（61）单独一个都多。发现正在通过模型回答
+# 发生，而站点此前没有发布任何为此而组织的内容。
 #
-# Two files, per the llmstxt.org convention:
-#   llms.txt       an index: every page, its URL, and one line of description
-#   llms-full.txt  every page body concatenated, so one fetch gives a model
-#                  the whole corpus rather than 87 round trips
+# 按 llmstxt.org 的约定写两个文件：
+#   llms.txt       索引：每个页面、它的 URL，以及一行描述
+#   llms-full.txt  所有页面正文拼接在一起，一次抓取就能把一个模型的整个语料
+#                  给它，而不用来回 87 次
 #
-# Both are written after the OUT_DIR wipe in build(), or they would be
-# deleted before they are ever served.
+# 两者都在 build() 清空 OUT_DIR 之后才写，否则它们会在被提供之前就被删掉。
 
-SITE_ORIGIN = "https://nitinksingh.com"
-SITE_BASEURL = "/e-commerce-agents"
+SITE_ORIGIN = "https://s1encisi.github.io"
+SITE_BASEURL = "/reliable-commerce-agents"
 
 
 def page_url(page: Page) -> str:
-    """Public URL for a page, matching Jekyll's .md -> .html mapping."""
+    """页面的公开 URL，与 Jekyll 的 .md -> .html 映射保持一致。"""
     path = page.out_path.as_posix()
     if path.endswith("index.md"):
         path = path[: -len("index.md")]
@@ -863,11 +824,11 @@ def page_url(page: Page) -> str:
 
 
 def strip_for_plaintext(body: str) -> str:
-    """Remove Liquid scaffolding that is noise to a model reading the corpus."""
+    """去掉对阅读语料的模型而言只是噪声的 Liquid 脚手架。"""
     body = re.sub(r"\{%\s*raw\s*%\}|\{%\s*endraw\s*%\}", "", body)
-    # {{ site.baseurl }}/foo -> the real URL, so links in the corpus resolve.
+    # {{ site.baseurl }}/foo -> 真实 URL，让语料里的链接可以解析。
     body = re.sub(r"\{\{\s*site\.baseurl\s*\}\}", SITE_BASEURL, body)
-    body = re.sub(r"\n\{:\s*\.[^}]*\}", "", body)  # just-the-docs callout markers
+    body = re.sub(r"\n\{:\s*\.[^}]*\}", "", body)  # just-the-docs 提示标记
     return body.strip()
 
 
@@ -879,17 +840,16 @@ def write_llms_files(pages: list[Page], rendered: dict[Path, str]) -> None:
         by_section.setdefault(page.parent or page.title, []).append(page)
 
     index = [
-        "# E-Commerce Agents",
+        "# 可靠电商多智能体平台",
         "",
         f"> {SITE_DESCRIPTION}",
         "",
-        "A multi-agent e-commerce platform built on Microsoft Agent Framework, implemented twice —",
-        "Python and .NET — behind one Next.js frontend. Five orchestration patterns are selectable",
-        "at runtime. This documentation is generated from the repository, so every page corresponds",
-        "to a file in it.",
+        "一套基于微软智能体框架（Microsoft Agent Framework）构建的多智能体电商平台，",
+        "后端为 Python，前端为单个 Next.js 应用，五种编排模式可在运行时选择。",
+        "本文档由仓库生成，因此每个页面都对应仓库中的一个文件。",
         "",
-        f"Repository: https://github.com/nitin27may/e-commerce-agents",
-        f"Full text of every page: {SITE_ORIGIN}{SITE_BASEURL}/llms-full.txt",
+        f"仓库: https://github.com/s1encisi/reliable-commerce-agents",
+        f"所有页面的全文: {SITE_ORIGIN}{SITE_BASEURL}/llms-full.txt",
         "",
     ]
     for section, section_pages in by_section.items():
@@ -908,22 +868,22 @@ def write_llms_files(pages: list[Page], rendered: dict[Path, str]) -> None:
     (OUT_DIR / "llms.txt").write_text("\n".join(index) + "\n", encoding="utf-8")
 
     full = [
-        "# E-Commerce Agents — complete documentation",
+        "# 可靠电商多智能体平台 —— 完整文档",
         "",
-        f"Generated from https://github.com/nitin27may/e-commerce-agents",
-        f"Index: {SITE_ORIGIN}{SITE_BASEURL}/llms.txt",
+        f"由 https://github.com/s1encisi/reliable-commerce-agents 生成",
+        f"索引: {SITE_ORIGIN}{SITE_BASEURL}/llms.txt",
         "",
         "---",
         "",
     ]
     for page in ordered:
         body = rendered.get(page.out_path, "")
-        # Drop the YAML front matter; it is Jekyll's, not content.
+        # 去掉 YAML front matter；那是 Jekyll 的东西，不是内容。
         parts = body.split("---", 2)
         content = parts[2] if len(parts) > 2 else body
         full.append(f"# {page.title}")
         full.append("")
-        full.append(f"Source: {page_url(page)}")
+        full.append(f"源码: {page_url(page)}")
         full.append("")
         full.append(strip_for_plaintext(content))
         full.append("")
@@ -940,9 +900,9 @@ def write_llms_files(pages: list[Page], rendered: dict[Path, str]) -> None:
                 "",
                 f"Sitemap: {SITE_ORIGIN}{SITE_BASEURL}/sitemap.xml",
                 "",
-                "# Structured for language models — see https://llmstxt.org",
-                f"# Index:     {SITE_ORIGIN}{SITE_BASEURL}/llms.txt",
-                f"# Full text: {SITE_ORIGIN}{SITE_BASEURL}/llms-full.txt",
+                "# 面向语言模型组织 —— 参见 https://llmstxt.org",
+                f"# 索引:     {SITE_ORIGIN}{SITE_BASEURL}/llms.txt",
+                f"# 全文:     {SITE_ORIGIN}{SITE_BASEURL}/llms-full.txt",
                 "",
             ]
         ),
@@ -950,7 +910,7 @@ def write_llms_files(pages: list[Page], rendered: dict[Path, str]) -> None:
     )
 
     size_kb = (OUT_DIR / "llms-full.txt").stat().st_size / 1024
-    print(f"wrote llms.txt ({len(ordered)} pages), llms-full.txt ({size_kb:.0f} KB), robots.txt")
+    print(f"已写出 llms.txt（{len(ordered)} 个页面）、llms-full.txt（{size_kb:.0f} KB）、robots.txt")
 
 
 def build(check_only: bool) -> int:
@@ -961,20 +921,19 @@ def build(check_only: bool) -> int:
     rendered: dict[Path, str] = {}
     for page in pages:
         body = rewriter.rewrite(page) if not page.generated else page.body
-        # Order matters: label before protect_liquid, so an injected accTitle
-        # is inside any {% raw %} wrapper rather than dangling outside it.
+        # 顺序很重要：先打标签再 protect_liquid，这样注入的 accTitle 会落在
+        # {% raw %} 包裹之内，而不是悬在它外面。
         body = ensure_h1(body, page.title)
         body = label_mermaid_diagrams(body, page.title)
         body = protect_liquid(body)
         rendered[page.out_path] = f"{front_matter(page, body)}\n\n{body}{source_link(page)}"
 
-        # A page whose description falls back to the site default is a page
-        # that will look like a duplicate of the other 84 to a search engine.
-        # This is the check that stops the original bug recurring silently.
+        # 一个 description 回退到站点默认值的页面，在搜索引擎看来就是另外 84 个
+        # 页面的重复。正是这项检查阻止了最初的缺陷静默复发。
         if SITE_DESCRIPTION in rendered[page.out_path].split("---", 2)[1]:
             rewriter.problems.append(
-                f"{page.out_path}: no usable opening paragraph, so its meta description "
-                f"falls back to the site default (which all 85 pages shared before the SEO pass)"
+                f"{page.out_path}: 没有可用的开篇段落，因此它的 meta description "
+                f"回退到了站点默认值（SEO 整改前全部 85 个页面都共用它）"
             )
 
         rewriter.problems.extend(check_diagram_labels(page.out_path, body))
@@ -984,26 +943,24 @@ def build(check_only: bool) -> int:
         duplicate_titles.setdefault((page.parent, page.title), []).append(page.out_path.as_posix())
     for (parent, title), where in duplicate_titles.items():
         if len(where) > 1:
-            # just-the-docs matches parent/child by *title*, so two pages
-            # sharing one under the same parent silently collapse the nav.
-            rewriter.problems.append(
-                f"duplicate title {title!r} under parent {parent!r}: {', '.join(where)}"
-            )
+            # just-the-docs 按*标题*匹配父子关系，所以同一父节点下两个页面
+            # 重名会让导航静默塌陷。
+            rewriter.problems.append(f"父节点 {parent!r} 下存在重复标题 {title!r}: {', '.join(where)}")
 
     known_parents = {p.title for p in pages if p.has_children}
     for page in pages:
         for rel, kind in ((page.parent, "parent"), (page.grand_parent, "grand_parent")):
             if rel and rel not in known_parents:
-                rewriter.problems.append(f"{page.out_path}: {kind} {rel!r} has no page declaring has_children")
+                rewriter.problems.append(f"{page.out_path}: {kind} {rel!r} 没有任何页面声明 has_children")
 
     if rewriter.problems:
-        print(f"{len(rewriter.problems)} problem(s):", file=sys.stderr)
+        print(f"{len(rewriter.problems)} 个问题:", file=sys.stderr)
         for problem in sorted(set(rewriter.problems)):
             print(f"  - {problem}", file=sys.stderr)
         return 1
 
     if check_only:
-        print(f"ok: {len(pages)} pages, {sum(1 for p in pages if p.generated)} generated, no broken links")
+        print(f"ok: {len(pages)} 个页面，其中 {sum(1 for p in pages if p.generated)} 个为生成页，没有断链")
         return 0
 
     if OUT_DIR.exists():
@@ -1012,10 +969,9 @@ def build(check_only: bool) -> int:
 
     shutil.copy(REPO_ROOT / "docs/_config.yml", OUT_DIR / "_config.yml")
 
-    # `_includes/` has to land at the SITE ROOT, not under `docs/`. That is why this
-    # is its own copy instead of another entry in the asset loop below: that loop
-    # preserves the `docs/` prefix, and Jekyll only ever looks for `_includes/` at
-    # the top level -- it would silently render nothing.
+    # `_includes/` 必须落在站点根目录，而不是 `docs/` 之下。这就是为什么它是
+    # 单独一次复制，而不是下面资源循环里的一个条目：那个循环会保留 `docs/`
+    # 前缀，而 Jekyll 只在顶层查找 `_includes/` —— 否则它会静默地什么都不渲染。
     shutil.copytree(REPO_ROOT / "docs/_includes", OUT_DIR / "_includes")
     for asset in ("docs/images", "docs/architecture.png"):
         src = REPO_ROOT / asset
@@ -1036,13 +992,13 @@ def build(check_only: bool) -> int:
     write_llms_files(pages, rendered)
 
     mermaid = sum(text.count("```mermaid") for text in rendered.values())
-    print(f"built {len(rendered)} pages into {OUT_DIR.relative_to(REPO_ROOT)}/ ({mermaid} mermaid diagrams)")
+    print(f"已把 {len(rendered)} 个页面构建到 {OUT_DIR.relative_to(REPO_ROOT)}/（{mermaid} 张 mermaid 图）")
     return 0
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", action="store_true", help="verify without writing")
+    parser.add_argument("--check", action="store_true", help="只校验，不写文件")
     args = parser.parse_args()
     return build(check_only=args.check)
 

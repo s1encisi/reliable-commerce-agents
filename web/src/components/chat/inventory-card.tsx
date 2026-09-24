@@ -49,41 +49,39 @@ interface InventoryData {
 }
 
 const WAREHOUSE_COLUMNS: DataTableColumn<WarehouseStock>[] = [
-  { key: "warehouse", header: "Warehouse" },
-  { key: "region", header: "Region" },
+  { key: "warehouse", header: "仓库" },
+  { key: "region", header: "区域" },
   {
     key: "quantity",
-    header: "Qty",
+    header: "数量",
     align: "right",
     render: (r) => (
       <span className={r.low_stock ? "text-warning font-medium" : undefined}>
         {r.quantity ?? "—"}
-        {r.low_stock ? " (low)" : ""}
+        {r.low_stock ? "（库存偏低）" : ""}
       </span>
     ),
   },
 ];
 
 const RESTOCK_COLUMNS: DataTableColumn<RestockEntry>[] = [
-  { key: "warehouse", header: "Warehouse" },
-  { key: "expected_quantity", header: "Qty", align: "right" },
-  { key: "expected_date", header: "Expected" },
+  { key: "warehouse", header: "仓库" },
+  { key: "expected_quantity", header: "数量", align: "right" },
+  { key: "expected_date", header: "预计到货" },
 ];
 
 interface ChatInventoryCardProps {
   data: InventoryData;
-  /** Re-prompts the chat, e.g. after picking a shipping option — there's no
-   * direct-mutation endpoint for "select a carrier" the way cart add-item
-   * has one, so this follows the existing Track/Cancel/Return re-prompt
-   * pattern (order-card.tsx) rather than inventing a third mechanism. */
+  /** 重新向对话发起提问，例如在选定配送方式之后——「选择承运商」没有像购物车
+   * 添加商品那样的直接写入接口，因此这里沿用已有的跟踪/取消/退货再提问模式
+   * （order-card.tsx），而不是另造第三套机制。 */
   onAction?: (message: string) => void;
 }
 
 export function ChatInventoryCard({ data, onAction }: ChatInventoryCardProps) {
-  // Nothing to show — e.g. a tool call resolved no data and the model
-  // still emitted an all-empty fence. Don't render a header with a
-  // blank body underneath it. product_name alone still counts: it
-  // identifies which product this is about.
+  // 没有任何内容可展示——例如工具调用没取到数据，但模型仍然输出了一段
+  // 全空的代码块。此时不要渲染一个下方空白的标题栏。仅有 product_name
+  // 也算有效：它至少说明了这是哪件商品。
   const hasAnyData =
     data.product_name != null ||
     data.in_stock != null ||
@@ -96,17 +94,17 @@ export function ChatInventoryCard({ data, onAction }: ChatInventoryCardProps) {
 
   return (
     <div className="my-2 max-w-md rounded-xl border border-border bg-card shadow-sm overflow-hidden">
-      {/* Header */}
+      {/* 标题栏 */}
       <div className="flex items-center justify-between gap-3 border-b border-border bg-muted px-4 py-2.5">
         <div className="flex items-center gap-2 min-w-0">
           <Warehouse className="size-4 text-muted-foreground shrink-0" />
           <span className="text-sm font-medium text-foreground truncate">
-            {data.product_name || "Stock & Fulfillment"}
+            {data.product_name || "库存与履约"}
           </span>
         </div>
         {data.in_stock != null && (
           <StatusBadge
-            label={data.in_stock ? "In Stock" : "Out of Stock"}
+            label={data.in_stock ? "有货" : "缺货"}
             tone={data.in_stock ? "success" : "destructive"}
           />
         )}
@@ -115,7 +113,7 @@ export function ChatInventoryCard({ data, onAction }: ChatInventoryCardProps) {
       <div className="p-4 space-y-3">
         {data.total_quantity != null && (
           <StatTile
-            label="Total units"
+            label="库存总量"
             value={data.total_quantity}
             tone={data.total_quantity > 0 ? "success" : "destructive"}
           />
@@ -123,28 +121,28 @@ export function ChatInventoryCard({ data, onAction }: ChatInventoryCardProps) {
 
         {data.warehouses && data.warehouses.length > 0 && (
           <div>
-            <p className="text-[11px] font-medium text-muted-foreground mb-1">By warehouse</p>
+            <p className="text-[11px] font-medium text-muted-foreground mb-1">按仓库</p>
             <DataTable columns={WAREHOUSE_COLUMNS} rows={data.warehouses} />
           </div>
         )}
 
         {data.upcoming_restocks && data.upcoming_restocks.length > 0 && (
           <div>
-            <p className="text-[11px] font-medium text-muted-foreground mb-1">Upcoming restocks</p>
+            <p className="text-[11px] font-medium text-muted-foreground mb-1">即将补货</p>
             <DataTable columns={RESTOCK_COLUMNS} rows={data.upcoming_restocks} />
           </div>
         )}
 
         {data.next_restock && (!data.upcoming_restocks || data.upcoming_restocks.length === 0) && (
-          <p className="text-[11px] text-muted-foreground">Next restock: {data.next_restock}</p>
+          <p className="text-[11px] text-muted-foreground">下次补货：{data.next_restock}</p>
         )}
 
         {data.shipping_options && data.shipping_options.length > 0 && (
           <div>
             <p className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground mb-1">
               <Truck className="size-3" />
-              Shipping options
-              {data.ships_from?.warehouse && ` — ships from ${data.ships_from.warehouse}`}
+              配送方式
+              {data.ships_from?.warehouse && ` —— 发货仓库：${data.ships_from.warehouse}`}
             </p>
             <div className="space-y-1.5">
               {data.shipping_options.map((opt, i) => (
@@ -170,11 +168,11 @@ export function ChatInventoryCard({ data, onAction }: ChatInventoryCardProps) {
                         className="h-6 text-[11px] px-2"
                         onClick={() =>
                           onAction(
-                            `I'll go with ${opt.carrier}${opt.speed_tier ? ` (${opt.speed_tier})` : ""} shipping for ${formatPrice(opt.price)}${opt.delivery_window ? `, ${opt.delivery_window}` : ""}.`
+                            `我选择${opt.carrier}${opt.speed_tier ? `（${opt.speed_tier}）` : ""}配送，运费 ${formatPrice(opt.price)}${opt.delivery_window ? `，${opt.delivery_window}` : ""}。`
                           )
                         }
                       >
-                        Select
+                        选择
                       </Button>
                     )}
                   </div>

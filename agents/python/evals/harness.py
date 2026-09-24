@@ -1,21 +1,21 @@
-"""Runs eval cases through the real production execution path.
+"""让评测用例走真实的生产执行路径。
 
-Replaces ``evaluator.py``'s old ``_run_agent()``, which hand-rolled its own
-OpenAI tool-calling loop and called raw undecorated tool functions directly
-— bypassing every ``AgentMiddleware``/``FunctionMiddleware`` a real request
-goes through (guardrails, HITL, and Phase 2's grounding verification).
+替代了 ``evaluator.py`` 中旧的 ``_run_agent()``——后者自己手写了一套 OpenAI
+工具调用循环，并直接调用未加装饰器的原始工具函数，绕过了真实请求会经过的
+每一个 ``AgentMiddleware``/``FunctionMiddleware``（护栏、人工参与
+（Human-in-the-Loop，HITL），以及第二阶段的事实核验（grounding）校验）。
 
-Two paths, because ``orchestrator/modes/`` is an orchestrator-level concept
-only — specialists are never mode-dispatched, in evals or in production:
+共有两条路径，因为 ``orchestrator/modes/`` 只是编排器层面的概念——
+专业智能体从来不会被按模式分派，无论在评测中还是在生产环境中：
 
-- The ``orchestrator`` case goes through ``orchestrator.modes.get_mode("tool")
-  .run(...)`` — the same dispatch a real ``POST /api/chat`` request uses.
-- The five specialist cases go through ``shared.agent_host._run_agent_native()``
-  — the real A2A entry point each specialist's ``/message:send`` handler calls.
+- ``orchestrator`` 用例走 ``orchestrator.modes.get_mode("tool")
+  .run(...)``——与真实的 ``POST /api/chat`` 请求使用的是同一套分派。
+- 五个专业智能体用例走 ``shared.agent_host._run_agent_native()``
+  ——即每个专业智能体的 ``/message:send`` 处理器所调用的真实 A2A 入口。
 
-Both paths run the agent's full ``build_specialist_middleware()`` stack, and
-both go through ``shared.factory.get_chat_client()`` — so ``LLM_PROVIDER=replay``
-now actually works for evals, which it never did through the old loop.
+两条路径都会运行智能体完整的 ``build_specialist_middleware()`` 中间件栈，
+且都经由 ``shared.factory.get_chat_client()``——因此 ``LLM_PROVIDER=replay``
+现在对评测真正可用了，而旧的循环从未做到这一点。
 """
 
 from __future__ import annotations
@@ -34,10 +34,10 @@ from shared.grounding.ledger import reset_grounding_ledger
 from shared.guardrails.flags import get_guardrail_flags, reset_guardrail_flags
 from shared.replay_client import ReplayFixtureMissingError
 
-# Agent factory registry — maps eval agent names to their creation functions.
-# Lives here (not in run_evals.py) because ProductionRunner needs it to build
-# specialist agents; run_evals.py imports it from here for the CLI's --agent
-# choices, avoiding a run_evals <-> harness circular import.
+# 智能体工厂注册表——把评测用的智能体名称映射到它们的创建函数。
+# 放在这里（而不是 run_evals.py）是因为 ProductionRunner 需要它来构建
+# 专业智能体；run_evals.py 从这里导入它，供 CLI 的 --agent 选项使用，
+# 从而避免 run_evals 与 harness 之间出现循环导入。
 AGENT_FACTORIES: dict[str, tuple[str, str]] = {
     "product-discovery": ("product_discovery.agent", "create_product_discovery_agent"),
     "order-management": ("order_management.agent", "create_order_management_agent"),
@@ -50,7 +50,7 @@ AGENT_FACTORIES: dict[str, tuple[str, str]] = {
 
 @dataclass
 class RunOutcome:
-    """What a production run produced — enough for every existing scorer plus new ones."""
+    """一次生产运行产出的结果——足以支撑现有的每个评分器，也能支撑新的评分器。"""
 
     text: str
     tools_called: list[str] = field(default_factory=list)
@@ -60,11 +60,12 @@ class RunOutcome:
     grounding: dict[str, Any] | None = None
     guardrail_flags: dict[str, bool] = field(default_factory=dict)
     error: str | None = None
-    # A missing replay fixture is an infrastructure failure, not a bad answer.
-    # Tracked separately so CI can say "3 fixtures are missing" instead of
-    # reporting an agent that scored 0 — the ambiguity that let issue #25 sit
-    # open across two PRs.
+    # 缺少回放夹具属于基础设施故障，而不是一次糟糕的回答。
+    # 单独跟踪，这样 CI 就能说"有 3 个夹具缺失"，而不是报告一个得分为 0
+    # 的智能体——正是这种歧义让 issue #25 跨两个 PR 一直悬而未决。
     fixture_missing: bool = False
+    decision: dict[str, Any] | None = None
+    usage_available: bool = False
 
 
 def _create_agent(agent_name: str) -> Any:
@@ -93,11 +94,11 @@ def _routes(steps: list[dict[str, Any]]) -> list[str]:
 
 
 class ProductionRunner:
-    """Runs a single eval input through the real production path for one agent.
+    """让单个评测输入针对某一个智能体走真实的生产路径。
 
-    A fresh runner per case (or reused across cases for the same agent —
-    specialist agents are cached on first use, mirroring how a real process
-    builds each agent once and reuses it across requests).
+    每个用例使用一个新的 runner（对同一个智能体也可以跨用例复用——
+    专业智能体在首次使用时会被缓存，这与真实进程中每个智能体只构建一次、
+    并在多个请求之间复用的方式一致）。
     """
 
     def __init__(
@@ -106,8 +107,10 @@ class ProductionRunner:
         *,
         user_email: str = "eval@example.com",
         user_role: str = "customer",
+        mode: str = "tool",
     ) -> None:
         self.agent_name = agent_name
+        self.mode = mode
         self.user_email = user_email
         self.user_role = user_role
         self._agent: Any = None
@@ -133,9 +136,8 @@ class ProductionRunner:
                 guardrail_flags=get_guardrail_flags(),
             )
         except Exception as exc:
-            # A specialist's missing fixture reaches the orchestrator as an A2A
-            # failure rather than the original exception type, so fall back to
-            # recognising it by message.
+            # 专业智能体缺失夹具时，到达编排器的是一个 A2A 失败，而不是原始的
+            # 异常类型，因此回退为按消息内容来识别。
             return RunOutcome(
                 text="",
                 error=str(exc),
@@ -149,23 +151,27 @@ class ProductionRunner:
     async def _run_orchestrator(self, user_input: str) -> RunOutcome:
         from orchestrator.modes import RunContext, get_mode
 
-        mode = get_mode("tool")
+        mode = get_mode(self.mode)
         ctx = RunContext(history=[])
         text = ""
         grounding: dict[str, Any] | None = None
         usage: dict[str, Any] = {}
+        payload: dict[str, Any] = {}
 
         async for event in mode.run(user_input, ctx):
             if event.kind == "run_completed":
+                payload = event.payload
                 text = event.payload.get("text", "")
                 grounding = event.payload.get("grounding")
                 usage = event.payload.get("usage") or {}
 
-        steps = get_steps()
+        steps = payload.get("steps") or get_steps()
         return RunOutcome(
             text=text,
             tools_called=_tools_called(steps),
-            routes=_routes(steps),
+            routes=_routes(steps) or [a for a in payload.get("agents_involved", []) if a != "orchestrator"],
+            decision=payload.get("decision"),
+            usage_available=bool(usage),
             tokens_in=usage.get("input_token_count") or 0,
             tokens_out=usage.get("output_token_count") or 0,
             grounding=grounding,

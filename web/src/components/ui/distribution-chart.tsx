@@ -23,15 +23,15 @@ const TOOLTIP_STYLE = {
   fontSize: "12px",
 } as const;
 
-/** Bar chart for any {label, value} distribution a specialist returns (e.g. rating breakdown). */
+/** 柱状图，适用于专业智能体返回的任何 {label, value} 分布（例如评分构成）。 */
 export function DistributionChart({
   data,
   height = 200,
   colorIndex = 0,
-  valueLabel = "Count",
+  valueLabel = "数量",
 }: DistributionChartProps) {
   if (data.length === 0) {
-    return <p className="py-4 text-center text-xs text-muted-foreground">No distribution data available.</p>;
+    return <p className="py-4 text-center text-xs text-muted-foreground">暂无分布数据。</p>;
   }
 
   return (

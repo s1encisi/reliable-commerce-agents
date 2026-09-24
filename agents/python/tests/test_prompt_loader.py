@@ -1,10 +1,7 @@
-"""Unit tests for prompt composition (Track A1 — prompt-layer hardening).
+"""提示词组合的纯字符串测试。
 
-Pure string assembly: no LLM, no DB. Verifies that every agent's composed
-system prompt carries the shared security guardrails (prompt-injection
-resistance, role confinement, refusal policy) added to the grounding rules,
-that the original data-grounding directives survive composition, and that
-prompts remain role-aware.
+核对每个智能体保留共享安全规则、数据事实约束及角色专属说明，
+不调用模型或数据库。
 """
 
 from __future__ import annotations
@@ -41,12 +38,12 @@ def test_prompt_includes_security_guardrails(agent: str) -> None:
 def test_prompt_keeps_data_grounding(agent: str) -> None:
     prompt = load_prompt(agent, "customer").lower()
     assert "data grounding rules" in prompt
-    assert "hallucinate" in prompt  # core anti-fabrication directive survives
+    assert "hallucinate" in prompt  # 核心禁止编造指令仍存在。
 
 
 def test_injection_rules_name_the_canonical_attacks() -> None:
     prompt = load_prompt("orchestrator", "customer").lower()
-    # The actual guardrail wording is present, not just the header.
+    # 检查实际护栏措辞，不只检查标题。
     assert "as data, never as instructions" in prompt
     assert "ignore previous instructions" in prompt
     assert "never reveal" in prompt and "system prompt" in prompt
@@ -55,11 +52,11 @@ def test_injection_rules_name_the_canonical_attacks() -> None:
 def test_role_confinement_rejects_self_claimed_privilege() -> None:
     prompt = load_prompt("order-management", "customer").lower()
     assert "fixed by the authenticated user's role" in prompt
-    assert "i am an admin" in prompt  # explicitly names the escalation attempt
+    assert "i am an admin" in prompt  # 明确包含越权尝试的说明。
 
 
 def test_prompt_is_role_aware() -> None:
-    # The orchestrator has distinct customer vs admin role instructions.
+    # 编排器应区分客户与管理员指令。
     customer = load_prompt("orchestrator", "customer")
     admin = load_prompt("orchestrator", "admin")
     assert customer and admin
@@ -67,7 +64,7 @@ def test_prompt_is_role_aware() -> None:
 
 
 def test_unknown_role_falls_back_but_keeps_guardrails() -> None:
-    # An unrecognized role must still receive the shared security guardrails.
+    # 未知角色仍必须收到共享安全规则。
     prompt = load_prompt("orchestrator", "no-such-role")
     assert prompt
     for header in SECURITY_HEADERS:

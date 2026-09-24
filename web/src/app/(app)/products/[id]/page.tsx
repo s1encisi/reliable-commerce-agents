@@ -40,7 +40,7 @@ import {
 import { productImageUrl } from "@/lib/images";
 
 // ---------------------------------------------------------------------------
-// Types
+// 类型
 // ---------------------------------------------------------------------------
 
 interface Review {
@@ -79,19 +79,19 @@ interface ProductDetail {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// 辅助函数
 // ---------------------------------------------------------------------------
 
 function formatPrice(price: number): string {
-  return new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat("zh-CN", {
     style: "currency",
-    currency: "USD",
+    currency: "CNY",
   }).format(price);
 }
 
 function formatDate(dateStr: string): string {
   try {
-    return new Date(dateStr).toLocaleDateString("en-US", {
+    return new Date(dateStr).toLocaleDateString("zh-CN", {
       year: "numeric",
       month: "short",
       day: "numeric",
@@ -128,7 +128,7 @@ function StarRating({ rating, count }: { rating: number; count: number }) {
         ))}
       </div>
       <span className="text-sm text-muted-foreground">
-        {rating.toFixed(1)} ({count} reviews)
+        {rating.toFixed(1)}（{count} 条评价）
       </span>
     </div>
   );
@@ -152,7 +152,7 @@ function SmallStarRating({ rating }: { rating: number }) {
 }
 
 // ---------------------------------------------------------------------------
-// Rating Distribution Bar Chart
+// 评分分布条形图
 // ---------------------------------------------------------------------------
 
 function RatingDistribution({
@@ -190,7 +190,7 @@ function RatingDistribution({
 }
 
 // ---------------------------------------------------------------------------
-// Skeleton
+// 骨架屏
 // ---------------------------------------------------------------------------
 
 function DetailSkeleton() {
@@ -216,7 +216,7 @@ function DetailSkeleton() {
 }
 
 // ---------------------------------------------------------------------------
-// Page
+// 页面
 // ---------------------------------------------------------------------------
 
 export default function ProductDetailPage() {
@@ -243,7 +243,7 @@ export default function ProductDetailPage() {
       setProduct(data);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to load product"
+        err instanceof Error ? err.message : "商品加载失败"
       );
     } finally {
       setLoading(false);
@@ -267,10 +267,10 @@ export default function ProductDetailPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
+      {/* 页头 */}
       <div className="border-b border-border bg-card">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-          {/* Back button */}
+          {/* 返回按钮 */}
           <Button
             variant="ghost"
             size="sm"
@@ -278,7 +278,7 @@ export default function ProductDetailPage() {
             onClick={() => router.push("/products")}
           >
             <ArrowLeft className="mr-1.5 size-4" />
-            Back to Products
+            返回商品列表
           </Button>
 
           {loading && <DetailSkeleton />}
@@ -290,13 +290,13 @@ export default function ProductDetailPage() {
 
           {!loading && !error && product && (
             <>
-              {/* Breadcrumb */}
+              {/* 面包屑 */}
               <nav className="mb-4 flex items-center gap-1.5 text-sm text-muted-foreground">
                 <button
                   className="hover:text-primary transition-colors"
                   onClick={() => router.push("/products")}
                 >
-                  Products
+                  商品
                 </button>
                 <ChevronRight className="size-3.5" />
                 <span>{product.category}</span>
@@ -304,9 +304,9 @@ export default function ProductDetailPage() {
                 <span className="text-foreground">{product.name}</span>
               </nav>
 
-              {/* Product hero: image + info */}
+              {/* 商品主区：图片与信息 */}
               <div className="grid gap-8 lg:grid-cols-2">
-                {/* Image */}
+                {/* 图片 */}
                 <div className="relative aspect-square overflow-hidden rounded-2xl bg-muted">
                   <img
                     src={productImageUrl(product.id, 800, 800, product.image_url, product.category)}
@@ -315,12 +315,12 @@ export default function ProductDetailPage() {
                   />
                   {product.original_price && product.original_price > product.price && (
                     <span className="absolute top-4 left-4 rounded-lg bg-red-500 px-3 py-1 text-sm font-bold text-white shadow-lg">
-                      Save {Math.round((1 - product.price / product.original_price) * 100)}%
+                      省 {Math.round((1 - product.price / product.original_price) * 100)}%
                     </span>
                   )}
                 </div>
 
-                {/* Product Info */}
+                {/* 商品信息 */}
                 <div>
                   <div className="flex items-center gap-3">
                     <h1 className="text-2xl font-bold text-foreground">
@@ -353,7 +353,7 @@ export default function ProductDetailPage() {
                   </div>
                   {onSale && (
                     <Badge className="mt-2 bg-emerald-100 text-emerald-700 border-emerald-200">
-                      Save {savePct}%
+                      省 {savePct}%
                     </Badge>
                   )}
 
@@ -366,20 +366,20 @@ export default function ProductDetailPage() {
                       <div className="flex items-center gap-2">
                         <CheckCircle className="size-5 text-emerald-500" />
                         <span className="font-medium text-emerald-700">
-                          In Stock ({product.total_stock} units)
+                          有货（{product.total_stock} 件）
                         </span>
                       </div>
                     ) : (
                       <div className="flex items-center gap-2">
                         <XCircle className="size-5 text-red-500" />
                         <span className="font-medium text-red-700">
-                          Out of Stock
+                          缺货
                         </span>
                       </div>
                     )}
                   </div>
 
-                  {/* Add to Cart */}
+                  {/* 加入购物车 */}
                   {product.in_stock && (
                     <div className="mt-6 space-y-3">
                       <div className="flex items-center gap-3">
@@ -430,7 +430,7 @@ export default function ProductDetailPage() {
                         ) : (
                           <ShoppingCart className="mr-2 size-5" />
                         )}
-                        {added ? "Added to Cart!" : "Add to Cart"}
+                        {added ? "已加入购物车！" : "加入购物车"}
                       </Button>
                     </div>
                   )}
@@ -441,16 +441,16 @@ export default function ProductDetailPage() {
         </div>
       </div>
 
-      {/* Content */}
+      {/* 内容区 */}
       {!loading && !error && product && (
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <div className="grid gap-8 lg:grid-cols-3">
-            {/* Left column: description, specs, reviews */}
+            {/* 左列：描述、规格、评价 */}
             <div className="space-y-8 lg:col-span-2">
-              {/* Description */}
+              {/* 商品描述 */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Description</CardTitle>
+                  <CardTitle>商品描述</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <p className="leading-relaxed text-muted-foreground">
@@ -459,12 +459,12 @@ export default function ProductDetailPage() {
                 </CardContent>
               </Card>
 
-              {/* Specs */}
+              {/* 规格参数 */}
               {product.specs &&
                 Object.keys(product.specs).length > 0 && (
                   <Card>
                     <CardHeader>
-                      <CardTitle>Specifications</CardTitle>
+                      <CardTitle>规格参数</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <Table>
@@ -487,11 +487,11 @@ export default function ProductDetailPage() {
                   </Card>
                 )}
 
-              {/* Rating Distribution */}
+              {/* 评分分布 */}
               {product.rating_distribution && (
                 <Card>
                   <CardHeader>
-                    <CardTitle>Rating Distribution</CardTitle>
+                    <CardTitle>评分分布</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <RatingDistribution
@@ -501,12 +501,12 @@ export default function ProductDetailPage() {
                 </Card>
               )}
 
-              {/* Reviews */}
+              {/* 用户评价 */}
               {product.reviews && product.reviews.length > 0 && (
                 <Card>
                   <CardHeader>
                     <CardTitle>
-                      Reviews ({product.reviews.length})
+                      用户评价（{product.reviews.length}）
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -526,7 +526,7 @@ export default function ProductDetailPage() {
                                     className="border-primary/30 bg-primary/10 text-primary text-[10px]"
                                   >
                                     <CheckCircle className="mr-0.5 size-2.5" />
-                                    Verified
+                                    已认证购买
                                   </Badge>
                                 )}
                               </div>
@@ -552,36 +552,36 @@ export default function ProductDetailPage() {
               )}
             </div>
 
-            {/* Right column: stock, ask agent */}
+            {/* 右列：库存、咨询 */}
             <div className="space-y-6">
-              {/* Stock status */}
+              {/* 库存状态 */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Availability</CardTitle>
+                  <CardTitle>库存情况</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {product.in_stock ? (
                     <div className="flex items-center gap-2">
                       <CheckCircle className="size-5 text-emerald-500" />
                       <span className="font-medium text-emerald-700">
-                        In Stock ({product.total_stock} units)
+                        有货（{product.total_stock} 件）
                       </span>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
                       <XCircle className="size-5 text-red-500" />
                       <span className="font-medium text-red-700">
-                        Out of Stock
+                        缺货
                       </span>
                     </div>
                   )}
 
-                  {/* Warehouse breakdown */}
+                  {/* 各仓库存 */}
                   {product.warehouses &&
                     product.warehouses.length > 0 && (
                       <div className="space-y-2">
                         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                          Warehouse Breakdown
+                          各仓库存
                         </p>
                         {product.warehouses.map((ws) => (
                           <div
@@ -610,19 +610,19 @@ export default function ProductDetailPage() {
                 </CardContent>
               </Card>
 
-              {/* Ask Agent button */}
+              {/* 咨询按钮 */}
               <Button
                 className="w-full bg-primary text-primary-foreground hover:opacity-90"
                 onClick={() =>
                   router.push(
                     `/chat?q=${encodeURIComponent(
-                      `Tell me more about the ${product.name}`
+                      `请介绍一下${product.name}`
                     )}`
                   )
                 }
               >
                 <MessageSquare className="mr-2 size-4" />
-                Ask Agent About This Product
+                向智能体咨询该商品
               </Button>
             </div>
           </div>

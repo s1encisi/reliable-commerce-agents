@@ -1,49 +1,47 @@
 /**
  * demo-recording.spec.ts
  *
- * Records the 60-90 second silent clip that sits at the top of the README and
- * the docs site home. Not a test — it asserts almost nothing. It drives the app
- * through the six things that make this repo different, in one continuous take:
+ * 录制一段 60-90 秒的无声短片，放在 README 顶部与文档站点首页。
+ * 它不是测试——几乎不断言任何东西。它用一条连续镜头，把本仓库
+ * 与众不同的六件事演示一遍：
  *
- *   1. Streaming chat with generative UI (product cards, not raw JSON)
- *   2. Switching orchestration mode from the composer
- *   3. The orchestration graph animating node-by-node from live SSE events
- *   4. A workflow pausing on its human-in-the-loop gate
- *   5. The pending approval on /runs
- *   6. Approve, and the run resuming from a real Postgres checkpoint
+ *   1. 带生成式 UI 的流式对话（渲染成商品卡片，而不是原始 JSON）
+ *   2. 在输入框中切换编排模式
+ *   3. 编排图依据实时 SSE 事件逐个节点地动画展开
+ *   4. 一个工作流在 human-in-the-loop 关卡处暂停
+ *   5. /runs 上的待审批记录
+ *   6. 批准后，运行从真实的 Postgres 检查点恢复
  *
- * Requires the full stack running with a live LLM key:
+ * 需要完整技术栈已启动，且 LLM 密钥可用：
  *   ./scripts/dev.sh --demo
  *
- * Run:
+ * 运行：
  *   cd web && pnpm exec playwright test e2e/demo-recording.spec.ts
  *
- * Output: test-results/<...>/video.webm. Convert for embedding with
+ * 输出：test-results/<...>/video.webm。用下面的命令转换后嵌入：
  *   ffmpeg -i video.webm -c:v libx264 -crf 24 -pix_fmt yuv420p demo.mp4
  *
- * Being a committed script rather than a manual screen capture means it can be
- * re-recorded after any UI change instead of decaying into a stale clip.
+ * 把它写成提交进仓库的脚本、而不是手工录屏，意味着每次 UI 改动后都能
+ * 重新录制，而不会慢慢变成一段过时的素材。
  *
- * ── Two things that will ruin the take, both learned the hard way ────────────
+ * ── 两件会毁掉这次录制的事，都是踩过坑才总结出来的 ──────────────────────
  *
- * Prompts must be ones the catalogue can actually answer. `search_products`
- * does ILIKE '%<whole phrase>%', so "running shoes" matches nothing while
- * "Allbirds" matches — the seeded catalogue has no product whose text contains
- * the word "shoes". A natural-sounding prompt that returns "I couldn't find
- * any" is the worst possible first impression, so every prompt below is
- * verified against the seed data.
+ * 提示词必须是商品目录真能回答的。`search_products` 走的是
+ * ILIKE '%<整段短语>%'，所以 "running shoes" 什么都匹配不到，而
+ * "Allbirds" 能匹配上——种子目录里没有任何商品的文本包含 "shoes" 这个词。
+ * 一个听起来自然、却回答「我找不到」的提示词是最糟糕的第一印象，
+ * 因此下面每一句提示词都对照过种子数据。
  *
- * Never wait on text like "Routing to specialists...". The composer's submit
- * button swaps to a stop icon while a turn is in flight and swaps back when it
- * completes; that is the only reliable signal. Waiting on text races the
- * stream, and a click landing mid-stream silently no-ops.
+ * 绝不要等待「正在路由到专业智能体…」这类文案。一个回合进行中时，
+ * 输入框的提交按钮会换成停止图标，回合结束后再换回来；这才是唯一可靠的
+ * 信号。等待文案会和流式响应抢跑，而在流中途落下的点击会静默失效。
  */
 
 import { test, expect, type Page } from "@playwright/test";
 
 const CUSTOMER = { email: "alice.johnson@gmail.com", password: "customer123" };
 
-// Recording only — no retries, one worker, generous budget for real LLM calls.
+// 仅用于录制 —— 不重试、单 worker、为真实 LLM 调用留出充裕预算。
 test.use({
   viewport: { width: 1440, height: 900 },
   video: { mode: "on", size: { width: 1440, height: 900 } },
@@ -51,8 +49,8 @@ test.use({
 
 test.setTimeout(600_000);
 
-/** Human-paced pause. The clip is watched, not benchmarked — dead-fast UI
- *  transitions read as glitches on video. */
+/** 按人类节奏停顿。这段短片是给人看的，不是用来跑分的——UI 切换太快
+ *  在视频里会显得像卡顿。 */
 const beat = (page: Page, ms = 1_200) => page.waitForTimeout(ms);
 
 async function login(page: Page) {
@@ -65,12 +63,12 @@ async function login(page: Page) {
   await page.goto("/login");
   await page.fill('input[type="email"]', CUSTOMER.email);
   await page.fill('input[type="password"]', CUSTOMER.password);
-  await page.getByRole("button", { name: /log\s*in|sign\s*in/i }).click();
+  await page.getByRole("button", { name: /登录/ }).click();
   await page.waitForURL(/\/chat/, { timeout: 20_000 });
   await page.waitForLoadState("networkidle").catch(() => {});
 }
 
-/** Type at human speed so the video shows typing rather than text teleporting in. */
+/** 以人类速度输入，这样视频里能看到打字过程，而不是文字瞬移进来。 */
 async function typeAndSend(page: Page, message: string) {
   const input = page.locator("textarea").first();
   await input.waitFor({ state: "visible", timeout: 15_000 });
@@ -80,7 +78,7 @@ async function typeAndSend(page: Page, message: string) {
   await input.press("Enter");
 }
 
-/** Wait for the turn to actually finish — see the header note. */
+/** 等待一个回合真正结束 —— 见文件头的说明。 */
 async function waitForTurn(page: Page) {
   const STOP = 'button[aria-label="Stop"], button:has(svg.lucide-square)';
   await page.waitForSelector(STOP, { timeout: 30_000, state: "attached" }).catch(() => {});
@@ -88,34 +86,33 @@ async function waitForTurn(page: Page) {
   await beat(page, 1_500);
 }
 
-test("demo clip — chat, modes, graph, approval, resume", async ({ page }) => {
+test("演示短片 —— 对话、模式、编排图、审批、恢复", async ({ page }) => {
   await login(page);
   await beat(page, 1_500);
 
-  // ── 1. Streaming chat + generative UI ────────────────────────────────────
-  // "Allbirds" is a literal substring of a seeded product name, so ILIKE finds
-  // it and the answer renders as cards.
-  await typeAndSend(page, "What Allbirds products do you have?");
+  // ── 1. 流式对话 + 生成式 UI ─────────────────────────────────────────────
+  // "Allbirds" 是某个种子商品名的字面子串，所以 ILIKE 能找到它，
+  // 回答就会渲染成卡片。
+  await typeAndSend(page, "你们有哪些 Allbirds 的商品？");
   await waitForTurn(page);
   await beat(page, 2_000);
 
-  // ── 2. A follow-up, to show conversation context surviving ───────────────
-  await typeAndSend(page, "How much are they?");
+  // ── 2. 追问一次，展示对话上下文得以保留 ─────────────────────────────────
+  await typeAndSend(page, "它们多少钱？");
   await waitForTurn(page);
   await beat(page, 2_000);
 
-  // ── 3. Switch orchestration mode, then re-ask ────────────────────────────
-  // The mode switcher is fed by GET /api/orchestration/modes. Opening it on
-  // camera is the point: the same question, routed a different way.
-  // Located by aria-label, not by button text. The trigger displays the CURRENT
-  // mode's label, so any text-based locator only works before the first switch
-  // and silently stops matching afterwards — which is exactly how the second
-  // switch below failed for five recordings while the spec exited 0 each time.
-  const modeSwitcher = page.getByLabel("Orchestration mode");
+  // ── 3. 切换编排模式，然后重新提问 ───────────────────────────────────────
+  // 模式切换器的数据来自 GET /api/orchestration/modes。在镜头前打开它
+  // 正是重点：同一个问题，用不同的方式路由。
+  // 通过 aria-label 定位，而不是按钮文本。触发器上显示的是「当前」模式的
+  // 标签，所以任何基于文本的定位器只在第一次切换之前有效，之后就静默失配——
+  // 下面第二次切换之所以连续五次录制都失败、而 spec 每次都退出 0，正是这个原因。
+  const modeSwitcher = page.getByLabel("编排模式");
   if (await modeSwitcher.isVisible().catch(() => false)) {
     await modeSwitcher.click();
     await beat(page, 1_200);
-    const preP = page.getByRole("option", { name: /pre-purchase/i }).first();
+    const preP = page.getByRole("option", { name: /pre-purchase|购前|购买前/i }).first();
     if (await preP.isVisible().catch(() => false)) {
       await preP.click();
     } else {
@@ -124,28 +121,25 @@ test("demo clip — chat, modes, graph, approval, resume", async ({ page }) => {
     await beat(page, 1_200);
   }
 
-  await typeAndSend(page, "I'm considering the Allbirds Wool Runners — should I buy them?");
+  await typeAndSend(page, "我在考虑 Allbirds Wool Runners —— 该买吗？");
   await waitForTurn(page);
-  await beat(page, 3_000); // hold on the animated graph
+  await beat(page, 3_000); // 在动画展开的编排图上多停留一会儿
 
-  // ── 4. Trigger the HITL gate ─────────────────────────────────────────────
+  // ── 4. 触发 HITL 关卡 ───────────────────────────────────────────────────
   //
-  // Switch to workflow:return-replace FIRST. The approval gate lives in that
-  // workflow's graph, not in the platform — asking a return question while
-  // still in pre-purchase mode routes it through a workflow with no gate, which
-  // is why the first two recordings logged "no pending approval on /runs" and
-  // passed anyway, losing the clip's last two beats.
-  const switcher2 = page.getByLabel("Orchestration mode");
+  // 必须先切到 workflow:return-replace。审批关卡位于那个工作流的图里，
+  // 而不在平台层——在仍是 pre-purchase 模式时提退货问题，会把它路由进一个
+  // 没有关卡的流程，这就是为什么前两次录制都记录了「/runs 上没有待审批」，
+  // 却依然通过，并丢掉了短片最后两个节拍。
+  const switcher2 = page.getByLabel("编排模式");
   if (await switcher2.isVisible().catch(() => false)) {
     await switcher2.click();
     await beat(page, 1_200);
-    // The label is "Return & Replace (sequential + in-workflow HITL)". A `.?`
-    // between the words cannot span " & ", so the previous pattern matched
-    // nothing, the `else` branch pressed Escape, and the clip asked its return
-    // question in pre-purchase mode — a workflow with no approval gate. That is
-    // the actual reason five recordings logged "no pending approval on /runs"
-    // and still exited 0.
-    const rr = page.getByRole("option", { name: /return\s*&\s*replace/i }).first();
+    // 标签是 "Return & Replace (sequential + in-workflow HITL)"。词与词之间的
+    // `.?` 无法跨过 " & "，所以旧的正则什么都匹配不到，`else` 分支按了
+    // Escape，短片就在 pre-purchase 模式下问了退货问题——那是个没有审批关卡的
+    // 工作流。这才是五次录制都记录「/runs 上没有待审批」却依然退出 0 的真正原因。
+    const rr = page.getByRole("option", { name: /return\s*&\s*replace|退货|换货/i }).first();
     if (await rr.isVisible().catch(() => false)) {
       await rr.click();
     } else {
@@ -154,33 +148,30 @@ test("demo clip — chat, modes, graph, approval, resume", async ({ page }) => {
     await beat(page, 1_200);
   }
 
-  // The order is looked up, not hardcoded, and that is not fussiness.
+  // 订单是查出来的，不是写死的——这不是吹毛求疵。
   //
-  // FOUR constraints must hold at once for the approval gate to fire, and each
-  // one cost a recording to discover:
+  // 审批关卡要触发，必须同时满足四个约束，每一条都是拿一次录制换来的：
   //
-  //   workflow:return-replace selected  the gate lives in that graph, not the
-  //                                     platform — a return asked in any other
-  //                                     mode routes through a workflow with no gate
-  //   status 'delivered'                the mode falls back to the user's MOST
-  //                                     RECENT order, which is 'shipped'
-  //   within the 30-day return window   the two largest delivered orders are
-  //                                     39 and 42 days old
-  //   total above $500                  RETURN_HITL_THRESHOLD; a cheaper return
-  //                                     is auto-approved and never pauses
+  //   选中 workflow:return-replace      关卡在那个图里，不在平台层——在其他
+  //                                     任何模式下提退货，都会被路由进一个
+  //                                     没有关卡的流程
+  //   状态为 'delivered'                该模式会回退到用户「最近」一笔订单，
+  //                                     而那笔是 'shipped'
+  //   在 30 天退货窗口内                金额最大的两笔已送达订单分别是
+  //                                     39 天和 42 天前
+  //   总价高于 $500                     RETURN_HITL_THRESHOLD；更便宜的退货
+  //                                     会自动批准，永远不会暂停
   //
-  // And a fifth, which is why hardcoding failed even after the other four were
-  // right: a return can only be initiated ONCE per order. The first recording
-  // consumes it, and every rerun afterwards takes a different path and silently
-  // loses the beat. Alice has exactly one qualifying order at any moment, so a
-  // hardcoded id works precisely once.
+  // 还有第五条，也是为什么即使前四条都对了、写死 id 依然会失败：同一笔订单
+  // 只能发起一次退货。第一次录制把它用掉了，此后每次重跑都会走另一条路径、
+  // 静默丢掉这个节拍。Alice 在任何时刻都恰好只有一笔符合条件的订单，所以
+  // 写死的 id 只能生效一次。
   //
-  // Reading /api/orders and filtering makes the spec re-runnable, and it fails
-  // with a real explanation when the seed data cannot support the take.
-  // Absolute URL, deliberately. Same-origin "/api/orders" would now work too —
-  // the frontend proxies /api/* to the orchestrator — but going direct keeps
-  // this probe independent of the proxy, so a broken proxy fails as a broken
-  // proxy rather than as missing seed data.
+  // 读 /api/orders 再做过滤，让这个 spec 可以反复重跑；而当种子数据无法支撑
+  // 这次录制时，它会带着真实原因失败。
+  // 刻意使用绝对 URL。同源的 "/api/orders" 现在其实也能用——前端会把
+  // /api/* 代理给编排器——但直连能让这个探测独立于代理，这样代理坏了就报
+  // 代理坏了，而不是报成种子数据缺失。
   const apiBase = process.env.E2E_API_URL ?? "http://localhost:8080";
 
   const orderId = await page.evaluate(async (base) => {
@@ -190,9 +181,9 @@ test("demo clip — chat, modes, graph, approval, resume", async ({ page }) => {
     });
     const body = await res.json();
     const orders = Array.isArray(body) ? body : (body.orders ?? body.entries ?? []);
-    // The orders endpoint returns `date`, not `created_at` — the shape differs
-    // from the DB column, which is easy to assume and wrong.
-    const cutoff = Date.now() - 25 * 24 * 60 * 60 * 1000; // inside the 30-day window, with margin
+    // orders 接口返回的是 `date`，不是 `created_at` —— 这个字段形状与
+    // 数据库列不同，很容易想当然搞错。
+    const cutoff = Date.now() - 25 * 24 * 60 * 60 * 1000; // 处于 30 天窗口内，留有余量
     const match = orders.find(
       (o: Record<string, unknown>) =>
         o.status === "delivered" &&
@@ -204,54 +195,53 @@ test("demo clip — chat, modes, graph, approval, resume", async ({ page }) => {
 
   expect(
     orderId,
-    "no delivered order over $500 inside the 30-day window — the seed data cannot " +
-      "produce an approval pause, so re-seed (./scripts/dev.sh --clean) before recording"
+    "30 天窗口内没有超过 $500 的已送达订单 —— 种子数据无法产生审批暂停，" +
+      "录制前请重新播种（./scripts/dev.sh --clean）"
   ).not.toBe("");
 
   await typeAndSend(
     page,
-    `I want to return order ${orderId} — it is not what I expected.`
+    `我想退掉订单 ${orderId} —— 它和我想的不一样。`
   );
   await waitForTurn(page);
   await beat(page, 2_500);
 
-  // ── 5-6. The pending approval on /runs, then resume ──────────────────────
+  // ── 5-6. /runs 上的待审批，然后恢复运行 ─────────────────────────────────
   await page.goto("/runs");
   await page.waitForLoadState("networkidle").catch(() => {});
   await beat(page, 2_500);
 
-  const approve = page.getByRole("button", { name: /approve/i }).first();
+  const approve = page.getByRole("button", { name: /批准/ }).first();
   if (await approve.isVisible().catch(() => false)) {
     await approve.scrollIntoViewIfNeeded();
     await beat(page, 1_200);
     await approve.click();
-    await beat(page, 4_000); // the run resumes from its checkpoint
+    await beat(page, 4_000); // 运行正从它的检查点恢复
   } else {
-    // Fail, do not log.
+    // 失败，而不是打日志。
     //
-    // This branch used to console.log and let the test pass, which meant six
-    // consecutive recordings produced a clip missing its last two beats — the
-    // approval and the resume — while the spec exited 0 every time. A recording
-    // script that reports success for an incomplete take is the same failure
-    // this repo keeps finding elsewhere: healthy-looking, quietly wrong.
+    // 这个分支以前只 console.log 并让测试通过，结果连续六次录制产出的短片
+    // 都缺了最后两个节拍——审批与恢复——而 spec 每次都退出 0。一个对不完整的
+    // 录制报告成功的脚本，正是本仓库在其他地方反复发现的同一种失败：
+    // 表面健康，实则悄悄出错。
     //
-    // Everything needed to diagnose it goes in the message, because the clip is
-    // the artifact and nobody re-watches a green run.
-    const modeLabel = await page.getByLabel("Orchestration mode").textContent().catch(() => "(not found)");
+    // 诊断所需的一切都写进消息里，因为产物是那段短片，而没人会去重看一次
+    // 绿色的运行。
+    const modeLabel = await page.getByLabel("编排模式").textContent().catch(() => "(not found)");
     const bodyText = (await page.locator("main").textContent().catch(() => "")) ?? "";
     throw new Error(
-      "No pending approval on /runs, so the clip is missing its approval and resume beats.\n" +
-        `Composer mode at the end of the run: ${modeLabel}\n` +
-        "The return must satisfy ALL FOUR of: workflow:return-replace selected, order " +
-        "status 'delivered', within the 30-day return window, and total above " +
-        "RETURN_HITL_THRESHOLD ($500).\n" +
-        `/runs page text (first 400 chars): ${bodyText.slice(0, 400)}`
+      "/runs 上没有待审批，因此短片缺少审批与恢复这两个节拍。\n" +
+        `运行结束时输入框的模式：${modeLabel}\n` +
+        "这笔退货必须同时满足以下四项：选中 workflow:return-replace、订单" +
+        "状态为 'delivered'、处于 30 天退货窗口内，且总价高于 " +
+        "RETURN_HITL_THRESHOLD（$500）。\n" +
+        `/runs 页面文本（前 400 字符）：${bodyText.slice(0, 400)}`
     );
   }
 
   await beat(page, 2_000);
 
-  // The one real assertion: we ended somewhere sensible, so a broken take fails
-  // loudly instead of silently producing an unusable video.
+  // 唯一一处真正的断言：我们结束在了合理的位置，这样坏掉的录制会大声失败，
+  // 而不是静默产出一段没法用的视频。
   expect(page.url()).toMatch(/\/(runs|chat)/);
 });

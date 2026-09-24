@@ -1,22 +1,12 @@
-"""MAF ContextProviders for injecting e-commerce context into agent runs.
+"""向智能体运行注入电商上下文的 MAF 提供器。
 
-Three composable providers:
+三个可组合提供器：
+- UserProfileProvider：查询用户，写入 state["user"]，并追加用户说明。
+- RecentOrdersProvider：附加最近 5 笔订单及对应指令段。
+- AgentMemoriesProvider：读取有效长期记忆，写入 state["memories"]。
 
-- :class:`UserProfileProvider` — looks up the logged-in user and exposes
-  ``state["user"]`` (dict) plus an instruction line via
-  ``context.extend_instructions``.
-- :class:`RecentOrdersProvider` — attaches the user's last 5 orders.
-  ``state["recent_orders"]`` (list) + a bulleted instruction section.
-- :class:`AgentMemoriesProvider` — attaches active memories from the
-  ``agent_memories`` table. ``state["memories"]`` (list) + an
-  instruction section.
-
-:class:`ECommerceContextProvider` is a back-compat composite that wires
-all three in the order specialists used before the refactor, and keeps
-producing the legacy ``state["user_context"]`` formatted string that
-``shared/agent_host.py``'s custom tool loop reads. Individual specialists
-can switch to the smaller providers once Phase 7 step 03 retires the
-custom loop in favour of MAF-native execution.
+ECommerceContextProvider 按既定顺序组合三者，并继续生成兼容用的
+state["user_context"]。只需要部分能力的专业智能体可单独挂载提供器。
 """
 
 from __future__ import annotations
@@ -33,12 +23,10 @@ from shared.db import get_pool
 
 
 class UserProfileProvider(ContextProvider):
-    """Injects the logged-in user's profile into agent runs.
+    """注入当前用户资料。
 
-    Sets ``state["user"]`` to a dict with keys name, email, role,
-    loyalty_tier, total_spend. Also calls ``context.extend_instructions``
-    with a short "Current user:" line so MAF-native runs see the user
-    without extra glue.
+    state["user"] 包含 name、email、role、loyalty_tier、total_spend，
+    同时通过 extend_instructions 向 MAF 追加简短用户说明。
     """
 
     def __init__(self) -> None:
@@ -71,7 +59,7 @@ class UserProfileProvider(ContextProvider):
         }
         state["user"] = profile
 
-        # MAF-native: push a concise system-prompt line.
+        # 通过 MAF 原生接口追加简短系统指令。
         if hasattr(context, "extend_instructions"):
             context.extend_instructions(
                 "user-profile",
@@ -87,12 +75,10 @@ class UserProfileProvider(ContextProvider):
 
 
 class RecentOrdersProvider(ContextProvider):
-    """Injects the user's last N orders. Requires UserProfileProvider in
-    the same provider chain, or a prior call that populated
-    ``state["user"]["email"]``.
+    """注入最近 N 笔订单，默认最多 5 笔。
 
-    Args:
-        limit: max orders to include (default 5).
+    需要同一链中先运行 UserProfileProvider，或已设置
+    state["user"]["email"]。limit 控制最大条数。
     """
 
     def __init__(self, *, limit: int = 5) -> None:
@@ -146,11 +132,7 @@ class RecentOrdersProvider(ContextProvider):
 
 
 class AgentMemoriesProvider(ContextProvider):
-    """Injects active long-term memories for the current user.
-
-    Args:
-        limit: max memories to include (default 10).
-    """
+    """注入当前用户的有效长期记忆；limit 默认为 10。"""
 
     def __init__(self, *, limit: int = 10) -> None:
         super().__init__(source_id="agent-memories")
@@ -171,7 +153,7 @@ class AgentMemoriesProvider(ContextProvider):
                 """SELECT category, content, importance
                    FROM agent_memories m
                    JOIN users u ON m.user_id = u.id
-                   WHERE u.email = $1 AND m.is_active = TRUE
+                   WHERE u.email = $1 AND m.is_active = TRUE AND m.confirmed_at IS NOT NULL
                      AND (m.expires_at IS NULL OR m.expires_at > NOW())
                    ORDER BY m.importance DESC, m.created_at DESC
                    LIMIT $2""",
@@ -205,16 +187,10 @@ class AgentMemoriesProvider(ContextProvider):
 
 
 class ECommerceContextProvider(ContextProvider):
-    """Back-compat composite. Keeps existing callers working unchanged.
+    """兼容现有调用方的组合提供器。
 
-    Runs the three fine-grained providers in order, then assembles the
-    legacy ``state["user_context"]`` string that the custom tool loop in
-    ``shared/agent_host.py`` threads into the system prompt today.
-
-    Specialist agents that only need a subset should import the
-    individual providers instead; this composite stays around for the
-    orchestrator (which currently wants everything) and as a drop-in
-    default.
+    依次执行三个细粒度提供器，再组装兼容字段 user_context。
+    编排器可使用完整组合；只需要部分信息的专业智能体宜单独选择提供器。
     """
 
     def __init__(self, *, providers: Sequence[ContextProvider] | None = None) -> None:
@@ -229,7 +205,7 @@ class ECommerceContextProvider(ContextProvider):
         for provider in self._providers:
             await provider.before_run(agent=agent, session=session, context=context, state=state)
 
-        # Reassemble the legacy user_context string for the custom tool loop.
+        # 重新组装兼容用的 user_context 字符串。
         lines: list[str] = []
         user = state.get("user")
         if user:

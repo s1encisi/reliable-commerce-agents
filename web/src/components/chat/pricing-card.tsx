@@ -44,29 +44,29 @@ interface PricingData {
 function savingsLabel(line: SavingsLine): string {
   switch (line.type) {
     case "coupon":
-      return line.code ? `Coupon ${line.code}` : "Coupon";
+      return line.code ? `优惠券 ${line.code}` : "优惠券";
     case "loyalty_discount":
-      return line.tier ? `${line.tier[0].toUpperCase()}${line.tier.slice(1)} loyalty discount` : "Loyalty discount";
+      return line.tier ? `${line.tier} 会员折扣` : "会员折扣";
     case "bundle_promotion":
-      return line.name || "Bundle deal";
+      return line.name || "组合优惠";
     case "buy_x_get_y":
-      return line.name ? `${line.name}${line.product ? ` (${line.product})` : ""}` : "Buy X get Y";
+      return line.name ? `${line.name}${line.product ? `（${line.product}）` : ""}` : "买赠活动";
     case "flash_sale":
-      return line.name ? `${line.name}${line.product ? ` (${line.product})` : ""}` : "Flash sale";
+      return line.name ? `${line.name}${line.product ? `（${line.product}）` : ""}` : "限时秒杀";
     default:
-      return line.description || "Savings";
+      return line.description || "优惠";
   }
 }
 
 const COUPON_COLUMNS: DataTableColumn<DealCoupon>[] = [
-  { key: "code", header: "Code" },
+  { key: "code", header: "优惠码" },
   {
     key: "description",
-    header: "Details",
-    // Long descriptions push the Discount column out of the card's
-    // max-w-md — table cells default to whitespace-nowrap (ui/table.tsx),
-    // so without a width cap the row just grows instead of wrapping.
-    // Found live: WELCOME10's full description hid its own discount %.
+    header: "说明",
+    // 过长的说明会把「折扣」列挤出卡片的 max-w-md 宽度——表格单元格默认
+    // 是 whitespace-nowrap（ui/table.tsx），没有宽度上限时整行只会被撑开
+    // 而不会换行。这是实测发现的问题：WELCOME10 的完整说明把它自己的
+    // 折扣百分比遮住了。
     render: (r) => (
       <span className="block max-w-[140px] truncate" title={r.description}>
         {r.description ?? "—"}
@@ -75,7 +75,7 @@ const COUPON_COLUMNS: DataTableColumn<DealCoupon>[] = [
   },
   {
     key: "discount_value",
-    header: "Discount",
+    header: "折扣",
     align: "right",
     render: (r) =>
       r.discount_value == null
@@ -87,9 +87,9 @@ const COUPON_COLUMNS: DataTableColumn<DealCoupon>[] = [
 ];
 
 const PROMOTION_COLUMNS: DataTableColumn<DealPromotion>[] = [
-  { key: "name", header: "Promotion" },
-  { key: "type", header: "Type" },
-  { key: "end_date", header: "Ends" },
+  { key: "name", header: "促销活动" },
+  { key: "type", header: "类型" },
+  { key: "end_date", header: "结束时间" },
 ];
 
 export function ChatPricingCard({ data }: { data: PricingData }) {
@@ -97,27 +97,26 @@ export function ChatPricingCard({ data }: { data: PricingData }) {
   const hasCoupons = data.coupons && data.coupons.length > 0;
   const hasPromotions = data.promotions && data.promotions.length > 0;
 
-  // Nothing to show — e.g. optimize_cart couldn't resolve a cart and the
-  // model still emitted an all-empty fence. Don't render a header with a
-  // blank body underneath it.
+  // 没有任何内容可展示——例如 optimize_cart 没能取到购物车，但模型仍然
+  // 输出了一段全空的代码块。此时不要渲染一个下方空白的标题栏。
   if (!hasWaterfall && !hasCoupons && !hasPromotions) return null;
 
   return (
     <div className="my-2 max-w-md rounded-xl border border-border bg-card shadow-sm overflow-hidden">
-      {/* Header */}
+      {/* 标题栏 */}
       <div className="flex items-center gap-2 border-b border-border bg-muted px-4 py-2.5">
         <Tag className="size-4 text-muted-foreground shrink-0" />
         <span className="text-sm font-medium text-foreground">
-          {hasWaterfall ? "Savings Breakdown" : "Deals & Promotions"}
+          {hasWaterfall ? "优惠明细" : "优惠与促销"}
         </span>
       </div>
 
       <div className="p-4 space-y-3">
-        {/* Discount waterfall */}
+        {/* 优惠瀑布 */}
         {hasWaterfall && (
           <div className="text-sm space-y-1.5">
             <div className="flex items-center justify-between text-muted-foreground">
-              <span>Original total</span>
+              <span>原价合计</span>
               <span>{formatPrice(data.original_total!)}</span>
             </div>
             {data.savings!.map((line, i) => (
@@ -128,10 +127,10 @@ export function ChatPricingCard({ data }: { data: PricingData }) {
             ))}
             <div className="border-t border-border pt-1.5 flex items-center justify-between font-semibold text-foreground">
               <span>
-                Final total
+                实付合计
                 {data.savings_percentage != null && (
                   <span className="ml-1 text-xs font-normal text-success">
-                    (saved {data.savings_percentage}%)
+                    （已省 {data.savings_percentage}%）
                   </span>
                 )}
               </span>
@@ -140,20 +139,20 @@ export function ChatPricingCard({ data }: { data: PricingData }) {
           </div>
         )}
 
-        {/* Active coupons */}
+        {/* 可用优惠券 */}
         {hasCoupons && (
           <div>
             <p className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground mb-1">
-              <Ticket className="size-3" /> Active coupons
+              <Ticket className="size-3" /> 可用优惠券
             </p>
             <DataTable columns={COUPON_COLUMNS} rows={data.coupons!} />
           </div>
         )}
 
-        {/* Active promotions */}
+        {/* 进行中的促销 */}
         {hasPromotions && (
           <div>
-            <p className="text-[11px] font-medium text-muted-foreground mb-1">Active promotions</p>
+            <p className="text-[11px] font-medium text-muted-foreground mb-1">进行中的促销</p>
             <DataTable columns={PROMOTION_COLUMNS} rows={data.promotions!} />
           </div>
         )}

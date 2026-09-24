@@ -32,15 +32,14 @@ const ALIGN_CLASS: Record<NonNullable<DataTableColumn<never>["align"]>, string> 
 };
 
 /**
- * Generic table for any homogeneous list a specialist returns (warehouses,
- * deals, tier comparisons, price-history points) — the fence dispatcher
- * supplies the column definitions per data shape; this only renders them.
+ * 通用表格，适用于专业智能体返回的任何同构列表（仓库、优惠、档位对比、
+ * 价格历史点……）——由围栏分发器按数据形状提供列定义，本组件只负责渲染。
  */
 export function DataTable<T extends Record<string, unknown>>({
   columns,
   rows,
   caption,
-  emptyMessage = "No data available.",
+  emptyMessage = "暂无数据。",
 }: DataTableProps<T>) {
   if (rows.length === 0) {
     return <p className="py-4 text-center text-xs text-muted-foreground">{emptyMessage}</p>;

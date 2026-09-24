@@ -3,26 +3,26 @@ import { render, screen } from "@testing-library/react";
 import { SectionHeader } from "./section-header";
 
 describe("SectionHeader", () => {
-  it("renders the title as a heading", () => {
-    render(<SectionHeader title="Active Test Plans" />);
+  it("把标题渲染为 heading", () => {
+    render(<SectionHeader title="生效中的测试计划" />);
     expect(
-      screen.getByRole("heading", { name: "Active Test Plans" }),
+      screen.getByRole("heading", { name: "生效中的测试计划" }),
     ).toBeInTheDocument();
   });
 
-  it("renders eyebrow, description, and action", () => {
+  it("渲染眉标、描述与操作区", () => {
     render(
       <SectionHeader
-        eyebrow="Your Workspace"
-        title="Active Test Plans"
-        description="Track coverage across plans."
-        action={<button type="button">New Plan</button>}
+        eyebrow="你的工作区"
+        title="生效中的测试计划"
+        description="跟踪各计划的覆盖情况。"
+        action={<button type="button">新建计划</button>}
       />,
     );
-    expect(screen.getByText("Your Workspace")).toBeInTheDocument();
-    expect(screen.getByText("Track coverage across plans.")).toBeInTheDocument();
+    expect(screen.getByText("你的工作区")).toBeInTheDocument();
+    expect(screen.getByText("跟踪各计划的覆盖情况。")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "New Plan" }),
+      screen.getByRole("button", { name: "新建计划" }),
     ).toBeInTheDocument();
   });
 });

@@ -1,4 +1,4 @@
-"""Unit tests for the agentic-timeline step recorder middleware."""
+"""智能体时间线步骤记录中间件的单元测试。"""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ async def test_records_a_step_on_success():
 
 
 async def test_noop_outside_request_scope():
-    current_steps.set(None)  # no active capture
+    current_steps.set(None)  # 当前未启用记录。
     mw = StepRecorderMiddleware()
 
     async def call_next() -> None:

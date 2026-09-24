@@ -1,17 +1,7 @@
-"""Unit tests for CostBudgetMiddleware (per-run cost budget ceiling).
+"""单次运行费用预算的内存单元测试。
 
-Pure in-memory logic — no DB, no LLM, no testcontainers fixtures. Mirrors the
-style of ``tests/test_guardrails_injection_middleware.py``: a duck-typed
-``ChatContext`` keeps the test decoupled from MAF's concrete constructor, and
-the "no leakage between requests" tests mirror the same shape as that file's
-``current_guardrail_flags`` coverage — this is exactly the kind of bug a
-ContextVar-backed accumulator invites if a stale value survives across runs.
-
-Two modes:
-- ``observe`` (default): cost is tracked and logged but never blocks, even
-  once the running total exceeds the configured budget.
-- ``enforce``: once the running total exceeds ``COST_BUDGET_USD_PER_RUN``,
-  the *next* turn is refused before ``call_next()`` is invoked.
+覆盖 observe 只记录、enforce 超限后阻止下一轮，以及 ContextVar
+在并发和顺序运行之间的隔离。使用最小 ChatContext 替身，无外部调用。
 """
 
 from __future__ import annotations
@@ -30,7 +20,7 @@ from shared.guardrails.cost_budget_middleware import (
 
 
 class _FakeResponse:
-    """Duck-typed ChatResponse: only ``usage_details`` and ``text`` matter here."""
+    """仅提供 usage_details 与 text 的响应替身。"""
 
     def __init__(self, tokens_in: int, tokens_out: int) -> None:
         self.usage_details = {"input_token_count": tokens_in, "output_token_count": tokens_out}
@@ -49,16 +39,16 @@ def _call_next_that_sets_result(response: object):
 
     async def _call_next() -> None:
         calls["count"] += 1
-        # Real MAF pipelines assign context.result before/while resolving
-        # call_next() — mirrored here so process() sees a populated result
-        # once call_next() returns, matching the real pipeline's contract.
+        # 实际管线会在 call_next 完成前设置 context.result，
+        # 替身保持相同顺序，
+        # 让 process 在返回后读到真实契约所需结果。
 
     return calls, _call_next
 
 
 @pytest.fixture(autouse=True)
 def _reset_state(monkeypatch):
-    """Every test starts from a clean ContextVar and a known default config."""
+    """每例从干净 ContextVar 和确定配置开始。"""
     monkeypatch.setattr(settings, "COST_BUDGET_MODE", "observe")
     monkeypatch.setattr(settings, "COST_BUDGET_USD_PER_RUN", None)
     current_run_cost_usd.set(None)
@@ -115,7 +105,7 @@ async def test_off_mode_skips_tracking_entirely(monkeypatch) -> None:
 
 async def test_observe_mode_never_blocks_even_over_budget(monkeypatch) -> None:
     monkeypatch.setattr(settings, "COST_BUDGET_MODE", "observe")
-    monkeypatch.setattr(settings, "COST_BUDGET_USD_PER_RUN", 0.000001)  # trivially tiny
+    monkeypatch.setattr(settings, "COST_BUDGET_USD_PER_RUN", 0.000001)  # 极小预算。
     reset_run_cost()
     mw = CostBudgetMiddleware()
     ctx = _Ctx()
@@ -135,9 +125,9 @@ async def test_observe_mode_never_blocks_even_over_budget(monkeypatch) -> None:
 async def test_enforce_mode_blocks_once_ceiling_exceeded(monkeypatch) -> None:
     monkeypatch.setattr(settings, "COST_BUDGET_MODE", "enforce")
     per_turn = estimate_cost(_model(), 1000, 1000)
-    # Budget big enough for exactly one turn's worth (running total after turn
-    # 1 == budget, so it isn't yet "exceeded"), too small for a second turn's
-    # worth (running total after turn 2 > budget, so turn 3 is refused).
+    # 预算恰好等于一轮费用，
+    # 第一轮后尚未超出；第二轮后超限，
+    # 因此第三轮被拒绝。
     monkeypatch.setattr(settings, "COST_BUDGET_USD_PER_RUN", per_turn)
     reset_run_cost()
     mw = CostBudgetMiddleware()
@@ -161,7 +151,7 @@ async def test_enforce_mode_blocks_once_ceiling_exceeded(monkeypatch) -> None:
 async def test_enforce_mode_streaming_refusal_yields_chunk(monkeypatch) -> None:
     monkeypatch.setattr(settings, "COST_BUDGET_MODE", "enforce")
     monkeypatch.setattr(settings, "COST_BUDGET_USD_PER_RUN", 0.0)
-    current_run_cost_usd.set(1.0)  # already over budget before any turn runs
+    current_run_cost_usd.set(1.0)  # 任何调用开始前就已超预算。
     mw = CostBudgetMiddleware()
     ctx = _Ctx(stream=True)
     calls = {"count": 0}
@@ -177,8 +167,7 @@ async def test_enforce_mode_streaming_refusal_yields_chunk(monkeypatch) -> None:
 
 
 async def test_enforce_mode_without_a_budget_never_blocks(monkeypatch) -> None:
-    """COST_BUDGET_USD_PER_RUN unset (None) is the additive/opt-in default —
-    enforce mode with no ceiling configured must not block anything."""
+    """未设置费用上限时，即使 enforce 模式也不应阻止调用。"""
     monkeypatch.setattr(settings, "COST_BUDGET_MODE", "enforce")
     monkeypatch.setattr(settings, "COST_BUDGET_USD_PER_RUN", None)
     reset_run_cost()
@@ -196,10 +185,7 @@ async def test_enforce_mode_without_a_budget_never_blocks(monkeypatch) -> None:
 
 
 async def test_streaming_turn_accumulates_via_result_hook() -> None:
-    """Non-blocking streaming path: cost is recorded via a deferred
-    stream_result_hook, since a streamed ChatResponse's usage isn't known
-    until the stream is fully consumed (mirrors GroundingVerificationMiddleware's
-    stream_result_hooks usage in shared/grounding/middleware.py)."""
+    """流式用量在流消费完才确定，费用通过延迟结果钩子记录，不阻塞分块。"""
     from agent_framework import ResponseStream
 
     reset_run_cost()
@@ -216,7 +202,7 @@ async def test_streaming_turn_accumulates_via_result_hook() -> None:
     await mw.process(ctx, _call_next)
 
     assert len(ctx.stream_result_hooks) == 1
-    # Simulate the pipeline invoking the hook once the stream is finalized.
+    # 模拟管线在流结束时执行结果钩子。
     hook = ctx.stream_result_hooks[0]
     hook(_FakeResponse(1000, 1000))
 
@@ -243,10 +229,7 @@ def test_reset_run_cost_clears_a_prior_runs_accumulation() -> None:
 
 
 async def test_no_leakage_between_consecutive_runs() -> None:
-    """Two runs in sequence, each explicitly reset, must never see the
-    other's accumulated cost — the same property
-    tests/test_guardrails_injection_middleware.py verifies for
-    current_guardrail_flags."""
+    """两次顺序运行显式重置后，不能看到彼此累计费用。"""
     mw = CostBudgetMiddleware()
 
     reset_run_cost()
@@ -270,13 +253,9 @@ async def test_no_leakage_between_consecutive_runs() -> None:
 
 
 async def test_a_recorded_turn_emits_the_cost_counter(monkeypatch) -> None:
-    """The middleware is the only place that prices *every* LLM turn.
+    """通过 process 验证每轮费用真正接入指标记录。
 
-    The orchestrator's usage_logs row sees one aggregate per run, so it cannot
-    say which agent spent what. Emitting here is what makes the counter usable
-    for finding where a spend anomaly actually came from — asserted through
-    ``process()`` rather than by calling the recorder directly, because the
-    wiring is the part that breaks.
+    运行级汇总无法说明各智能体花费；直接测试记录器也无法捕获接线遗漏。
     """
     from opentelemetry.sdk.metrics import MeterProvider
     from opentelemetry.sdk.metrics.export import InMemoryMetricReader
@@ -309,10 +288,7 @@ async def test_a_recorded_turn_emits_the_cost_counter(monkeypatch) -> None:
 
 
 async def test_a_turn_with_no_usage_emits_nothing(monkeypatch) -> None:
-    """A replay fixture carries no token counts. Pricing that at zero would
-    quietly report a free run; emitting nothing keeps "no data" distinguishable
-    from "cost nothing", which is the same distinction ``_turn_cost`` already
-    preserves for the budget ceiling."""
+    """无 token 用量的回放不能静默记为免费；不发出指标，以区分缺数据和零费用。"""
     from opentelemetry.sdk.metrics import MeterProvider
     from opentelemetry.sdk.metrics.export import InMemoryMetricReader
 

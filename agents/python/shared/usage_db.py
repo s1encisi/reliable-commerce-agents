@@ -1,7 +1,7 @@
-"""Usage logging — records agent invocations and execution steps.
+"""用量日志：记录智能体调用与执行步骤。
 
-Writes to usage_logs and agent_execution_steps tables.
-Includes trace_id from active OTel span for correlation with Aspire Dashboard.
+写入 usage_logs 和 agent_execution_steps，附加当前 OTel trace_id，
+用于关联 Jaeger 追踪。
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ async def log_agent_usage(
     status: str = "success",
     error_message: str | None = None,
 ) -> UUID | None:
-    """Insert a record into usage_logs. Returns the usage_log id."""
+    """向 usage_logs 插入记录，返回用量日志标识。"""
     pool = get_pool()
     trace_id = get_current_trace_id()
 
@@ -67,7 +67,7 @@ async def log_execution_step(
     status: str = "success",
     duration_ms: int = 0,
 ) -> None:
-    """Insert a record into agent_execution_steps."""
+    """向 agent_execution_steps 插入记录。"""
     pool = get_pool()
     try:
         await pool.execute(
@@ -87,7 +87,7 @@ async def log_execution_step(
 
 
 class UsageTimer:
-    """Context manager for timing agent invocations."""
+    """记录智能体调用耗时的上下文管理器。"""
 
     def __init__(self) -> None:
         self._start: float = 0
@@ -102,7 +102,7 @@ class UsageTimer:
 
 
 def _safe_json(data: dict | None) -> str | None:
-    """Safely serialize dict to JSON string for asyncpg JSONB."""
+    """安全地把字典序列化为 asyncpg JSONB 所需的 JSON 字符串。"""
     if data is None:
         return None
     import json

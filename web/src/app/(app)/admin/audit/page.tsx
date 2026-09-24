@@ -30,7 +30,7 @@ import {
 import { AGENTS } from "@/lib/agents";
 
 // ---------------------------------------------------------------------------
-// Types
+// 类型
 // ---------------------------------------------------------------------------
 
 type AuditStep = {
@@ -60,15 +60,17 @@ type AuditEntry = {
 };
 
 // ---------------------------------------------------------------------------
-// Constants
+// 常量
 // ---------------------------------------------------------------------------
 
 const PAGE_SIZE = 25;
-const AGENT_OPTIONS = ["All agents", ...AGENTS.map((a) => a.backendName)];
-const ASPIRE_BASE = "http://localhost:18888";
+const ALL_AGENTS = "全部智能体";
+const AGENT_OPTIONS = [ALL_AGENTS, ...AGENTS.map((a) => a.backendName)];
+/** Jaeger 界面地址；追踪详情路径为 `/trace/{traceId}`。 */
+const JAEGER_BASE = "http://localhost:16686";
 
 // ---------------------------------------------------------------------------
-// Helpers
+// 工具函数
 // ---------------------------------------------------------------------------
 
 function formatNumber(n: number | undefined | null): string {
@@ -86,7 +88,7 @@ function formatDuration(ms: number | undefined | null): string {
 
 function formatTimestamp(dateStr: string): string {
   try {
-    return new Date(dateStr).toLocaleString("en-US", {
+    return new Date(dateStr).toLocaleString("zh-CN", {
       month: "short",
       day: "numeric",
       hour: "2-digit",
@@ -111,7 +113,7 @@ function exportJson(entries: AuditEntry[]) {
 }
 
 // ---------------------------------------------------------------------------
-// Sub-components
+// 子组件
 // ---------------------------------------------------------------------------
 
 function FilterBar({
@@ -133,40 +135,40 @@ function FilterBar({
 
   return (
     <div className="flex flex-wrap items-center gap-2 px-4 py-3">
-      {/* Agent filter */}
+      {/* 智能体筛选 */}
       <select
         value={agentFilter}
         onChange={(e) => setAgentFilter(e.target.value)}
         className="rounded-md border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-        aria-label="Filter by agent"
+        aria-label="按智能体筛选"
       >
         {AGENT_OPTIONS.map((a) => (
-          <option key={a} value={a === "All agents" ? "" : a}>
+          <option key={a} value={a === ALL_AGENTS ? "" : a}>
             {a}
           </option>
         ))}
       </select>
 
-      {/* Status filter */}
+      {/* 状态筛选 */}
       <select
         value={statusFilter}
         onChange={(e) => setStatusFilter(e.target.value)}
         className="rounded-md border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-        aria-label="Filter by status"
+        aria-label="按状态筛选"
       >
-        <option value="">All statuses</option>
-        <option value="success">Success</option>
-        <option value="error">Error</option>
+        <option value="">全部状态</option>
+        <option value="success">成功</option>
+        <option value="error">失败</option>
       </select>
 
-      {/* Search */}
+      {/* 搜索 */}
       <div className="relative flex-1 min-w-[180px]">
         <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
         <input
           ref={inputRef}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search user or prompt…"
+          placeholder="搜索用户或提示词…"
           className="h-8 w-full rounded-md border bg-background pl-8 pr-8 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
         />
         {search && (
@@ -186,6 +188,7 @@ function FilterBar({
   );
 }
 
+/** 单条工具调用的输入 / 输出详情。 */
 function StepDetail({ step }: { step: AuditStep }) {
   const inputStr = step.tool_input
     ? JSON.stringify(step.tool_input, null, 2)
@@ -209,7 +212,7 @@ function StepDetail({ step }: { step: AuditStep }) {
               variant="outline"
               className="border-red-200 bg-red-50 text-[10px] text-red-700"
             >
-              error
+              错误
             </Badge>
           )}
         </div>
@@ -232,7 +235,7 @@ function StepDetail({ step }: { step: AuditStep }) {
 }
 
 // ---------------------------------------------------------------------------
-// Page
+// 页面
 // ---------------------------------------------------------------------------
 
 export default function AdminAuditPage() {
@@ -246,18 +249,18 @@ export default function AdminAuditPage() {
   const [error, setError] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
-  // Filters
+  // 筛选条件
   const [agentFilter, setAgentFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [search, setSearch] = useState("");
-  // Debounced search
+  // 防抖后的搜索词
   const [debouncedSearch, setDebouncedSearch] = useState("");
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(t);
   }, [search]);
 
-  // Reset page when filters change
+  // 筛选条件变化时回到第一页
   useEffect(() => {
     setPage(0);
   }, [agentFilter, statusFilter, debouncedSearch]);
@@ -281,7 +284,7 @@ export default function AdminAuditPage() {
       setTotal(data?.total ?? 0);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to load audit log",
+        err instanceof Error ? err.message : "加载审计日志失败",
       );
     } finally {
       setLoading(false);
@@ -310,9 +313,9 @@ export default function AdminAuditPage() {
           <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-destructive/10">
             <ShieldAlert className="size-8 text-destructive" />
           </div>
-          <h2 className="mt-4 text-lg font-semibold">Access Denied</h2>
+          <h2 className="mt-4 text-lg font-semibold">无权访问</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Admin privileges required.
+            需要管理员权限。
           </p>
         </div>
       </div>
@@ -324,7 +327,7 @@ export default function AdminAuditPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
+      {/* 页头 */}
       <div className="border-b bg-card">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between gap-4">
@@ -333,9 +336,9 @@ export default function AdminAuditPage() {
                 <ScrollText className="size-5 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-xl font-bold">Agent Runs</h1>
+                <h1 className="text-xl font-bold">智能体运行记录</h1>
                 <p className="text-sm text-muted-foreground">
-                  Full execution trace — every agent invocation with tool steps
+                  完整执行追踪——每一次智能体调用及其工具步骤
                 </p>
               </div>
             </div>
@@ -347,16 +350,16 @@ export default function AdminAuditPage() {
               className="gap-1.5"
             >
               <Download className="size-3.5" />
-              Export JSON
+              导出 JSON
             </Button>
           </div>
         </div>
       </div>
 
-      {/* Content */}
+      {/* 内容区 */}
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <div className="rounded-xl bg-card ring-1 ring-foreground/10">
-          {/* Filter bar */}
+          {/* 筛选栏 */}
           <FilterBar
             agentFilter={agentFilter}
             setAgentFilter={setAgentFilter}
@@ -367,12 +370,12 @@ export default function AdminAuditPage() {
           />
           <Separator />
 
-          {/* Table header row */}
+          {/* 表格上方统计行 */}
           <div className="flex items-center justify-between px-4 py-2">
             <span className="text-xs text-muted-foreground">
               {loading
-                ? "Loading…"
-                : `${total.toLocaleString()} run${total !== 1 ? "s" : ""}${hasFilters ? " (filtered)" : ""}`}
+                ? "加载中…"
+                : `共 ${total.toLocaleString()} 条运行记录${hasFilters ? "（已筛选）" : ""}`}
             </span>
             {hasFilters && (
               <button
@@ -384,7 +387,7 @@ export default function AdminAuditPage() {
                 }}
                 className="text-xs text-primary hover:underline"
               >
-                Clear filters
+                清除筛选
               </button>
             )}
           </div>
@@ -393,7 +396,7 @@ export default function AdminAuditPage() {
             <div className="flex items-center justify-center py-16">
               <Loader2 className="size-5 animate-spin text-primary" />
               <span className="ml-2 text-sm text-muted-foreground">
-                Loading…
+                加载中…
               </span>
             </div>
           )}
@@ -409,8 +412,8 @@ export default function AdminAuditPage() {
               <ScrollText className="mx-auto size-10 text-muted-foreground" />
               <p className="mt-3 text-sm text-muted-foreground">
                 {hasFilters
-                  ? "No runs match the current filters."
-                  : "No runs recorded yet."}
+                  ? "没有符合当前筛选条件的运行记录。"
+                  : "尚无运行记录。"}
               </p>
             </div>
           )}
@@ -420,14 +423,14 @@ export default function AdminAuditPage() {
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="w-[32px]" />
-                  <TableHead>Time</TableHead>
-                  <TableHead>Agent</TableHead>
-                  <TableHead>User</TableHead>
-                  <TableHead>Prompt</TableHead>
-                  <TableHead className="text-right">Tokens</TableHead>
-                  <TableHead className="text-right">Duration</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Trace</TableHead>
+                  <TableHead>时间</TableHead>
+                  <TableHead>智能体</TableHead>
+                  <TableHead>用户</TableHead>
+                  <TableHead>提示词</TableHead>
+                  <TableHead className="text-right">Token</TableHead>
+                  <TableHead className="text-right">耗时</TableHead>
+                  <TableHead>状态</TableHead>
+                  <TableHead>追踪</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -438,7 +441,7 @@ export default function AdminAuditPage() {
                   return (
                     <TableRow key={entry.id} className="group" aria-expanded={isExpanded}>
                       <TableCell colSpan={9} className="p-0">
-                        {/* Main row */}
+                        {/* 主行 */}
                         <div
                           className={`flex items-center text-sm ${hasSteps ? "cursor-pointer hover:bg-muted/30" : ""}`}
                           onClick={() => hasSteps && toggleExpanded(entry.id)}
@@ -449,7 +452,7 @@ export default function AdminAuditPage() {
                           role={hasSteps ? "button" : undefined}
                           tabIndex={hasSteps ? 0 : undefined}
                         >
-                          {/* Expand toggle */}
+                          {/* 展开开关 */}
                           <div className="flex w-10 shrink-0 items-center justify-center py-2.5">
                             {hasSteps ? (
                               isExpanded ? (
@@ -462,68 +465,68 @@ export default function AdminAuditPage() {
                             )}
                           </div>
 
-                          {/* Time */}
+                          {/* 时间 */}
                           <div className="w-[135px] shrink-0 py-2.5 text-xs text-muted-foreground">
                             {formatTimestamp(entry.created_at)}
                           </div>
 
-                          {/* Agent */}
+                          {/* 智能体 */}
                           <div className="w-[155px] shrink-0 py-2.5 font-mono text-xs text-foreground/80">
                             {entry.agent_name}
                           </div>
 
-                          {/* User */}
+                          {/* 用户 */}
                           <div className="w-[155px] shrink-0 truncate py-2.5 text-xs text-muted-foreground">
                             {entry.user_email ?? "—"}
                           </div>
 
-                          {/* Prompt */}
+                          {/* 提示词 */}
                           <div className="min-w-0 flex-1 truncate py-2.5 pr-3 text-xs text-muted-foreground">
                             {entry.input_summary ?? "—"}
                           </div>
 
-                          {/* Tokens */}
+                          {/* Token */}
                           <div className="w-[80px] shrink-0 py-2.5 text-right text-xs text-muted-foreground">
                             {formatNumber(entry.tokens_in + entry.tokens_out)}
                           </div>
 
-                          {/* Duration */}
+                          {/* 耗时 */}
                           <div className="w-[75px] shrink-0 py-2.5 text-right text-xs text-muted-foreground">
                             {formatDuration(entry.duration_ms)}
                           </div>
 
-                          {/* Status */}
+                          {/* 状态 */}
                           <div className="w-[70px] shrink-0 py-2.5">
                             {entry.status === "success" ? (
                               <Badge
                                 variant="outline"
                                 className="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400"
                               >
-                                OK
+                                成功
                               </Badge>
                             ) : (
                               <Badge
                                 variant="outline"
                                 className="border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-400"
                               >
-                                Error
+                                失败
                               </Badge>
                             )}
                           </div>
 
-                          {/* Trace link */}
+                          {/* 追踪链接 */}
                           <div className="w-[56px] shrink-0 py-2.5 pr-3">
                             {entry.trace_id ? (
                               <a
-                                href={`${ASPIRE_BASE}/traces/${entry.trace_id}`}
+                                href={`${JAEGER_BASE}/trace/${entry.trace_id}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 onClick={(e) => e.stopPropagation()}
-                                title={`Open trace ${entry.trace_id} in Aspire`}
+                                title={`在 Jaeger 中查看追踪 ${entry.trace_id}`}
                                 className="inline-flex items-center gap-0.5 text-xs text-primary hover:underline"
                               >
                                 <ExternalLink className="size-3" />
-                                Aspire
+                                Jaeger
                               </a>
                             ) : (
                               <span className="text-xs text-muted-foreground/40">—</span>
@@ -531,12 +534,12 @@ export default function AdminAuditPage() {
                           </div>
                         </div>
 
-                        {/* Expanded steps */}
+                        {/* 展开的工具步骤 */}
                         {isExpanded && hasSteps && (
                           <div className="border-t border-border bg-muted/40 px-4 pb-3 pt-2">
                             <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                               <Wrench className="size-3" />
-                              Tool steps ({entry.steps.length})
+                              工具步骤（{entry.steps.length}）
                             </div>
                             <div className="space-y-1.5">
                               {entry.steps.map((step) => (
@@ -558,14 +561,14 @@ export default function AdminAuditPage() {
             </Table>
           )}
 
-          {/* Pagination */}
+          {/* 分页 */}
           {!loading && total > PAGE_SIZE && (
             <>
               <Separator />
               <div className="flex items-center justify-between px-4 py-3">
                 <span className="text-xs text-muted-foreground">
-                  Page {page + 1} of {totalPages} &middot;{" "}
-                  {total.toLocaleString()} total
+                  第 {page + 1} / {totalPages} 页 &middot;{" "}
+                  共 {total.toLocaleString()} 条
                 </span>
                 <div className="flex gap-2">
                   <Button
@@ -574,7 +577,7 @@ export default function AdminAuditPage() {
                     disabled={page === 0}
                     onClick={() => setPage((p) => p - 1)}
                   >
-                    Previous
+                    上一页
                   </Button>
                   <Button
                     variant="outline"
@@ -582,7 +585,7 @@ export default function AdminAuditPage() {
                     disabled={page >= totalPages - 1}
                     onClick={() => setPage((p) => p + 1)}
                   >
-                    Next
+                    下一页
                   </Button>
                 </div>
               </div>

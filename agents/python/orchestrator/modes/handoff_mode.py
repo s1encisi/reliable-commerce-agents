@@ -1,17 +1,16 @@
-"""``handoff`` mode: MAF ``HandoffBuilder`` mesh over the same specialists.
+"""``handoff`` 模式：在同一批专业智能体之上运行 MAF ``HandoffBuilder`` 网格。
 
-Wraps ``orchestrator/handoff.py::build_orchestrator_handoff_workflow`` —
-already built, already tested (``tests/test_handoff_orchestration.py``),
-never previously reachable from a live request. This is the first thing
-that reaches it: ``ORCHESTRATION_MODE=handoff`` or a per-request
-``mode="handoff"`` now actually runs the mesh instead of the tool router.
+包装 ``orchestrator/handoff.py::build_orchestrator_handoff_workflow`` ——
+它早已构建完成、也早已有测试覆盖
+（``tests/test_handoff_orchestration.py``），但此前从未能从实际请求触达。
+本模块是第一个触达它的东西：``ORCHESTRATION_MODE=handoff`` 或按请求传入
+``mode="handoff"``，现在真的会运行这个网格，而不是工具路由。
 
-Final-answer and participant-order extraction mirrors
-``tutorials/14-handoff-orchestration/python/main.py::ask()`` — that
-tutorial is the verified reference for how to read a handoff workflow's
-event stream (confirmed against real Azure calls in Phase 0): "output"
-events carry incremental ``AgentResponseUpdate`` text per executor id, and
-the final answer is the last participant's fully-assembled turn.
+最终答案与参与者顺序的提取方式，参照
+``tutorials/14-handoff-orchestration/python/main.py::ask()`` —— 那个教程是
+读取处理权交接工作流事件流的经验证参考实现（已在 Phase 0 对照真实 Azure
+调用确认）："output" 事件按执行器 id 携带增量的 ``AgentResponseUpdate``
+文本，而最终答案是最后一位参与者完整拼装后的那一轮发言。
 """
 
 from __future__ import annotations
@@ -26,30 +25,27 @@ from .base import ModeCapabilities, RunContext
 
 class HandoffMode:
     name = "handoff"
-    label = "Handoff Mesh"
+    label = "处理权交接网格"
     description = (
-        "MAF HandoffBuilder mesh: the orchestrator mechanically hands control to a specialist "
-        "and back, instead of the LLM deciding per-turn via a tool call."
+        "MAF HandoffBuilder 网格：编排器机械地把控制权交给某个专业智能体再交回，而不是由 LLM 每轮通过工具调用自行决定。"
     )
     capabilities = ModeCapabilities(
         streams=True,
-        supports_hitl=False,  # neither shared/hitl.py nor an in-workflow gate is wired into this mesh
+        supports_hitl=False,  # shared/hitl.py 与工作流内门控都未接入这个网格
         supports_checkpoints=False,
         is_graph=True,
     )
 
     async def run(self, message: str, ctx: RunContext) -> AsyncIterator[OrchestrationEvent]:
-        # Forwarded for parity with the tool router — handoff specialists are
-        # RemoteSpecialistChatClient instances that don't currently read this
-        # ContextVar (they flatten only the current turn's prompt, see
-        # shared/remote_agent.py), but setting it costs nothing and keeps
-        # both modes' request setup identical.
+        # 为了与工具路由保持一致性而透传 —— 处理权交接的专业智能体是
+        # RemoteSpecialistChatClient 实例，目前并不读取这个 ContextVar
+        # （它们只压平当前轮的提示词，见 shared/remote_agent.py），但设置它
+        # 没有成本，还能让两种模式的请求准备过程完全一致。
 
-        # Module-qualified access (not `from orchestrator.handoff import ...`)
-        # deliberately — tests monkeypatch orchestrator.handoff._load_registry
-        # / .create_orchestrator_agent, which only takes effect on attribute
-        # reads through the module object, not on a name bound at import time
-        # into this module's own namespace.
+        # 刻意使用模块限定访问（而非 `from orchestrator.handoff import ...`）
+        # —— 测试会 monkeypatch orchestrator.handoff._load_registry
+        # / .create_orchestrator_agent，而只有通过模块对象读取属性才会生效，
+        # 在导入时绑定到本模块命名空间的名字则不会。
         known_participants = {"orchestrator", *handoff_module._load_registry().keys()}
         workflow = handoff_module.build_orchestrator_handoff_workflow()
 
@@ -78,15 +74,13 @@ class HandoffMode:
         agents_involved = list(dict.fromkeys(eid for eid, _ in assembled)) or ["orchestrator"]
         final_text = assembled[-1][1] if assembled else ""
 
-        # No "grounding" key here (unlike tool_router.py): each participant's
-        # own agent.run() call still runs GroundingVerificationMiddleware and
-        # still corrects/strips its finalized response before persistence,
-        # but final_text above is assembled by concatenating raw streamed
-        # AgentResponseUpdate chunks off HandoffBuilder's workflow event
-        # stream — it never exposes the per-participant AgentResponse whose
-        # additional_properties carries the report. Surfacing it in the UI
-        # for this mode needs a HandoffBuilder event-stream change, not a
-        # grounding change.
+        # 这里没有 "grounding" 键（与 tool_router.py 不同）：每位参与者自己的
+        # agent.run() 调用仍会执行 GroundingVerificationMiddleware，也仍会在
+        # 持久化之前修正/剥离其最终响应，但上面的 final_text 是通过拼接
+        # HandoffBuilder 工作流事件流中原始的 AgentResponseUpdate 分片组装
+        # 而成的 —— 它从不暴露那些 additional_properties 携带报告的
+        # 按参与者 AgentResponse。要在这个模式的 UI 里呈现该报告，需要修改
+        # HandoffBuilder 的事件流，而不是改事实核验（grounding）。
         yield OrchestrationEvent(
             kind="run_completed",
             payload={"text": final_text, "agents_involved": agents_involved},

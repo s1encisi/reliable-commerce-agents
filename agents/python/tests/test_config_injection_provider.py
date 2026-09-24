@@ -1,10 +1,7 @@
-"""Phase 0.4 Task C — GUARDRAILS_INJECTION_PROVIDER validation.
+"""注入检测提供方配置测试。
 
-``azure_content_safety`` was accepted by config but has no implementation
-behind it (``shared/guardrails/azure_shield.py`` does not exist). Selecting
-it must fail fast at startup instead of silently running the regex provider.
-Follows the ``_validate_secrets`` test pattern in test_secret_validation.py —
-rebuilds ``Settings`` in isolation so the repo-root ``.env`` can't interfere.
+尚未实现的 azure_content_safety 必须在启动时失败，不能静默使用
+regex。隔离创建 Settings，避免仓库 .env 干扰。
 """
 
 from __future__ import annotations
@@ -44,7 +41,7 @@ def test_azure_content_safety_rejected_as_not_implemented(monkeypatch: pytest.Mo
 
 
 def test_azure_content_safety_rejected_even_in_development(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Unlike the secret-strength checks, this is not an environment-gated warning."""
+    """此校验与密钥强度警告不同，不随环境降级为警告。"""
     mod = _prepare_env(monkeypatch, provider="azure_content_safety", environment="development")
     with pytest.raises(ValueError, match="not implemented"):
         mod.Settings(_env_file=None)  # type: ignore[call-arg]

@@ -5,6 +5,12 @@ interface ActionChipsProps {
   onChipClick: (text: string) => void;
 }
 
+/**
+ * 快捷操作标签组。
+ *
+ * 用于在助手回复下方提供一组可点击的追问建议，点击后把该标签文本回填到输入框。
+ * 标签文本由调用方（通常来自后端建议）提供，本组件不做内容改写。
+ */
 export function ActionChips({ chips, onChipClick }: ActionChipsProps) {
   return (
     <div className="flex flex-wrap gap-1.5 mt-2">

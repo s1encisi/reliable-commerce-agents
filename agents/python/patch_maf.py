@@ -1,20 +1,12 @@
-"""Patch agent_framework __init__.py if it's empty (MAF v1.0 packaging bug).
+"""仅在 agent_framework/__init__.py 为空时修复 MAF 1.0 打包缺陷。
 
-This only applied to agent-framework-core==1.0.0, whose __init__.py shipped
-empty. Fixed upstream by 1.14.0 (the version this repo now pins) — the
-package ships a real __init__.py with proper re-exports, so patch() is
-already a no-op (it only writes when the file is empty) and this script does
-nothing on a current install. Left in place as a defensive fallback rather
-than removed outright; see the "MAF Package Patch" note in CLAUDE.md.
+当前锁定的 1.14.0 已提供完整的公开导出，因此正常安装上 patch() 不执行
+写入。本脚本保留为兼容性兜底，详见 CLAUDE.md 的 MAF 包补丁说明。
 
-Writes must go through a temp file + os.replace(), not an in-place
-``write_text()``. uv hardlinks installed site-packages files back into its
-shared cache by default on Linux (no repo-wide link-mode override exists), so
-a plain write_text() truncates the inode shared with the cache entry — it
-doesn't just fix this venv, it corrupts the cached wheel content for every
-future `uv sync` that resolves to the same cache entry, in this or any other
-project on the machine. os.replace() swaps the directory entry to a new
-inode instead, leaving the cache's copy untouched.
+写入必须使用临时文件和 os.replace()，不能原地 write_text()。Linux 下
+uv 默认将安装文件硬链接到共享缓存；原地写入会修改同一 inode，污染
+本机其他项目后续 uv sync 使用的缓存。os.replace() 创建新的目录项，
+可保留缓存中的原始文件。
 """
 
 import importlib

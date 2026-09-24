@@ -9,11 +9,17 @@ interface ExamplePromptsProps {
   agent: AgentMeta;
 }
 
+/**
+ * 示例提问区。
+ *
+ * 每个标签都是一个直达对话页的链接，点击后自动把该提问预填到输入框，
+ * 便于面试官或访客一键复现该智能体的典型用法。
+ */
 export function ExamplePrompts({ agent }: ExamplePromptsProps) {
   return (
     <section>
       <h2 className="mb-3 text-sm font-semibold text-foreground">
-        Try it — example prompts
+        试一试 · 示例提问
       </h2>
       <div className="flex flex-wrap gap-2">
         {agent.examplePrompts.map((prompt) => (

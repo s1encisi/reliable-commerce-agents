@@ -1,9 +1,7 @@
-"""unwrap_function_result / rewrap_function_result — pure logic, no DB, no LLM.
+"""工具结果解包与重新包装的纯逻辑测试。
 
-Covers the real runtime shape (list[Content]-like, .text holds JSON) found
-live while diagnosing why GroundingLedger was always empty despite real tool
-calls happening every turn, plus the raw dict/list passthrough shape direct
-unit tests (and a future MAF version that stops wrapping) would use.
+覆盖真实 list[Content] 包装和裸字典、列表透传，防止中间件在
+真实运行时静默忽略工具数据。
 """
 
 from __future__ import annotations
@@ -14,8 +12,7 @@ from shared.function_results import rewrap_function_result, unwrap_function_resu
 
 
 class _FakeContent:
-    """Duck-types agent_framework._types.Content well enough for these
-    helpers: the only attribute they touch is .text."""
+    """仅模拟 Content 的 text 属性，满足辅助函数使用范围。"""
 
     def __init__(self, text: str | None) -> None:
         self.text = text
@@ -54,7 +51,7 @@ def test_unwrap_returns_raw_text_when_not_valid_json() -> None:
 def test_rewrap_mutates_wrapped_content_text_in_place() -> None:
     original = [_FakeContent(json.dumps({"price": 19.99}))]
     result = rewrap_function_result(original, {"price": 25.00})
-    assert result is original  # same object, mutated
+    assert result is original  # 仍为同一对象，内容原地修改。
     assert json.loads(original[0].text) == {"price": 25.00}
 
 

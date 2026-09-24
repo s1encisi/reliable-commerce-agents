@@ -1,21 +1,14 @@
 # ============================================================
-# E-Commerce Agents — Docker Compose
-# Usage: ./scripts/dev.sh  (or docker compose up --build)
+# 可靠电商多智能体平台 — Docker Compose
+# 用法：./scripts/dev.sh（或 docker compose up --build）
 # ============================================================
 
-# Compose project name, set explicitly.
+# Compose 项目名，显式指定。
 #
-# Without it, every compose file in this directory resolves to the same
-# project (`e-commerce-agents`, from the folder name) — so the Python and .NET
-# stacks shared container names, and `docker compose down` with one file would
-# leave the other's containers running as orphans. That is not a hypothetical:
-# it is what happens, and the recovery is `docker rm -f`.
-#
-# Distinct names make each stack independently addressable. They still cannot
-# run simultaneously — both publish the same host ports, deliberately — but now
-# the failure is a clear port conflict rather than two stacks quietly wearing
-# each other's container names. See plan 16 F4.
-name: e-commerce-agents
+# 若不指定，本目录下的每个 compose 文件都会解析为同一个项目（取目录名），
+# 导致不同环境共用容器名，`docker compose down` 只关掉其中一组、另一组变成
+# 孤儿容器残留。显式命名后，各环境互相独立、可单独寻址。
+name: reliable-commerce-agents
 
 services:
   # ── Infrastructure ─────────────────────────────────────────
@@ -46,17 +39,16 @@ services:
       timeout: 3s
       retries: 5
 
-  # ── Aspire Dashboard (OpenTelemetry) ────────────────────────
+  # ── Jaeger（OpenTelemetry 追踪可视化）────────────────────────
 
-  aspire:
-    image: mcr.microsoft.com/dotnet/aspire-dashboard:latest
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
     ports:
-      - "18888:18888"   # Dashboard UI
-      - "18890:18889"   # OTLP receiver
+      - "16686:16686"   # Jaeger 查询界面
+      - "4317:4317"     # OTLP gRPC 接收端
+      - "4318:4318"     # OTLP HTTP 接收端
     environment:
-      DASHBOARD__FRONTEND__AUTHMODE: Unsecured
-    # The dashboard image has no /bin/sh or bash. Check its published HTTP
-    # endpoint from the host; CMD-SHELL probes falsely mark it unhealthy.
+      COLLECTOR_OTLP_ENABLED: "true"
 
   # ── Seed Database (runs once, exits) ────────────────────────
 
@@ -78,14 +70,12 @@ services:
     restart: "no"
     profiles: ["seed"]
 
-  # ── Self-Hosted OAuth2 Authorization Server (optional — AUTH_MODE=oauth) ──
+  # ── 自托管 OAuth2 授权服务器（可选 — AUTH_MODE=oauth）──────
   #
-  # Issues RS256 tokens for user login (orchestrator-brokered ROPC),
-  # inter-agent A2A (client credentials), and MCP resource access. No
-  # external identity provider — the JWKS/token endpoints below are the
-  # only auth authority for both this stack and docker-compose.dotnet.yml
-  # (which runs its own co-located instance; the two stacks don't share
-  # a network). Not required when AUTH_MODE=local (the default).
+  # 签发 RS256 令牌，覆盖用户登录（由编排器代理的 ROPC 流程）、
+  # 智能体间 A2A 调用（client credentials）以及 MCP 资源访问。
+  # 不依赖任何外部身份提供商 —— 下列 JWKS / token 端点即为本栈
+  # 唯一的鉴权中心。AUTH_MODE=local（默认）时不需要启动本服务。
 
   auth-server:
     build:
@@ -109,7 +99,7 @@ services:
       ENVIRONMENT: ${ENVIRONMENT:-development}
     profiles: ["agents"]
 
-  # ── Orchestrator (Customer Support Agent) ───────────────────
+  # ── 编排器（面向用户的统一入口智能体）─────────────────────
 
   orchestrator:
     build:
@@ -150,15 +140,13 @@ services:
       OAUTH_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET:-}
       OAUTH_SEED_KEY: ${OAUTH_SEED_KEY:-dev-oauth-seed-change-me}
       OTEL_ENABLED: "true"
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://aspire:18889
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
       OTEL_SERVICE_NAME: ecommerce.orchestrator
-      # Capture LLM input/output content in Aspire GenAI telemetry view
-      # Set to "false" in production environments that process PII
+      # 是否在 Jaeger 的 GenAI 视图中采集 LLM 输入/输出内容
+      # 处理个人敏感信息的生产环境请置为 "false"
       OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: ${OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT:-true}
-      # MAF v1 feature flags — defaults preserve existing behaviour. The .NET
-      # compose set these from day one; the Python compose was missing them
-      # so toggling RETURN_HITL_THRESHOLD / etc. required editing the
-      # running container. (Audit fix #6.)
+      # MAF v1 功能开关 —— 默认值保持现有行为；如需调整
+      # RETURN_HITL_THRESHOLD 等阈值，改这里即可，无需进入容器内修改。
       MAF_SESSION_BACKEND: ${MAF_SESSION_BACKEND:-postgres}
       MAF_CHECKPOINT_BACKEND: ${MAF_CHECKPOINT_BACKEND:-postgres}
       ORCHESTRATION_MODE: ${ORCHESTRATION_MODE:-tool}

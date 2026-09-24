@@ -6,10 +6,16 @@ import type { Scenario } from "@/lib/scenarios";
 interface ScenarioCardProps {
   scenario: Scenario;
   href: string;
-  /** Compact single-line layout for use inside the command palette. */
+  /** 单行紧凑布局，供命令面板内部使用。 */
   compact?: boolean;
 }
 
+/**
+ * 演示场景卡片。
+ *
+ * 展示场景名称、说明、示例提问与涉及到的智能体；`compact` 为真时退化为
+ * 单行布局，用于命令面板的搜索结果列表。
+ */
 export function ScenarioCard({ scenario, href, compact = false }: ScenarioCardProps) {
   const Icon = scenario.icon;
 
@@ -64,7 +70,7 @@ export function ScenarioCard({ scenario, href, compact = false }: ScenarioCardPr
           ))}
         </div>
         <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary transition-colors group-hover/sc:bg-primary group-hover/sc:text-primary-foreground">
-          Try it <ArrowRight className="size-3" />
+          立即体验 <ArrowRight className="size-3" />
         </span>
       </div>
     </Link>

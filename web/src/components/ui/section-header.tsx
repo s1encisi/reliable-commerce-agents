@@ -3,14 +3,14 @@ import { cn } from "@/lib/utils";
 export interface SectionHeaderProps {
   title: string;
   description?: string;
-  /** Small uppercase label above the title. */
+  /** 标题上方的小号大写标签。 */
   eyebrow?: string;
-  /** Right-aligned slot, e.g. a button or filter. */
+  /** 右对齐插槽，例如按钮或筛选器。 */
   action?: React.ReactNode;
   className?: string;
 }
 
-/** Consistent header for page/section blocks across the app shell. */
+/** 应用外壳中页面 / 区块的统一标题栏。 */
 export function SectionHeader({
   title,
   description,

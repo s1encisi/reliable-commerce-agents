@@ -22,27 +22,27 @@ afterEach(() => {
 });
 
 describe("OrchestrationGraph", () => {
-  it("renders nothing for a mode with no fixed graph (mermaid: null)", async () => {
+  it("没有固定图的模式（mermaid: null）不渲染任何内容", async () => {
     vi.spyOn(api, "getModeGraph").mockResolvedValue({ name: "tool", mermaid: null });
     const { container } = render(<OrchestrationGraph mode="tool" />);
     await waitFor(() => expect(api.getModeGraph).toHaveBeenCalledWith("tool"));
     expect(container.firstChild).toBeNull();
   });
 
-  it("renders nothing while the graph fetch is still pending or fails", async () => {
+  it("图请求仍在进行或失败时不渲染任何内容", async () => {
     vi.spyOn(api, "getModeGraph").mockRejectedValue(new Error("network error"));
     const { container } = render(<OrchestrationGraph mode="workflow:pre-purchase" />);
     await waitFor(() => expect(api.getModeGraph).toHaveBeenCalled());
     expect(container.firstChild).toBeNull();
   });
 
-  it("renders a container once the graph loads", async () => {
+  it("图加载完成后渲染出容器", async () => {
     vi.spyOn(api, "getModeGraph").mockResolvedValue({ name: "workflow:pre-purchase", mermaid: SAMPLE_GRAPH });
     const { container } = render(<OrchestrationGraph mode="workflow:pre-purchase" />);
     await waitFor(() => expect(container.querySelector("svg")).not.toBeNull());
   });
 
-  it("classes an active node id (dash form) as the mermaid active class", async () => {
+  it("把激活的节点 id（连字符形式）标记为 mermaid 的 active 类", async () => {
     vi.spyOn(api, "getModeGraph").mockResolvedValue({ name: "workflow:pre-purchase", mermaid: SAMPLE_GRAPH });
     const { container } = render(<OrchestrationGraph mode="workflow:pre-purchase" activeNodeIds={["fan-out"]} />);
     await waitFor(() => expect(container.querySelector("svg")).not.toBeNull());
@@ -51,7 +51,7 @@ describe("OrchestrationGraph", () => {
     expect(source).toContain("class fan_out active");
   });
 
-  it("classes a done node id as success and defaults untouched nodes to core", async () => {
+  it("把已完成的节点 id 标记为 success，未触及的节点默认为 core", async () => {
     vi.spyOn(api, "getModeGraph").mockResolvedValue({ name: "workflow:pre-purchase", mermaid: SAMPLE_GRAPH });
     const { container } = render(<OrchestrationGraph mode="workflow:pre-purchase" doneNodeIds={["fan-out"]} />);
     await waitFor(() => expect(container.querySelector("svg")).not.toBeNull());
@@ -60,7 +60,7 @@ describe("OrchestrationGraph", () => {
     expect(source).toContain("class reviews core");
   });
 
-  it("re-fetches the graph when the mode prop changes", async () => {
+  it("mode 属性变化时重新拉取图", async () => {
     vi.spyOn(api, "getModeGraph").mockResolvedValue({ name: "workflow:pre-purchase", mermaid: SAMPLE_GRAPH });
     const { rerender } = render(<OrchestrationGraph mode="workflow:pre-purchase" />);
     await waitFor(() => expect(api.getModeGraph).toHaveBeenCalledWith("workflow:pre-purchase"));

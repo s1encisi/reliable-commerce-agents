@@ -1,4 +1,4 @@
-"""Return policy regressions through real entry points and isolated Postgres."""
+"""通过真实入口和隔离 PostgreSQL 验证退货政策回归。"""
 
 import asyncio
 import json
@@ -231,7 +231,7 @@ async def test_tool_and_rest_both_queue_when_approval_required(
     order_id = await seed_order(returns_db, delivered_at=NOW - timedelta(days=5), total=total)
     tool_result = await initiate_return.func(order_id=str(order_id), reason="wrong")
     response = await http_post(f"/api/orders/{order_id}/return", {"reason": "wrong"})
-    assert response.status_code == 409  # the existing UI must not announce a created return
+    assert response.status_code == 409  # 界面不能在此时宣称退货已创建。
     assert "approval" in response.json()["detail"]
     assert tool_result["outcome"] == response.json()["outcome"] == "AWAITING_APPROVAL"
     await assert_unmodified(returns_db, order_id)
@@ -270,7 +270,7 @@ async def test_approval_rechecks_changed_evidence_and_binding(
         )
     result = await approve(request_id)
     assert result["success"] is False
-    # Approval is a decision, not proof that the business write succeeded.
+    # 审批是授权决定，不是业务写入成功的证据。
     assert (
         await returns_db.fetchval("SELECT status FROM tool_approval_requests WHERE id = $1", request_id) == "approved"
     )
@@ -352,7 +352,7 @@ async def test_real_workflow_pauses_before_writes_and_revalidates_on_resume(
     await assert_unmodified(returns_db, order_id)
     if expire:
         monkeypatch.setattr("shared.after_sales.service.utc_now", lambda: NOW + timedelta(days=2))
-    # Build a new workflow from the database checkpoint, as a new HTTP request does.
+    # 从数据库检查点重建工作流，模拟新的 HTTP 请求。
     events = [
         e
         async for e in ReturnReplaceMode().resume(
@@ -365,7 +365,7 @@ async def test_real_workflow_pauses_before_writes_and_revalidates_on_resume(
     if approved and not expire:
         assert "finalize" in final["agents_involved"]
         row = await returns_db.fetchrow("SELECT reason, refund_method FROM returns WHERE order_id = $1", order_id)
-        assert row["reason"] == message  # the approved reason survives process reconstruction
+        assert row["reason"] == message  # 审批确认的原因在进程重建后仍保持一致。
         assert row["refund_method"] == "store_credit"
     else:
         assert "finalize" not in final["agents_involved"]
@@ -418,7 +418,7 @@ async def test_waiting_for_order_lock_does_not_freeze_eligibility_clock(
 
     order_id = await seed_order(returns_db, delivered_at=NOW - timedelta(days=30))
     intent = InitiateReturnInput(order_id=order_id, reason="wrong")
-    # Reserve before locking the parent: the new operation's FK takes a key-share lock.
+    # 先预留操作再锁父记录，因为新操作的外键需要键共享锁。
     await operations.reserve(intent, operations.operation_id_for(intent))
     entering = asyncio.Event()
     original = service._load_snapshot

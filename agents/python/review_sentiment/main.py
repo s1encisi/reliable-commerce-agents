@@ -1,4 +1,4 @@
-"""Review & Sentiment agent — entry point."""
+"""评论与情感分析智能体 —— 入口点。"""
 
 from review_sentiment.agent import AGENT_TOOLS, create_review_sentiment_agent
 from shared.agent_host import create_agent_app

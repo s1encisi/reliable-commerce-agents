@@ -1,17 +1,9 @@
-"""Grounding ledger — typed facts recorded from this turn's tool results.
+"""本轮工具结果的结构化事实台账。
 
-Mirrors the ``current_steps`` / ``StepRecorderMiddleware`` pattern in
-``shared/agent_observability.py``: a ``FunctionMiddleware`` appends to a
-ContextVar-backed object after every tool call, and is a no-op when the
-ContextVar is unset (outside a request that opted into grounding capture).
-
-Tool results are not uniformly shaped — product tools key their id as ``id``,
-``get_order_details`` keys it as ``order_id`` (see ``order_management/tools.py``),
-and neither ``products`` nor any tool result carries a ``stock`` column (stock
-lives in ``warehouse_inventory``, surfaced only by ``check_stock`` under
-``product_id``/``in_stock``/``total_quantity`` — a different shape again). So
-facts are recognized by duck-typing on the combination of keys a given tool
-shape actually returns, not by a single hardcoded id key.
+沿用请求级 ContextVar 与函数中间件模式：工具调用后追加事实，
+未启用记录时不做处理。工具结构不同，商品用 id、订单用 order_id，
+库存由 check_stock 返回 product_id、in_stock、total_quantity；
+因此按字段组合识别，不能假设所有结果共用同一个标识或 stock 字段。
 """
 
 from __future__ import annotations
@@ -21,8 +13,8 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any
 
-# Imported from the concrete submodule, matching shared/agent_observability.py:
-# the agent-framework v1.0 beta ships an empty top-level __init__.
+# 直接导入具体子模块，与 agent_observability.py 一致。
+# 这样兼容早期顶层 __init__.py 为空的框架包。
 from agent_framework._middleware import FunctionInvocationContext, FunctionMiddleware
 
 from shared.function_results import unwrap_function_result
@@ -53,17 +45,17 @@ class PromoFact:
 
 @dataclass
 class GroundingLedger:
-    """Facts seen in real tool results this turn, keyed by id (or code)."""
+    """本轮真实工具结果中的事实，以标识或代码为键保存。"""
 
     products: dict[str, ProductFact] = field(default_factory=dict)
     orders: dict[str, OrderFact] = field(default_factory=dict)
     promos: dict[str, PromoFact] = field(default_factory=dict)
-    # Catch-all for amounts that don't fit the product/order/promo shapes above
-    # — e.g. get_price_history's nested `history: [{"price": ..., ...}, ...]`
-    # array, or any other tool that reports a bare `price`/`amount` inside a
-    # nested list rather than at the top level. Verified live: without this,
-    # get_price_history's own historical price points scored "unverifiable"
-    # even though they're real data straight from the same tool call.
+    # 补充记录不符合商品、订单或促销结构的金额。
+    # 例如 get_price_history 的 history 列表，
+    # 或其他嵌套结构中的 price、amount，
+    # 都需要递归收集。否则真实工具返回的
+    # 历史价格也会被误记为 unverifiable，
+    # 无法体现已有证据。
     known_amounts: set[float] = field(default_factory=set)
 
     def record(self, result: Any) -> None:
@@ -87,12 +79,12 @@ class GroundingLedger:
             "amount",
             "total",
             "discount_amount",
-            # `original_price` is a real column that get_product_details and
-            # compare_products both return, so a reply saying "$299.99, down
-            # from $349.99" was citing the tool's own data — and scoring it
-            # "unverifiable" anyway. Full-text search made this visible by
-            # surfacing discounted products reliably enough that the model
-            # started mentioning the strikethrough price in most answers.
+            # original_price 是商品详情和比较工具返回的真实列。
+            # 回答可能同时引用现价和原价，
+            # 两者都来自工具，
+            # 不能把原价误标为无法核验。
+            # 全文检索更常命中打折商品后，
+            # 这个遗漏会更容易暴露。
             "original_price",
         ):
             value = _as_float(item.get(key))
@@ -138,20 +130,20 @@ def _iter_dicts(result: Any):
 
 
 def _looks_like_product(item: dict[str, Any]) -> bool:
-    # search_products / get_product_details / compare_products / semantic_search /
-    # find_similar_products / get_trending_products all return id + price + name
-    # at the top level; order line items use unit_price, not price, so they
-    # never collide with this shape.
+    # 商品搜索、详情、比较、语义检索、
+    # 相似商品和热门商品工具都在顶层返回 id、price、name。
+    # 订单明细使用 unit_price，
+    # 因此不会与此形态混淆。
     return "id" in item and "price" in item and "name" in item and "order_id" not in item
 
 
 def _looks_like_order(item: dict[str, Any]) -> bool:
-    # get_order_details returns order_id + status + total + items.
+    # 订单详情包含 order_id、status、total、items。
     return "status" in item and "total" in item and ("order_id" in item or "items" in item)
 
 
 def _looks_like_promo(item: dict[str, Any]) -> bool:
-    # validate_coupon's success shape: valid=True, code, discount_amount, ...
+    # 优惠券校验成功时包含 valid=True、code、discount_amount 等字段。
     return "code" in item and "discount_amount" in item and item.get("valid") is True
 
 
@@ -162,13 +154,13 @@ def _as_float(value: Any) -> float | None:
         return None
 
 
-# None outside a request that opted into grounding capture, so the recording
-# middleware below is always safe to attach.
+# 未启用事实记录时 ContextVar 为 None，
+# 因此可以无条件挂载记录中间件。
 current_grounding_ledger: ContextVar[GroundingLedger | None] = ContextVar("current_grounding_ledger", default=None)
 
 
 class GroundingLedgerMiddleware(FunctionMiddleware):
-    """Record product/order/promo facts from every tool result into the ledger."""
+    """将每次工具返回的商品、订单和促销事实记入台账。"""
 
     async def process(
         self,
@@ -182,17 +174,15 @@ class GroundingLedgerMiddleware(FunctionMiddleware):
         ledger.record(unwrap_function_result(getattr(context, "result", None)))
 
 
-# Stateless — shared across every agent, same idiom as STEP_MIDDLEWARE.
+# 无状态实例，所有智能体共享，方式与 STEP_MIDDLEWARE 相同。
 GROUNDING_LEDGER_MIDDLEWARE: list[FunctionMiddleware] = [GroundingLedgerMiddleware()]
 
 
 def reset_grounding_ledger() -> GroundingLedger:
-    """Begin capture for the current request/process; returns the fresh ledger.
+    """为当前请求或进程调用创建新台账。
 
-    Call this everywhere ``shared.agent_observability.reset_steps()`` is
-    called — once per orchestrator request, and once per specialist process
-    invocation (specialists run out-of-process, so each gets its own ledger
-    populated from its own tool calls; see ``shared/agent_host.py``).
+    与 reset_steps() 一同调用：编排器每次请求重置，专业智能体每次
+    独立进程调用也重置，各自只记录本轮实际执行的工具结果。
     """
     fresh = GroundingLedger()
     current_grounding_ledger.set(fresh)

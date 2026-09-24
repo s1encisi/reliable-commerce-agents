@@ -1,20 +1,17 @@
 """
-E-Commerce Agents — Product Embedding Generator
+可靠电商多智能体平台 —— 商品向量生成器
 
-Reads all products from the database and generates embeddings
-using OpenAI / Azure OpenAI text-embedding-3-small (1536 dimensions).
-Stores results in the product_embeddings table.
+从数据库读取全部商品，使用 OpenAI / Azure OpenAI 的 text-embedding-3-small
+（1536 维）生成向量，并把结果写入 product_embeddings 表。
 
-Usage: uv run python -m scripts.generate_embeddings
+用法: uv run python -m scripts.generate_embeddings
 
-LLM_PROVIDER=replay skips any real embedding API call and generates
-deterministic pseudo-random vectors instead (seeded by product id, so
-reruns are reproducible) — this is what the free/deterministic CI smoke
-job uses: it needs product_embeddings populated so semantic-search-backed
-eval cases don't error out on an empty table, but it must stay zero-cost
-and zero-credential like every other part of that job. The actual vector
-values aren't meaningful in this mode; nothing in the smoke suite asserts
-on embedding-similarity quality, only that the pipeline runs end to end.
+当 LLM_PROVIDER=replay 时会跳过任何真实的向量 API 调用，改为生成确定性的伪随机
+向量（以商品文本为随机种子，因此重复运行结果可复现）—— 免费且确定性的持续集成
+冒烟作业正是这样做的：它需要 product_embeddings 里有数据，否则依赖语义检索的
+评测用例会在空表上报错；但和该作业的其他环节一样，它必须保持零成本、零凭据。
+此模式下向量取值本身没有意义，冒烟套件里没有任何断言检查向量相似度质量，只
+验证整条流水线能跑通。
 """
 
 from __future__ import annotations
@@ -37,20 +34,15 @@ DATABASE_URL = os.environ.get(
 LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "openai")
 EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "text-embedding-3-small")
 EMBEDDING_DIMENSIONS = 1536
-BATCH_SIZE = 20  # OpenAI supports up to 2048 inputs per request
+BATCH_SIZE = 20  # 每批输入数量上限沿用现有配置。
 
 
 def _fake_embedding(text: str) -> list[float]:
-    """Deterministic offline vector for LLM_PROVIDER=replay.
+    """回放模式的确定性离线商品向量。
 
-    Delegates to `shared.replay_embeddings.embed_text`, which is also what
-    `semantic_search` uses for the *query* side. Both sides must use one
-    scheme or similarity is meaningless — and nothing would fail to say so.
-
-    This used to be pseudo-random noise seeded by product **id**, which made
-    every nearest-neighbour result arbitrary. Seeding from the product's text
-    instead means a query sharing words with a product actually ranks near it,
-    so the pgvector path is genuinely exercised rather than merely executed.
+    与查询端共用 shared.replay_embeddings.embed_text，保证相似度可比。
+    向量来自商品文本而非商品标识的随机噪声，因此共享词元的查询可
+    召回相关商品，真实覆盖 pgvector 路径。
     """
     from shared.replay_embeddings import embed_text
 
@@ -58,7 +50,7 @@ def _fake_embedding(text: str) -> list[float]:
 
 
 def create_client() -> openai.AsyncOpenAI:
-    """Create the embedding client based on LLM_PROVIDER."""
+    """按 LLM_PROVIDER 创建嵌入客户端。"""
     if LLM_PROVIDER == "azure":
         endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT", "")
         key = os.environ.get("AZURE_OPENAI_KEY", "")
@@ -81,7 +73,7 @@ def create_client() -> openai.AsyncOpenAI:
 
 
 def build_embedding_text(product: dict) -> str:
-    """Build a rich text representation of a product for embedding."""
+    """组合商品的丰富文本表示，供向量嵌入使用。"""
     parts = [
         product["name"],
         product["description"],
@@ -97,28 +89,28 @@ def build_embedding_text(product: dict) -> str:
 
 
 async def main() -> None:
-    logger.info("Connecting to database...")
+    logger.info("正在连接数据库...")
     conn = await asyncpg.connect(DATABASE_URL)
 
     try:
         products = await conn.fetch(
             "SELECT id, name, description, category, brand, price, specs FROM products ORDER BY name"
         )
-        logger.info("Found %d products", len(products))
+        logger.info("共找到 %d 个商品", len(products))
 
         if not products:
-            logger.warning("No products found — run seed.py first")
+            logger.warning("未找到任何商品 —— 请先运行 seed.py")
             return
 
-        # Clear existing embeddings
+        # 清空已有的向量
         await conn.execute("DELETE FROM product_embeddings")
-        logger.info("Cleared existing embeddings")
+        logger.info("已清空既有向量")
 
         if LLM_PROVIDER == "replay":
-            logger.info("Using LLM_PROVIDER=replay — generating deterministic fake embeddings, no API call")
+            logger.info("使用 LLM_PROVIDER=replay —— 生成确定性的模拟向量，不调用 API")
             for product in products:
-                # The same text the real provider would embed, so replay and
-                # live runs index the same content.
+                # 使用与真实提供商完全相同的文本，这样 replay 与真实运行
+                # 索引的是同一份内容。
                 embedding = _fake_embedding(build_embedding_text(dict(product)))
                 await conn.execute(
                     "INSERT INTO product_embeddings (product_id, embedding) VALUES ($1, $2)",
@@ -128,14 +120,14 @@ async def main() -> None:
             client = create_client()
             azure_deployment = os.environ.get("AZURE_EMBEDDING_DEPLOYMENT", "")
             model = azure_deployment if LLM_PROVIDER == "azure" and azure_deployment else EMBEDDING_MODEL
-            logger.info("Using LLM_PROVIDER=%s, embedding model=%s", LLM_PROVIDER, model)
+            logger.info("使用 LLM_PROVIDER=%s，向量模型=%s", LLM_PROVIDER, model)
 
-            # Process in batches
+            # 分批处理
             for i in range(0, len(products), BATCH_SIZE):
                 batch = products[i:i + BATCH_SIZE]
                 texts = [build_embedding_text(dict(p)) for p in batch]
 
-                logger.info("Generating embeddings for batch %d/%d (%d products)...",
+                logger.info("正在为第 %d/%d 批（%d 个商品）生成向量...",
                             i // BATCH_SIZE + 1, (len(products) + BATCH_SIZE - 1) // BATCH_SIZE, len(batch))
 
                 response = await client.embeddings.create(model=model, input=texts)
@@ -148,25 +140,23 @@ async def main() -> None:
                         product_id, json.dumps(embedding),
                     )
 
-        # Rebuild the ivfflat index. Not housekeeping — without it semantic
-        # search returns near-garbage, in production as well as in replay.
+        # 重建 ivfflat 索引。这不是日常维护 —— 少了它，无论生产环境还是 replay
+        # 模式，语义检索都会返回近乎垃圾的结果。
         #
-        # docker/postgres/init.sql creates `idx_product_embedding` on an EMPTY
-        # table, so ivfflat has no data to derive centroids from. Every vector
-        # then lands in a degenerate partition, and with the default
-        # `ivfflat.probes = 1` a query probes one list and returns whatever is
-        # in it. Measured directly on this schema: "wireless noise cancelling
-        # headphones" returned "Patagonia Better Sweater" at similarity 0.000
-        # through the index, and "Sony WH-1000XM5" at 0.420 with an exact scan.
-        # Same data, same query — the index alone was the difference.
+        # docker/postgres/init.sql 是在**空表**上创建 `idx_product_embedding` 的，
+        # 因此 ivfflat 没有任何数据可以推导质心。于是每个向量都会落进退化分区，
+        # 在默认的 `ivfflat.probes = 1` 下，一次查询只探测一个列表并返回其中的
+        # 全部内容。在本 schema 上直接实测：走索引时 "wireless noise cancelling
+        # headphones" 返回了 "Patagonia Better Sweater"，相似度 0.000；而精确扫描
+        # 返回的是 "Sony WH-1000XM5"，相似度 0.420。同样的数据、同样的查询 ——
+        # 唯一的差别就是索引。
         #
-        # The same applies after any wholesale re-embedding: centroids computed
-        # for the previous vectors do not describe the new ones.
+        # 任何整体重新生成向量之后同理：为旧向量算出的质心并不能描述新向量。
         await conn.execute("REINDEX INDEX idx_product_embedding")
-        logger.info("Rebuilt idx_product_embedding so ivfflat centroids match the stored vectors")
+        logger.info("已重建 idx_product_embedding，使 ivfflat 质心与已存向量匹配")
 
         total = await conn.fetchval("SELECT COUNT(*) FROM product_embeddings")
-        logger.info("Generated and stored %d product embeddings (dimension: 1536)", total)
+        logger.info("已生成并存储 %d 条商品向量（维度: 1536）", total)
 
     finally:
         await conn.close()

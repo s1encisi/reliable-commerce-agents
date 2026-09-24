@@ -1,8 +1,8 @@
-"""Reproducible return-path comparison in disposable Postgres, with no LLM calls.
+"""在一次性 Postgres 中可复现的退货路径对比，且不发起任何 LLM 调用。
 
-Run from the repository root:
+从仓库根目录运行：
   uv run --project agents/python python -m evals.after_sales --output docs/evaluation/after-sales-results.json
-Frozen code is loaded only in child evaluation processes. Ablations have no runtime flag.
+冻结代码仅在子评测进程中加载。消融实验没有运行时开关。
 """
 
 import argparse
@@ -56,7 +56,7 @@ VARIANTS = ["B0", "B1", "B2", "A_no_recheck", "A_no_reconcile", "A_no_budget"]
 
 
 def source_digest(path: Path) -> str:
-    """Git normalizes text line endings; hashes must survive Windows/Linux checkouts."""
+    """Git 会归一化文本的行尾；哈希必须在 Windows/Linux 检出之间保持一致。"""
     return hashlib.sha256(path.read_text().encode("utf-8")).hexdigest()
 
 
@@ -246,7 +246,7 @@ async def trial(pool: asyncpg.Pool, fn: Any, variant: str, case: str, repetition
                 except ConnectionResetError:
                     if case != "lost_reply":
                         raise
-                    results = [await fn(**args)]  # one explicit retry after a lost response
+                    results = [await fn(**args)]  # 响应丢失后显式重试一次
                 if case in {"same_retry", "payload_conflict"}:
                     results.append(await fn(**{**args, "reason": "changed" if case == "payload_conflict" else reason}))
     except TimeoutError:
@@ -287,7 +287,7 @@ async def trial(pool: asyncpg.Pool, fn: Any, variant: str, case: str, repetition
     observed = faulty.hits if faulty else fault_hits
     fault_requested = case in {"lost_reply", "temporary_db", "persistent_db"}
     if fault_requested and observed == 0:
-        passed = False  # injection failure is never counted as successful recovery
+        passed = False  # 故障注入失败绝不会被算作成功恢复
     return {
         "case_id": case,
         "repetition": repetition,
@@ -335,7 +335,7 @@ async def child(variant: str, repetitions: int) -> dict[str, Any]:
 
 
 async def load_checks() -> list[dict[str, Any]]:
-    """Observed local service load, not a production capacity claim."""
+    """观测到的本地服务负载，并非关于生产容量的论断。"""
     configure("B2")
     import shared.db as db
     from shared.after_sales import service

@@ -1,10 +1,4 @@
-"""
-Phase 7 Refactor 08 — PrePurchaseWorkflow (MAF Concurrent) tests.
-
-Stubs the three parallel tool functions + shipping so we can assert on
-the full fan-out → fan-in → synthesis pipeline without hitting an LLM
-or external services.
-"""
+"""购前并发工作流测试，替换工具函数，验证扇出、汇聚与综合链路，无模型或外部服务。"""
 
 from __future__ import annotations
 
@@ -105,7 +99,7 @@ async def test_shipping_skipped_when_out_of_stock() -> None:
 
 @pytest.mark.asyncio
 async def test_single_branch_failure_does_not_abort_run() -> None:
-    """A failing tool surfaces in state.errors; siblings and synthesis still complete."""
+    """一个工具失败写入 state.errors，其他分支和综合仍应完成。"""
 
     async def _boom(**_: Any) -> dict[str, Any]:
         raise RuntimeError("sentiment service down")
@@ -119,16 +113,16 @@ async def test_single_branch_failure_does_not_abort_run() -> None:
     state = await PrePurchaseWorkflow(tools).execute(ResearchState(product_id="sku-3"))
 
     assert any("reviews: sentiment service down" in e for e in state.errors)
-    # The other branches still populated their slots.
+    # 其他分支仍填充各自结果。
     assert state.stock["in_stock"] is True
     assert state.price_history["is_good_deal"] is True
-    # Synthesis still produces a recommendation (with gaps).
+    # 综合仍给出建议，并说明缺失信息。
     assert state.recommendation
 
 
 @pytest.mark.asyncio
 async def test_missing_tools_produce_recommendation_gaps() -> None:
-    """No tool for a branch → empty slot in state + gap in the recommendation."""
+    """分支无工具时状态为空，建议中应明确缺口。"""
     state = await PrePurchaseWorkflow(tools={}).execute(ResearchState(product_id="sku-4"))
     assert state.reviews == {}
     assert state.stock == {}
@@ -141,7 +135,7 @@ async def test_missing_tools_produce_recommendation_gaps() -> None:
 
 @pytest.mark.asyncio
 async def test_three_branches_actually_run_in_parallel() -> None:
-    """Wall-clock sanity check: each branch sleeps 0.3s; serial=0.9+s, parallel≈0.3s."""
+    """并发耗时检查：三个分支各等待 0.3 秒，串行约 0.9 秒，并发约 0.3 秒。"""
 
     async def _slow_sentiment(product_id: str) -> dict[str, Any]:
         await asyncio.sleep(0.3)
@@ -165,7 +159,7 @@ async def test_three_branches_actually_run_in_parallel() -> None:
     await PrePurchaseWorkflow(tools).execute(ResearchState(product_id="sku-5"))
     elapsed = asyncio.get_event_loop().time() - start
 
-    # Parallel execution should finish in ~0.3–0.5s, well under the 0.9s serial baseline.
+    # 并发应明显快于 0.9 秒串行基线，保留调度余量。
     assert elapsed < 0.8, f"Expected parallel execution (<0.8s), got {elapsed:.3f}s"
 
 
@@ -180,23 +174,21 @@ def test_workflow_builder_wires_every_executor() -> None:
 
 # ─────────────── Partial results must look partial (plan 19 §2b) ───────────────
 #
-# This workflow shipped returning 48 characters from a four-executor fan-out:
-# "Stock: 348 units available | Price trend: stable". The synthesis was not at
-# fault — every line is guard-claused on its data being present, so the fan-out
-# was real and faithful. The *inputs* were missing, and nothing said so.
+# 历史故障中，多分支工作流只返回极短摘要，
+# 虽然执行拓扑正确，
+# 但综合每一行都依赖相应数据，
+# 输入缺失却没有说明。
 #
-# Three silent paths caused it: a missing tool was a no-op with no error and no
-# completed_steps entry, state.errors was collected and never read, and the
-# recommendation could not distinguish "checked and found nothing" from "never
-# ran". These pin all three.
+# 缺工具时无错误、无步骤记录，
+# 已有 state.errors 也未被读取，
+# 回答无法区分查无结果和从未执行。
+# 以下用例分别固定这三个边界。
 
 
 async def test_a_missing_tool_is_recorded_rather_than_skipped_silently() -> None:
-    """A tool absent from the registry used to produce no error, no log and no
-    completed_steps entry — indistinguishable from one that ran and found
-    nothing."""
+    """工具缺失必须显式记录，不能与已执行但无结果混淆。"""
 
-    # Only stock is wired; the other three are absent.
+    # 只接入库存，其余三个工具缺失。
     async def _stock(product_id: str) -> dict:
         return {"in_stock": True, "total_quantity": 5}
 
@@ -211,8 +203,7 @@ async def test_a_missing_tool_is_recorded_rather_than_skipped_silently() -> None
 
 
 async def test_the_recommendation_names_what_it_could_not_check() -> None:
-    """A short answer that admits what is missing is honest. One that quietly
-    omits it reads as a complete picture, which is the actual harm."""
+    """建议应说明缺少哪些信息，避免让不完整回答显得全面。"""
 
     async def _stock(product_id: str) -> dict:
         return {"in_stock": True, "total_quantity": 348}
@@ -223,7 +214,7 @@ async def test_the_recommendation_names_what_it_could_not_check() -> None:
     workflow = PrePurchaseWorkflow({"check_stock": _stock, "get_price_history": _price})
     state = await workflow.execute(ResearchState(product_id="p1"))
 
-    # The exact shape of the original defect, now self-describing.
+    # 复现原始缺陷形态，当前应提供明确缺口说明。
     assert "Stock: 348 units available" in state.recommendation
     assert "could not check" in state.recommendation
     assert "reviews" in state.recommendation
@@ -246,9 +237,7 @@ async def test_a_failing_tool_is_recorded_and_does_not_take_the_run_down() -> No
 
 
 async def test_all_four_contributions_produce_no_caveat() -> None:
-    """The control. With every probe answering, the recommendation must not
-    carry a 'could not check' clause — otherwise the caveat is noise rather
-    than signal."""
+    """对照用例：所有查询都正常返回时，不应输出多余的无法检查提示。"""
 
     async def _reviews(product_id: str) -> dict:
         return {"overall_sentiment": "positive", "average_rating": 4.6}
@@ -279,9 +268,7 @@ async def test_all_four_contributions_produce_no_caveat() -> None:
 
 
 async def test_out_of_stock_records_why_shipping_was_skipped() -> None:
-    """Not an error — shipping an out-of-stock item has nothing to estimate.
-    Recorded so "we did not check" is distinguishable from "we checked and
-    found nothing"."""
+    """缺货时不估算配送属于正常分支，但要与未执行查询区分。"""
 
     async def _stock(product_id: str) -> dict:
         return {"in_stock": False, "total_quantity": 0}
@@ -297,12 +284,9 @@ async def test_out_of_stock_records_why_shipping_was_skipped() -> None:
 
 
 async def test_a_probe_that_runs_but_returns_nothing_usable_is_still_reported() -> None:
-    """The subtler form of the original defect, found by the benchmark.
+    """工具运行成功仍可能返回空字典或缺关键字段。
 
-    A probe can complete and contribute nothing — an empty dict, or a payload
-    missing the one key the recommendation needs. `completed_steps` records only
-    that it ran, so keying the caveat off that produced a confident 48-character
-    answer with all four steps "completed" and two contributing nothing.
+    completed_steps 只能证明执行过，不能证明结果足以支持建议。
     """
     from workflows.pre_purchase import PrePurchaseWorkflow, ResearchState
 
@@ -312,7 +296,7 @@ async def test_a_probe_that_runs_but_returns_nothing_usable_is_still_reported() 
     async def _price(product_id: str, days: int) -> dict:
         return {"trend": "stable"}
 
-    # Both run successfully and both return nothing the recommendation can use.
+    # 两个分支都成功执行，但都没返回可供建议使用的信息。
     async def _reviews_empty(product_id: str) -> dict:
         return {}
 
@@ -329,8 +313,8 @@ async def test_a_probe_that_runs_but_returns_nothing_usable_is_still_reported() 
     )
     state = await workflow.execute(ResearchState(product_id="p1"))
 
-    # They ran, so completed_steps lists them — which is exactly why the caveat
-    # cannot be derived from it.
+    # 步骤列表包含它们，
+    # 所以缺口说明不能只由步骤完成状态推导。
     assert "reviews" in state.completed_steps
     assert "shipping" in state.completed_steps
 
@@ -340,19 +324,11 @@ async def test_a_probe_that_runs_but_returns_nothing_usable_is_still_reported() 
 
 
 def test_the_recommendation_reads_the_keys_the_tools_actually_return() -> None:
-    """The bug that hid behind every guard clause in this file.
+    """验证综合逻辑与真实工具字段契约一致。
 
-    `_build_recommendation` read `reviews["sentiment"]` and
-    `shipping["options"]`. The real tools return `overall_sentiment` and
-    `shipping_options`. Because every line is guard-claused on its data being
-    present, the mismatch produced no error — just two lines that had never
-    appeared, on any run, since the workflow was written. The stubs in this file
-    encoded the same wrong contract, which is why the tests did not catch it
-    either.
-
-    Asserted against the tool sources so the two cannot drift apart again
-    silently: if a tool renames a field, this fails rather than the workflow
-    quietly dropping a line.
+    旧代码读取 sentiment/options，而工具实际返回 overall_sentiment/
+    shipping_options；守卫会静默省略段落。测试对照工具源码，
+    防止替身和消费方同时写错而仍然通过。
     """
     import ast
     import pathlib

@@ -1,13 +1,12 @@
-"""RSA signing-key bootstrap and JWKS serving for the self-hosted auth-server.
+"""自托管 auth-server 的 RSA 签名密钥引导与 JWKS 服务。
 
-On first boot (no active row in ``oauth_signing_keys``) a new RSA keypair is
-generated and persisted — the public JWK plus a private PEM, encrypted at
-rest when ``AUTH_SIGNING_KEY_ENCRYPTION_KEY`` is set (required outside
-development, see ``docs/security-guide.md``). Every later boot reuses the
-existing active key so already-issued tokens keep validating. Rotation
-(inserting a new active key while retaining the old one in the JWKS until
-its longest-lived token expires) is a documented follow-up, not implemented
-here — there is always exactly one active key today.
+首次启动时（``oauth_signing_keys`` 中没有活跃行），会生成并持久化一对新的
+RSA 密钥——公开 JWK 加上一份私有 PEM，在设置了
+``AUTH_SIGNING_KEY_ENCRYPTION_KEY`` 时静态加密（开发环境之外为必需，见
+``docs/security-guide.md``）。之后每次启动都复用已有的活跃密钥，以便已签发
+的令牌继续可校验。轮换（插入新的活跃密钥，同时把旧密钥保留在 JWKS 中直到
+其最长寿的令牌过期）是已记录在案的后续工作，此处未实现——目前始终恰好只有
+一个活跃密钥。
 """
 
 from __future__ import annotations
@@ -30,7 +29,7 @@ _active_key: RSAKey | None = None
 
 
 def _fernet_key_from(secret: str) -> bytes:
-    """Stretch an arbitrary-length secret into a 32-byte urlsafe-base64 Fernet key."""
+    """把任意长度的密钥拉伸为 32 字节的 urlsafe-base64 Fernet 密钥。"""
     digest = hashlib.sha256(secret.encode()).digest()
     return base64.urlsafe_b64encode(digest)
 
@@ -54,23 +53,22 @@ def _decrypt_private_pem(blob: bytes) -> bytes:
     try:
         return Fernet(_fernet_key_from(key_material)).decrypt(blob)
     except InvalidToken:
-        # Stored plaintext because the encryption key was unset when this
-        # row was created (e.g. a dev DB later given a real key). Treat the
-        # blob as the raw PEM rather than failing startup.
+        # 以明文存储，因为创建这一行时加密密钥尚未设置
+        # （例如一个开发库后来才配了真实密钥）。把这个
+        # 二进制块当作原始 PEM 处理，而不是让启动失败。
         return blob
 
 
 def reset_cache_for_tests() -> None:
-    """Clear the in-process key cache. Test-only."""
+    """清空进程内密钥缓存。仅测试用。"""
     global _active_kid, _active_key
     _active_kid, _active_key = None, None
 
 
 async def ensure_active_key(pool: asyncpg.Pool) -> tuple[str, RSAKey]:
-    """Return the ``(kid, private_key)`` pair, bootstrapping one on first boot.
+    """返回 ``(kid, private_key)`` 对，首次启动时引导生成一个。
 
-    Idempotent and process-cached: repeated calls after the first return the
-    same cached key without hitting the database.
+    幂等且进程内缓存：首次之后的重复调用返回同一个缓存密钥，不访问数据库。
     """
     global _active_kid, _active_key
     if _active_key is not None and _active_kid is not None:
@@ -105,7 +103,7 @@ async def ensure_active_key(pool: asyncpg.Pool) -> tuple[str, RSAKey]:
 
 
 async def get_jwks(pool: asyncpg.Pool) -> dict:
-    """Return the public JWKS document: active plus any not-yet-expired retired keys."""
+    """返回公开的 JWKS 文档：活跃密钥加上所有尚未过期的退役密钥。"""
     rows = await pool.fetch("SELECT public_jwk FROM oauth_signing_keys WHERE is_active = TRUE OR retired_at IS NULL")
 
     def _as_dict(value):

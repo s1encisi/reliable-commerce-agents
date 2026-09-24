@@ -1,4 +1,4 @@
-"""Order Management tools — orders, tracking, cancellation, modification."""
+"""订单管理工具 —— 订单、追踪、取消、修改。"""
 
 from __future__ import annotations
 
@@ -92,7 +92,7 @@ async def get_order_details(
 
     pool = get_pool()
     async with pool.acquire() as conn:
-        # Fetch order with user ownership check
+        # 获取订单并校验用户归属
         order = await conn.fetchrow(
             """SELECT o.id, o.status, o.total, o.shipping_address,
                       o.shipping_carrier, o.tracking_number,
@@ -106,7 +106,7 @@ async def get_order_details(
         if not order:
             return {"error": f"Order not found or access denied: {order_id}"}
 
-        # Fetch line items
+        # 获取订单行项目
         items = await conn.fetch(
             """SELECT oi.id, oi.quantity, oi.unit_price, oi.subtotal,
                       p.name, p.category, p.brand
@@ -116,7 +116,7 @@ async def get_order_details(
             order_id,
         )
 
-        # Fetch status history
+        # 获取状态历史
         history = await conn.fetch(
             """SELECT status, notes, location, timestamp
                FROM order_status_history
@@ -173,7 +173,7 @@ async def get_order_tracking(
 
     pool = get_pool()
     async with pool.acquire() as conn:
-        # Verify ownership and get carrier info
+        # 校验归属并获取承运商信息
         order = await conn.fetchrow(
             """SELECT o.id, o.status, o.shipping_carrier, o.tracking_number
                FROM orders o
@@ -192,7 +192,7 @@ async def get_order_tracking(
                 "message": "Order has not shipped yet. No tracking information available.",
             }
 
-        # Get latest tracking entry
+        # 获取最新的追踪记录
         latest = await conn.fetchrow(
             """SELECT status, notes, location, timestamp
                FROM order_status_history
@@ -202,7 +202,7 @@ async def get_order_tracking(
             order_id,
         )
 
-        # Get full tracking timeline
+        # 获取完整的追踪时间线
         timeline = await conn.fetch(
             """SELECT status, notes, location, timestamp
                FROM order_status_history
@@ -259,10 +259,9 @@ async def cancel_order(
 
     pool = get_pool()
     async with pool.acquire() as conn:
-        # Single transaction so SELECT-then-UPDATE can't race with a
-        # concurrent cancellation. SELECT ... FOR UPDATE locks the row
-        # until commit, so a second agent doing the same dance blocks
-        # behind us instead of double-cancelling.
+        # 使用单个事务，避免 SELECT-then-UPDATE 与并发的取消操作产生竞态。
+        # SELECT ... FOR UPDATE 会锁住该行直到提交，因此另一个智能体做同样
+        # 操作时会在我们之后阻塞，而不是造成重复取消。
         async with conn.transaction():
             order = await conn.fetchrow(
                 """SELECT o.id, o.status, o.total
@@ -331,12 +330,12 @@ async def modify_order(
     except ValidationError as exc:
         return validation_error_payload("modify_order", exc)
     order_id = str(validated.order_id)
-    # Re-serialise from the validated model so unknown keys are dropped.
+    # 从校验后的模型重新序列化，以丢弃未知键。
     new_address = validated.new_address.model_dump()
 
     pool = get_pool()
     async with pool.acquire() as conn:
-        # Verify ownership and check status
+        # 校验归属并检查状态
         order = await conn.fetchrow(
             """SELECT o.id, o.status, o.shipping_address
                FROM orders o
@@ -358,14 +357,14 @@ async def modify_order(
                 "current_status": order["status"],
             }
 
-        # Update shipping address (input was validated above by Pydantic).
+        # 更新收货地址（输入已在上面由 Pydantic 校验过）。
         await conn.execute(
             "UPDATE orders SET shipping_address = $1 WHERE id = $2",
             json.dumps(new_address),
             order_id,
         )
 
-        # Record in status history
+        # 记录到状态历史
         await conn.execute(
             """INSERT INTO order_status_history (order_id, status, notes)
                VALUES ($1, $2, $3)""",

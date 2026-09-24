@@ -1,8 +1,7 @@
-"""Reusable DB schema context strings for agent system prompts.
+"""系统提示词使用的共享数据库模式说明。
 
-Each constant describes the relevant database tables, columns, valid values,
-and relationships so the LLM can reason about which tools to call and how to
-interpret results.
+各常量描述相关表、字段、合法值及关系，帮助模型选择工具和解释结果；
+其字符串内容属于模型输入，本轮保持不变。
 """
 
 USER_SCHEMA_CONTEXT = (

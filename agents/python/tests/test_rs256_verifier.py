@@ -1,9 +1,6 @@
-"""RS256Verifier — validates AS-issued tokens against a real RSA keypair.
+"""用真实 RSA 密钥验证授权服务器令牌。
 
-Per-test RSA keypair + an in-process JWKS stub: ``PyJWKClient.fetch_data``
-(the third-party HTTP-fetch plumbing, not our own logic) is monkeypatched to
-return the test keypair's public JWK directly instead of making a real
-network call. Signature/claim verification below is genuine. No DB, no LLM.
+只替换 JWKS 网络获取，签名与声明校验均真实执行，无数据库或模型。
 """
 
 from __future__ import annotations
@@ -60,7 +57,7 @@ def test_accepts_valid_token(keypair, verifier):
 
 
 def test_accepts_token_with_list_audience(keypair, verifier):
-    """authlib issues aud as a list when a token spans multiple audiences."""
+    """多个受众时 authlib 将 aud 编码为列表。"""
     token = _make_token(keypair, aud=["ecommerce-agents", AUDIENCE])
     payload = verifier.decode(token, audience=AUDIENCE)
     assert AUDIENCE in payload["aud"]

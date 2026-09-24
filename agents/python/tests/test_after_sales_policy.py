@@ -1,4 +1,4 @@
-"""Deterministic, exact-time policy boundaries; no implicit wall clock."""
+"""精确时间边界的确定性政策测试，不依赖隐式墙钟。"""
 
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta, timezone

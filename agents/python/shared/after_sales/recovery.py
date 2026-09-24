@@ -1,4 +1,4 @@
-"""One deadline and attempt budget; uncertain writes are reconciled, not retried."""
+"""共享截止时间和尝试预算；不确定的写入先核实结果，不直接重试。"""
 
 import asyncio
 import time
@@ -32,7 +32,7 @@ TRANSIENT = (OSError, asyncpg.PostgresConnectionError, asyncpg.SerializationErro
 
 
 async def retry_read[T](call: Callable[[], Awaitable[T]], budget: RetryBudget) -> T:
-    """For side-effect-free calls only, sharing the caller's total deadline."""
+    """仅用于无副作用调用，沿用调用方的总截止时间。"""
     while budget.attempts < budget.max_attempts:
         budget.attempts += 1
         try:

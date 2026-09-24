@@ -1,3 +1,5 @@
+// 徽章基础原语：用于状态、标签等短文本展示。
+
 import { mergeProps } from "@base-ui/react/merge-props"
 import { useRender } from "@base-ui/react/use-render"
 import { cva, type VariantProps } from "class-variance-authority"

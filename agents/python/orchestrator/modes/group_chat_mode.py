@@ -1,22 +1,19 @@
-"""``group-chat`` mode: sequential round-table debate over a shared transcript.
+"""``group-chat`` 模式：围绕一份共享记录进行的顺序圆桌辩论。
 
-Wraps ``workflows/group_chat.py``'s ``GroupChatWorkflow`` — per the audit,
-exercised only with synthetic sync responders in its own tests. This is
-the first production caller: two agent-backed panelists (a value/pricing
-perspective and a quality/reviews perspective), each seeing what the
-previous ones said, followed by a moderator that synthesizes a verdict.
-Per that module's own docstring, this is a *distinct* MAF pattern from
-the others already wired — not a fan-out (``workflow:pre-purchase``) and
-not an LLM tool router (``tool``) or mesh (``handoff``) — useful when a
-decision benefits from multiple named perspectives rather than one
-specialist's answer.
+包装 ``workflows/group_chat.py`` 的 ``GroupChatWorkflow`` —— 按审计结论，
+它此前只在其自身测试中用合成的同步响应者被演练过。这是第一个生产调用方：
+两位由智能体支撑的圆桌成员（一个从性价比/定价视角，一个从质量/评论视角），
+每位发言前都能看到此前发言，最后由主持人综合出结论。按该模块自己的
+文档字符串所述，这是一个与已接入的其他模式都*不同*的 MAF 模式 ——
+不是扇出（``workflow:pre-purchase``），也不是 LLM 工具路由（``tool``）
+或网格（``handoff``）—— 当某个决策受益于多个具名视角而非某一位专业智能体
+的答案时，它很有用。
 
-Required a small change to ``workflows/group_chat.py``: ``Responder`` was
-strictly synchronous (every existing test only ever passed a plain
-function). A real panelist needs an LLM call, which is async —
-``_PanelistExecutor.run()`` now awaits the responder's result when it's
-awaitable, so this mode can pass a coroutine-returning closure without
-``workflows/group_chat.py`` needing to know anything about MAF ``Agent``.
+它需要对 ``workflows/group_chat.py`` 做一处小改动：``Responder`` 原本是
+严格同步的（现有测试都只传入普通函数）。而真实的圆桌成员需要一次 LLM
+调用，那是异步的 —— ``_PanelistExecutor.run()`` 现在会在响应者结果可等待时
+await 它，因此本模式可以传入一个返回协程的闭包，而
+``workflows/group_chat.py`` 无需了解任何关于 MAF ``Agent`` 的东西。
 """
 
 from __future__ import annotations
@@ -55,12 +52,11 @@ def _make_agent_responder(panel_name: str, instructions: str) -> Callable[[str, 
         from shared.factory import get_chat_client
         from shared.middleware import build_specialist_middleware
 
-        # Panelists are free-form LLM commentary with no tools attached, but
-        # they were built with no middleware at all — meaning no PII
-        # redaction, no injection detection, and (before this) no grounding
-        # check on their own output. Same wiring point every other agent
-        # uses; StepRecorderMiddleware/GroundingLedgerMiddleware are no-ops
-        # here since there are no tool calls to record.
+        # 圆桌成员是自由形式的 LLM 评述、没有挂任何工具，但它们此前完全
+        # 没有中间件 —— 意味着没有 PII 脱敏、没有注入检测，且（在此之前）
+        # 对自身输出没有事实核验（grounding）检查。这里用的是其他所有智能体
+        # 都在用的同一个接线点；由于没有工具调用需要记录，
+        # StepRecorderMiddleware/GroundingLedgerMiddleware 在此为空操作。
         agent = Agent(
             client=get_chat_client(),
             instructions=instructions,
@@ -76,12 +72,12 @@ def _make_agent_responder(panel_name: str, instructions: str) -> Callable[[str, 
 
 class GroupChatMode:
     name = "group-chat"
-    label = "Group Chat (round-table debate)"
+    label = "群聊（圆桌辩论）"
     description = (
-        "MAF sequential workflow: named panelists take turns over a shared "
-        "transcript — each sees prior turns before speaking — then a moderator "
-        "synthesizes a verdict. Distinct from tool routing (one specialist call) "
-        "and handoff (control changes hands); every panelist speaks."
+        "MAF 顺序工作流：具名圆桌成员围绕一份共享记录轮流发言 —— "
+        "每位发言前都能看到此前的发言 —— 最后由主持人综合出结论。"
+        "与工具路由（单次专业智能体调用）和移交（控制权易手）都不同："
+        "这里每位成员都会发言。"
     )
     capabilities = ModeCapabilities(streams=True, supports_hitl=False, supports_checkpoints=False, is_graph=True)
 
@@ -112,12 +108,12 @@ class GroupChatMode:
                 if isinstance(data, GroupChatState):
                     final_state = data
 
-        # No "grounding" key here: each panelist's own agent.run() call still
-        # runs GroundingVerificationMiddleware against its own turn's text
-        # (see _make_agent_responder above), but that per-turn report isn't
-        # threaded back through workflows/group_chat.py's transcript entries
-        # ({"speaker", "text"} only) or GroupChatState. Surfacing it in the
-        # UI would mean extending that data model, not the grounding code.
+        # 这里没有 "grounding" 键：每位圆桌成员自己的 agent.run() 调用仍会
+        # 针对其本轮文本执行 GroundingVerificationMiddleware（见上方
+        # _make_agent_responder），但那份按轮的报告并没有回传到
+        # workflows/group_chat.py 的记录条目（只有 {"speaker", "text"}）
+        # 或 GroupChatState 中。要把它呈现在 UI 里，需要扩展那个数据模型，
+        # 而不是改事实核验（grounding）代码。
         agents_involved = [name for name, _ in panelists] + ["moderator"]
         yield OrchestrationEvent(
             kind="run_completed",

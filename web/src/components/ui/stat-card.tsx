@@ -2,7 +2,7 @@ import { type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface StatDelta {
-  /** Pre-formatted delta label, e.g. "+3 this week" or "-12%". */
+  /** 已预先格式化好的变化量文案，例如「本周 +3」或「-12%」。 */
   value: string;
   trend: "up" | "down" | "neutral";
 }
@@ -12,10 +12,10 @@ export interface StatCardProps {
   value: string | number;
   icon?: LucideIcon;
   delta?: StatDelta;
-  /** Secondary line under the value. */
+  /** 数值下方的次要说明行。 */
   hint?: string;
   className?: string;
-  /** Extra classes for the value text — e.g. a semantic tone color. */
+  /** 数值文本的额外类名——例如语义色调色。 */
   valueClassName?: string;
 }
 
@@ -25,7 +25,7 @@ const TREND_CLASS: Record<StatDelta["trend"], string> = {
   neutral: "text-muted-foreground",
 };
 
-/** KPI tile: label + large value + optional icon, delta, and hint. */
+/** KPI 卡片：标签 + 大号数值 + 可选的图标、变化量与说明。 */
 export function StatCard({
   label,
   value,

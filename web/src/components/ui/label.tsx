@@ -1,3 +1,5 @@
+// 表单标签基础原语：基于原生 label 元素。
+
 "use client"
 
 import * as React from "react"

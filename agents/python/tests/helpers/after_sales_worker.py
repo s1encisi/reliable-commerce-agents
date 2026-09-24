@@ -1,4 +1,4 @@
-"""Child-process crash injector for isolated tests; not part of the application."""
+"""隔离测试的子进程崩溃注入器，不属于应用运行路径。"""
 
 import argparse
 import asyncio
@@ -33,7 +33,7 @@ async def run() -> None:
 
     async def crash(stage: str, conn: asyncpg.Connection, operation_id: UUID) -> None:
         if stage == args.crash:
-            # The exit code proves injection happened after the business write.
+            # 退出码证明注入发生在业务写入之后。
             count = await conn.fetchval("SELECT count(*) FROM returns WHERE order_id = $1", args.order)
             os._exit(71 if count == 1 else 79)
 

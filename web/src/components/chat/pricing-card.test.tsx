@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { ChatPricingCard } from "./pricing-card";
 
 describe("ChatPricingCard", () => {
-  it("renders a discount waterfall from optimize_cart's fields", () => {
+  it("根据 optimize_cart 的字段渲染优惠瀑布", () => {
     render(
       <ChatPricingCard
         data={{
@@ -18,14 +18,14 @@ describe("ChatPricingCard", () => {
         }}
       />
     );
-    expect(screen.getByText("Savings Breakdown")).toBeInTheDocument();
-    expect(screen.getByText("Coupon SAVE10")).toBeInTheDocument();
-    expect(screen.getByText("Gold loyalty discount")).toBeInTheDocument();
-    expect(screen.getByText("$304.48")).toBeInTheDocument();
-    expect(screen.getByText(/saved 13%/)).toBeInTheDocument();
+    expect(screen.getByText("优惠明细")).toBeInTheDocument();
+    expect(screen.getByText("优惠券 SAVE10")).toBeInTheDocument();
+    expect(screen.getByText("gold 会员折扣")).toBeInTheDocument();
+    expect(screen.getByText("¥304.48")).toBeInTheDocument();
+    expect(screen.getByText(/已省 13%/)).toBeInTheDocument();
   });
 
-  it("renders active deals from get_active_deals's fields with no waterfall", () => {
+  it("根据 get_active_deals 的字段渲染进行中的优惠，且不显示瀑布", () => {
     render(
       <ChatPricingCard
         data={{
@@ -34,21 +34,21 @@ describe("ChatPricingCard", () => {
         }}
       />
     );
-    expect(screen.getByText("Deals & Promotions")).toBeInTheDocument();
+    expect(screen.getByText("优惠与促销")).toBeInTheDocument();
     expect(screen.getByText("WELCOME15")).toBeInTheDocument();
     expect(screen.getByText("Summer Sale")).toBeInTheDocument();
-    expect(screen.queryByText("Savings Breakdown")).not.toBeInTheDocument();
+    expect(screen.queryByText("优惠明细")).not.toBeInTheDocument();
   });
 
-  it("renders nothing when the fence is effectively empty (Phase 8.4 Stage 4c live-testing find)", () => {
-    // A real bug found live: optimize_cart couldn't resolve a cart (no
-    // items given), and the model still emitted a `pricing` fence with no
-    // populated fields — rendering a header with a blank body underneath.
+  it("代码块实际为空时不渲染任何内容（第 8.4 阶段 Step 4c 实测发现）", () => {
+    // 实测发现的真实缺陷：optimize_cart 无法解析购物车（未提供商品），
+    // 而模型仍然输出了一段 `pricing` 代码块且字段全空——于是渲染出一个
+    // 标题栏下方却是空白内容的卡片。
     const { container } = render(<ChatPricingCard data={{}} />);
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("labels bundle and flash-sale savings lines correctly", () => {
+  it("组合优惠与限时秒杀的优惠行标签正确", () => {
     render(
       <ChatPricingCard
         data={{
@@ -61,6 +61,6 @@ describe("ChatPricingCard", () => {
       />
     );
     expect(screen.getByText("Headphone + Case Bundle")).toBeInTheDocument();
-    expect(screen.getByText("Flash Friday (Sony WH-1000XM5)")).toBeInTheDocument();
+    expect(screen.getByText("Flash Friday（Sony WH-1000XM5）")).toBeInTheDocument();
   });
 });

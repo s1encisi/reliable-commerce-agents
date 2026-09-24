@@ -1,14 +1,12 @@
-"""JWKS-based token verifier for this server's OAuth 2.1 resource-server mode.
+"""本服务 OAuth 2.1 资源服务器模式下基于 JWKS 的令牌校验器。
 
-Vendored, not shared: ``ecommerce-mcp-inventory`` is an isolated uv workspace
-member that never imports ``shared/`` (it's independently installable /
-publishable — see the design doc's correction #7). The main app's
-identical-in-spirit ``shared/oauth/verifier.py::RS256Verifier`` is
-deliberately NOT reused here; this module is kept in sync with it by hand
-instead of adding a cross-package dependency.
+此处为内置副本，而非共享代码：``ecommerce-mcp-inventory`` 是一个独立的 uv
+工作区成员，从不导入 ``shared/``（它可独立安装/发布 —— 参见设计文档的
+修正 #7）。主应用中精神上一致的 ``shared/oauth/verifier.py::RS256Verifier``
+被有意地在此不复用；本模块改为手工与其保持同步，而不是引入跨包依赖。
 
-Only active when ``MCP_AUTH_ENABLED=true`` (see ``server.py``) — this module
-itself has no side effects at import time.
+仅在 ``MCP_AUTH_ENABLED=true`` 时生效（参见 ``server.py``）—— 本模块
+自身在导入时没有副作用。
 """
 
 from __future__ import annotations
@@ -26,7 +24,7 @@ MCP_INVENTORY_REQUIRED_SCOPE = os.environ.get("MCP_INVENTORY_REQUIRED_SCOPE", "m
 
 
 class JwksTokenVerifier(TokenVerifier):
-    """Validates bearer tokens against the self-hosted auth-server's JWKS."""
+    """基于自托管 auth-server 的 JWKS 校验 bearer 令牌。"""
 
     def __init__(
         self,
@@ -42,9 +40,9 @@ class JwksTokenVerifier(TokenVerifier):
         self._required_scope = required_scope
 
     async def verify_token(self, token: str) -> AccessToken | None:
-        """Return an ``AccessToken`` for a valid token, else ``None`` (the MCP
-        SDK maps a ``None`` return to a 401 + ``WWW-Authenticate`` response —
-        no exception needs to propagate)."""
+        """令牌有效时返回 ``AccessToken``，否则返回 ``None``（MCP
+        SDK 会把 ``None`` 返回值映射为 401 + ``WWW-Authenticate`` 响应 ——
+        无需向外传播异常）。"""
         try:
             signing_key = self._jwks_client.get_signing_key_from_jwt(token)
             payload = jwt.decode(

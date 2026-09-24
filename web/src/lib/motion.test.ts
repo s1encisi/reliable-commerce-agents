@@ -11,22 +11,22 @@ describe("motion", () => {
     vi.unstubAllGlobals();
   });
 
-  it("exposes hidden/visible states on the page-enter variant", () => {
+  it("在页面入场变体上暴露 hidden/visible 状态", () => {
     expect(pageEnter.hidden).toBeDefined();
     expect(pageEnter.visible).toBeDefined();
   });
 
-  it("returns instant variants when the user prefers reduced motion", () => {
+  it("用户偏好减少动效时返回 instant 变体", () => {
     expect(withMotionPreference(pageEnter, true)).toBe(instant);
     expect(withMotionPreference(pageEnter, false)).toBe(pageEnter);
   });
 
-  it("prefersReducedMotion is false when matchMedia is unavailable", () => {
+  it("matchMedia 不可用时 prefersReducedMotion 返回 false", () => {
     vi.stubGlobal("window", {});
     expect(prefersReducedMotion()).toBe(false);
   });
 
-  it("prefersReducedMotion reflects the media query match", () => {
+  it("prefersReducedMotion 反映媒体查询的匹配结果", () => {
     vi.stubGlobal("window", {
       matchMedia: (query: string) => ({
         matches: query.includes("reduce"),

@@ -1,4 +1,4 @@
-"""Unit tests for shared.tool_examples (Track D). Pure module constants."""
+"""共享工具示例常量测试。"""
 
 from __future__ import annotations
 

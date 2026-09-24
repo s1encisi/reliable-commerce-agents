@@ -1,3 +1,5 @@
+// 多行文本输入框基础原语。
+
 import * as React from "react"
 
 import { cn } from "@/lib/utils"

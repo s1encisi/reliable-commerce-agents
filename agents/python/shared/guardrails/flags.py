@@ -1,19 +1,9 @@
-"""Request-scoped guardrail signal flags.
+"""请求级护栏触发标记。
 
-``ChatContext.metadata`` (where ``InjectionDetectionChatMiddleware`` sets
-``guardrail_injection_detected``) is constructed fresh and empty per chat
-call by MAF's internal pipeline — it is never threaded from the owning
-``AgentContext``, so a flag set there is invisible to anything outside that
-one completion call. Confirmed by reading ``agent_framework._middleware``:
-the chat pipeline's ``ChatContext(...)`` construction never passes a
-``metadata=`` argument.
-
-This ContextVar is the readable side effect that data needs, following the
-same pattern as ``shared.grounding.ledger.current_grounding_ledger``: reset
-to a fresh dict at the start of a request/run, read after the run completes
-by anything that needs to know what guardrails actually fired — e.g. the
-safety eval suite (``evals/scorers/safety.py``), which should assert on a
-real middleware side effect rather than only on response-text phrasing.
+MAF 每次聊天调用新建空的 ChatContext.metadata，不从 AgentContext
+继承；在那里设置的标记无法被调用外读取。使用 ContextVar 保存可观察
+副作用，运行开始时重置、结束后读取。安全评测据此断言实际护栏行为，
+不只依赖回复措辞。
 """
 
 from __future__ import annotations
@@ -24,12 +14,12 @@ current_guardrail_flags: ContextVar[dict[str, bool] | None] = ContextVar("curren
 
 
 def reset_guardrail_flags() -> dict[str, bool]:
-    """Begin capture for the current request/run; returns the fresh dict."""
+    """为当前请求或运行创建新的标记字典。"""
     fresh: dict[str, bool] = {}
     current_guardrail_flags.set(fresh)
     return fresh
 
 
 def get_guardrail_flags() -> dict[str, bool]:
-    """Return the flags recorded so far (empty if capture is off)."""
+    """返回目前记录的标记；未启用记录时为空。"""
     return current_guardrail_flags.get() or {}

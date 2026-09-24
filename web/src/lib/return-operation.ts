@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+/**
+ * 退货操作的结果契约。
+ *
+ * `outcome` 是后端返回的机器枚举值，必须保持英文原样；前端只据此决定
+ * 展示与后续跳转，不参与翻译。
+ */
 export const returnOperationSchema = z.object({
   operation_id: z.string().uuid().optional(),
   return_id: z.string().uuid().optional(),

@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isLoading: true,
   });
 
-  // Restore session from localStorage on mount
+  // 挂载时从 localStorage 恢复会话
   useEffect(() => {
     try {
       const storedUser = localStorage.getItem(STORAGE_KEY_USER);
@@ -120,7 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
   if (!ctx) {
-    throw new Error("useAuth must be used within an AuthProvider");
+    throw new Error("useAuth 必须在 AuthProvider 内使用");
   }
   return ctx;
 }

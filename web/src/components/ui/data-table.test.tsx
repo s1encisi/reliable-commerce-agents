@@ -10,46 +10,46 @@ interface Row {
 
 describe("DataTable", () => {
   const columns = [
-    { key: "name", header: "Warehouse" },
-    { key: "stock", header: "Stock", align: "right" as const },
+    { key: "name", header: "仓库" },
+    { key: "stock", header: "库存", align: "right" as const },
   ];
   const rows: Row[] = [
-    { name: "East", stock: 42 },
-    { name: "West", stock: 0 },
+    { name: "华东", stock: 42 },
+    { name: "华西", stock: 0 },
   ];
 
-  it("renders headers and cell values", () => {
+  it("渲染表头与单元格值", () => {
     render(<DataTable columns={columns} rows={rows} />);
-    expect(screen.getByText("Warehouse")).toBeInTheDocument();
-    expect(screen.getByText("Stock")).toBeInTheDocument();
-    expect(screen.getByText("East")).toBeInTheDocument();
+    expect(screen.getByText("仓库")).toBeInTheDocument();
+    expect(screen.getByText("库存")).toBeInTheDocument();
+    expect(screen.getByText("华东")).toBeInTheDocument();
     expect(screen.getByText("42")).toBeInTheDocument();
-    expect(screen.getByText("West")).toBeInTheDocument();
+    expect(screen.getByText("华西")).toBeInTheDocument();
     expect(screen.getByText("0")).toBeInTheDocument();
   });
 
-  it("uses a custom render function when provided", () => {
+  it("提供自定义 render 函数时使用它", () => {
     render(
       <DataTable
         columns={[
-          { key: "name", header: "Warehouse" },
-          { key: "stock", header: "Stock", render: (r) => (r.stock > 0 ? "In stock" : "Out of stock") },
+          { key: "name", header: "仓库" },
+          { key: "stock", header: "库存", render: (r) => (r.stock > 0 ? "有货" : "缺货") },
         ]}
         rows={rows}
       />
     );
-    expect(screen.getByText("In stock")).toBeInTheDocument();
-    expect(screen.getByText("Out of stock")).toBeInTheDocument();
+    expect(screen.getByText("有货")).toBeInTheDocument();
+    expect(screen.getByText("缺货")).toBeInTheDocument();
   });
 
-  it("shows the empty message instead of an empty table", () => {
-    render(<DataTable columns={columns} rows={[]} emptyMessage="Nothing here" />);
-    expect(screen.getByText("Nothing here")).toBeInTheDocument();
-    expect(screen.queryByText("Warehouse")).not.toBeInTheDocument();
+  it("无数据时展示空态文案，而非空表格", () => {
+    render(<DataTable columns={columns} rows={[]} emptyMessage="这里空空如也" />);
+    expect(screen.getByText("这里空空如也")).toBeInTheDocument();
+    expect(screen.queryByText("仓库")).not.toBeInTheDocument();
   });
 
-  it("renders an optional caption", () => {
-    render(<DataTable columns={columns} rows={rows} caption="Regional stock" />);
-    expect(screen.getByText("Regional stock")).toBeInTheDocument();
+  it("渲染可选的表格说明", () => {
+    render(<DataTable columns={columns} rows={rows} caption="各区域库存" />);
+    expect(screen.getByText("各区域库存")).toBeInTheDocument();
   });
 });

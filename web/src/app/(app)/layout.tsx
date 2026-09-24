@@ -18,7 +18,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
   }, [user, isLoading, router]);
 
-  // Show nothing while checking auth state
+  // 校验登录状态期间不渲染任何内容
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -27,7 +27,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Don't render the app shell until we confirm the user is authenticated
+  // 确认用户已登录前，不渲染应用外壳
   if (!user) {
     return null;
   }
@@ -38,14 +38,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="flex h-screen overflow-hidden">
         <DesktopSidebar />
         <div className="flex flex-1 flex-col overflow-hidden">
-          {/* Mobile header */}
+          {/* 移动端顶栏 */}
           <header className="flex h-14 items-center gap-2 border-b bg-background px-4 lg:hidden">
             <MobileSidebar />
-            <span className="text-sm font-semibold">E-Commerce Agents</span>
+            <span className="text-sm font-semibold">可靠电商多智能体平台</span>
           </header>
-          {/* Desktop top bar */}
+          {/* 桌面端顶栏 */}
           <TopBar />
-          {/* Main content */}
+          {/* 主内容区 */}
           <main className="flex-1 overflow-y-auto">{children}</main>
         </div>
       </div>

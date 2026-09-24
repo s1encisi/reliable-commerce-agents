@@ -1,19 +1,12 @@
-"""Agentic-timeline capture via MAF function middleware.
+"""通过 MAF 函数中间件记录智能体执行时间线。
 
-A single ``StepRecorderMiddleware`` is attached to every agent. On each tool
-call it appends a compact step (tool name, args, status, duration, short output)
-to the request-scoped ``current_steps`` list (``shared.context``). The
-orchestrator route drains the list to:
-  - persist ``agent_execution_steps`` (via ``shared.usage_db.log_execution_step``),
-  - populate ``messages.metadata``,
-  - stream ``event: step`` SSE frames to the timeline UI.
+每个智能体都挂载 StepRecorderMiddleware，工具调用结束后把工具名、参数、
+状态、耗时和简短输出写入请求级 current_steps。编排器读取这些步骤，
+持久化到 agent_execution_steps、填充 messages.metadata，并发送 step SSE 帧。
 
-Specialists run in their own process; ``shared.agent_host`` resets the list,
-runs the agent, tags the collected steps with the agent name, and returns them
-over A2A so the orchestrator can merge them into the live timeline.
-
-The middleware is a no-op when ``current_steps`` is None (i.e. outside a request
-that opted into capture), so it is safe to attach unconditionally.
+专业智能体在独立进程运行；宿主重置列表、标记智能体名称，再通过 A2A
+返回步骤，供编排器合并。current_steps 为 None 时中间件不做记录，
+因此可以无条件挂载。
 """
 
 from __future__ import annotations
@@ -23,10 +16,10 @@ import time
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-# Import from the concrete submodule rather than the package root: the
-# agent-framework v1.0 beta ships an empty __init__ that patch_maf.py re-exports
-# only inside the Docker image, so the top-level names aren't importable in a
-# plain checkout (e.g. local tests). The submodule path is stable.
+# 直接从子模块导入，保持与早期 MAF 包的兼容性。
+# 早期 1.0 beta 的 __init__.py 为空，
+# Docker 构建曾通过 patch_maf.py 修补导出，
+# 具体子模块路径也适用于未经修补的本地检出。
 from agent_framework._middleware import FunctionInvocationContext, FunctionMiddleware
 
 from shared.context import current_steps
@@ -35,13 +28,11 @@ _MAX = 600
 
 
 def _extract_row_ids(result: Any) -> list[str]:
-    """Best-effort ids referenced in a tool result, for step provenance.
+    """尽可能提取工具结果中的标识，用于步骤溯源。
 
-    Duck-typed the same way shared/grounding/ledger.py recognizes fact
-    shapes (products key their id as "id", get_order_details as
-    "order_id", check_stock as "product_id") — but implemented locally
-    rather than imported, so this general-purpose observability module
-    doesn't take a dependency on the grounding subsystem.
+    按数据形态识别商品的 id、订单的 order_id 与库存的 product_id。
+    与事实台账的识别方式一致，但在本模块独立实现，避免通用可观测性
+    模块依赖事实核验子系统。
     """
     ids: list[str] = []
     items = result if isinstance(result, list) else [result]
@@ -55,7 +46,7 @@ def _extract_row_ids(result: Any) -> list[str]:
 
 
 def _summarize(value: Any, limit: int = _MAX) -> Any:
-    """Best-effort JSON-serialisable, size-capped summary of tool I/O."""
+    """生成可 JSON 序列化且限制大小的工具输入输出摘要。"""
     if value is None:
         return None
     try:
@@ -64,7 +55,7 @@ def _summarize(value: Any, limit: int = _MAX) -> Any:
         s = str(value)
     if len(s) > limit:
         return s[:limit] + "…"
-    # round-trip small JSON so the UI gets structured data when possible
+    # 小型 JSON 往返序列化，尽量让界面得到结构化数据。
     try:
         return json.loads(s)
     except (TypeError, ValueError):
@@ -72,7 +63,7 @@ def _summarize(value: Any, limit: int = _MAX) -> Any:
 
 
 class StepRecorderMiddleware(FunctionMiddleware):
-    """Record one timeline step per tool invocation into ``current_steps``."""
+    """每次工具调用向 current_steps 记录一个时间线步骤。"""
 
     async def process(
         self,
@@ -96,7 +87,16 @@ class StepRecorderMiddleware(FunctionMiddleware):
         finally:
             steps = current_steps.get()
             if steps is not None:
-                result = getattr(context, "result", None)
+                from shared.function_results import unwrap_function_result
+
+                result = unwrap_function_result(getattr(context, "result", None))
+                confirmed = bool(result) and isinstance(result, (dict, list))
+                if isinstance(result, dict) and (
+                    result.get("error") or result.get("error_code") or result.get("success") is False
+                ):
+                    confirmed = False
+                if isinstance(result, list) and any(isinstance(x, dict) and x.get("error") for x in result):
+                    confirmed = False
                 from shared.after_sales.contracts import Outcome
 
                 outcome = result.get("outcome") if isinstance(result, dict) else None
@@ -105,6 +105,7 @@ class StepRecorderMiddleware(FunctionMiddleware):
                         "tool_name": tool_name,
                         "tool_input": _summarize(tool_input),
                         "tool_output": _summarize(result, 400),
+                        "result_confirmed": confirmed,
                         "status": status,
                         "business_outcome": outcome
                         if isinstance(outcome, str) and outcome in {s.value for s in Outcome}
@@ -118,18 +119,18 @@ class StepRecorderMiddleware(FunctionMiddleware):
                 )
 
 
-# Single shared instance — the middleware is stateless (all state lives in the
-# request-scoped ContextVar), so one instance is reused across every agent.
+# 中间件自身无状态；所有状态都保存在请求级 ContextVar 中，
+# 因此所有智能体可以复用同一个实例。
 STEP_MIDDLEWARE: list[FunctionMiddleware] = [StepRecorderMiddleware()]
 
 
 def reset_steps() -> list[dict]:
-    """Begin capture for the current request; returns the fresh list."""
+    """开始记录当前请求，返回新建的步骤列表。"""
     fresh: list[dict] = []
     current_steps.set(fresh)
     return fresh
 
 
 def get_steps() -> list[dict]:
-    """Return the steps captured in this request (empty if capture is off)."""
+    """返回本请求捕获的步骤；未启用记录时返回空列表。"""
     return current_steps.get() or []

@@ -1,4 +1,4 @@
-"""Inventory & Fulfillment tools — restock schedules, shipping, carriers, tracking, fulfillment planning, backorders."""
+"""库存与履约工具 —— 补货计划、运费、承运商、追踪、履约计划、缺货预订。"""
 
 from __future__ import annotations
 
@@ -64,7 +64,7 @@ async def estimate_shipping(
 ) -> dict:
     pool = get_pool()
     async with pool.acquire() as conn:
-        # Find warehouses with stock, preferring same-region first
+        # 查找有库存的仓库，优先同区域
         inventory = await conn.fetch(
             """SELECT w.id as warehouse_id, w.name as warehouse, w.region, wi.quantity
                FROM warehouse_inventory wi
@@ -87,7 +87,7 @@ async def estimate_shipping(
         best_warehouse = inventory[0]
         region_from = best_warehouse["region"]
 
-        # Get shipping rates from that region
+        # 获取该区域的运费费率
         rates = await conn.fetch(
             """SELECT c.name as carrier, c.speed_tier,
                       sr.price, sr.estimated_days_min, sr.estimated_days_max
@@ -270,7 +270,7 @@ async def calculate_fulfillment_plan(
                 unavailable.append(pid)
                 continue
 
-            # Find best warehouse: prefer same region, then by quantity
+            # 查找最佳仓库：优先同区域，其次按数量
             inventory = await conn.fetch(
                 """SELECT w.id as warehouse_id, w.name as warehouse, w.region, wi.quantity
                    FROM warehouse_inventory wi
@@ -303,13 +303,13 @@ async def calculate_fulfillment_plan(
                 shipments_by_warehouse[warehouse_key] = []
             shipments_by_warehouse[warehouse_key].append(item)
 
-        # Calculate shipping cost per shipment (one per warehouse)
+        # 计算每批发货的运费（每个仓库一批）
         total_shipping = 0.0
         shipment_details: list[dict] = []
 
         for warehouse_key, items in shipments_by_warehouse.items():
             region_from = items[0]["region"]
-            # Get cheapest carrier for this route
+            # 获取该路线最便宜的承运商
             rate = await conn.fetchrow(
                 """SELECT c.name as carrier, sr.price, sr.estimated_days_min, sr.estimated_days_max
                    FROM shipping_rates sr
@@ -377,7 +377,7 @@ async def place_backorder(
         if not product:
             return {"error": f"Product not found: {product_id}"}
 
-        # Verify product is actually out of stock
+        # 确认该商品确实缺货
         total_stock = await conn.fetchval(
             """SELECT COALESCE(SUM(quantity), 0)
                FROM warehouse_inventory
@@ -394,7 +394,7 @@ async def place_backorder(
                 "current_stock": total_stock,
             }
 
-        # Check next restock date
+        # 检查下一次补货日期
         next_restock = await conn.fetchrow(
             """SELECT rs.expected_date, rs.expected_quantity, w.name as warehouse
                FROM restock_schedule rs
@@ -405,7 +405,7 @@ async def place_backorder(
             product_id,
         )
 
-        # Mock backorder confirmation (no new table needed)
+        # 模拟缺货预订确认（无需新表）
         import uuid
 
         backorder_id = str(uuid.uuid4())

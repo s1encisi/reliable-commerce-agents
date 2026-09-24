@@ -6,13 +6,13 @@ import type { AgentStep } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 /**
- * Collapsible "agent activity" timeline — renders the tool-call steps streamed
- * over `event: step` SSE frames (orchestrator → specialist → tool).
- * Each step row expands to show tool_input / tool_output as formatted JSON.
+ * 可折叠的「智能体活动」时间线——渲染通过 `event: step` SSE 帧流式推送的
+ * 工具调用步骤（编排器 → 专业智能体 → 工具）。
+ * 每个步骤行都可展开，以格式化 JSON 展示 tool_input / tool_output。
  */
 export function AgentTimeline({ steps }: { steps: AgentStep[] }) {
-  // Open by default — the agentic timeline is the one thing this repo
-  // exists to show; hiding it behind a click buried the point.
+  // 默认展开——智能体时间线正是本仓库存在要展示的东西；
+  // 把它藏在一次点击之后反而埋没了重点。
   const [open, setOpen] = useState(true);
 
   if (!steps.length) return null;
@@ -27,10 +27,10 @@ export function AgentTimeline({ steps }: { steps: AgentStep[] }) {
       >
         <ChevronRight className={cn("size-3.5 transition-transform", open && "rotate-90")} />
         <span>
-          Agent activity · {steps.length} step{steps.length > 1 ? "s" : ""}
+          智能体活动 · {steps.length} 步
         </span>
         <span className="ml-auto text-muted-foreground/60">
-          {steps.reduce((sum, s) => sum + (s.duration_ms ?? 0), 0)}ms total
+          共 {steps.reduce((sum, s) => sum + (s.duration_ms ?? 0), 0)}ms
         </span>
       </button>
 
@@ -87,16 +87,16 @@ function StepRow({ step: s }: { step: AgentStep }) {
       {expanded && hasDetail && (
         <div className="space-y-1.5 border-t bg-muted/20 px-3 py-2">
           {s.tool_input !== undefined && (
-            <JsonBlock label="Input" value={s.tool_input} />
+            <JsonBlock label="输入" value={s.tool_input} />
           )}
           {s.tool_output !== undefined && (
-            <JsonBlock label="Output" value={s.tool_output} />
+            <JsonBlock label="输出" value={s.tool_output} />
           )}
           {s.provenance && s.provenance.row_ids.length > 0 && (
             <p className="text-muted-foreground">
-              Sourced from <span className="font-mono text-foreground/80">{s.provenance.source}</span>
+              数据来源 <span className="font-mono text-foreground/80">{s.provenance.source}</span>
               {" — "}
-              {s.provenance.row_ids.length} row{s.provenance.row_ids.length === 1 ? "" : "s"}
+              {s.provenance.row_ids.length} 行记录
               {": "}
               <span className="font-mono text-foreground/70">{s.provenance.row_ids.join(", ")}</span>
             </p>
@@ -113,7 +113,7 @@ function JsonBlock({ label, value }: { label: string; value: unknown }) {
       ? value
       : JSON.stringify(value, null, 2);
 
-  // Truncate very long outputs for readability
+  // 过长的输出做截断，便于阅读
   const truncated = text.length > 800;
   const display = truncated ? text.slice(0, 800) + "\n…" : text;
 

@@ -1,11 +1,7 @@
-"""Tests for orchestrator/modes/.
+"""编排模式测试，使用真实 Agent、工具调用层与 HandoffBuilder。
 
-ToolRouterMode and HandoffMode are tested against real MAF machinery (a
-genuine Agent driven by a fake chat client, a genuine HandoffBuilder-built
-Workflow) rather than mocking run() itself — the same standard the rest of
-Phase 1 has held. HandoffMode's specialist leg reuses
-test_handoff_orchestration.py's _StubTransport fixture so the A2A HTTP call
-is real (goes through httpx), only its destination is stubbed.
+客户端返回预设模型响应；专业智能体请求经过真实 httpx，
+仅网络目标由测试传输替代。
 """
 
 from __future__ import annotations
@@ -41,15 +37,10 @@ def _text_response(text: str) -> ChatResponse:
 
 
 class _ScriptedClient(FunctionInvocationLayer, BaseChatClient):
-    """Returns queued responses in order, driving real tool/handoff-tool
-    invocation via FunctionInvocationLayer — same composition as
-    shared/replay_client.py's ReplayChatClient, for the same reason: a bare
-    BaseChatClient can't execute a function_call response itself. Handles
-    stream=True via _build_response_stream() (not a bare ResponseStream)
-    for the same reason documented in replay_client.py — MAF's own
-    downstream machinery expects a finalizer that resolves back to a
-    ChatResponse, even for a caller that didn't request streaming (Agent.run()
-    routes internally through the streaming path)."""
+    """按顺序返回预设响应，驱动真实函数与交接工具调用。
+
+    组合 FunctionInvocationLayer；流式路径通过 _build_response_stream
+    安装最终响应终结器，满足 MAF 内部对 ChatResponse 的要求。"""
 
     def __init__(self, *responses: ChatResponse) -> None:
         super().__init__()
@@ -134,9 +125,7 @@ async def test_tool_router_yields_run_completed_with_text(monkeypatch: pytest.Mo
 
 @pytest.mark.asyncio
 async def test_tool_router_yields_tool_call_events_for_captured_steps(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Two turns: a function_call to a real tool, then the final answer —
-    proves ToolRouterMode's step-recorder integration (adapt_step) actually
-    fires for real tool invocations, not just a text-only turn."""
+    """先调用真实工具再返回答案，验证步骤记录确实覆盖工具执行。"""
     from agent_framework import tool
 
     @tool(name="get_weather", description="Get weather for a city")
@@ -178,14 +167,9 @@ async def test_tool_router_yields_tool_call_events_for_captured_steps(monkeypatc
 
 @pytest.mark.asyncio
 async def test_tool_router_forwards_history_into_the_model_call(monkeypatch: pytest.MonkeyPatch) -> None:
-    """History must reach the LLM's messages, not merely a ContextVar.
+    """历史必须进入模型消息，不能只设置无人读取的 ContextVar。
 
-    This used to assert that ``ToolRouterMode`` set a ``current_conversation_history``
-    ContextVar. That var was written by all five modes and read by nothing in
-    production — so the assertion held while proving nothing about whether the
-    prior turn influenced the answer. It was also an active red herring while
-    diagnosing #9, where the real question was exactly "does context reach the
-    model?". The var is gone; this asserts the thing it appeared to.
+    直接断言模型输入，避免无效状态变量让测试通过却未证明上下文传播。
     """
     fake = _ScriptedClient(_text_response("ok"))
     fake_agent = Agent(client=fake, instructions="test", name="orchestrator")
@@ -214,11 +198,8 @@ async def test_handoff_mode_routes_to_specialist_and_reports_its_answer(
     monkeypatch: pytest.MonkeyPatch,
     stub_transport: _StubTransport,  # noqa: F811 — pytest fixture param, not a redefinition
 ) -> None:
-    """Orchestrator's fake client emits handoff_to_math on turn 1 (the real
-    HandoffBuilder-synthesized tool — see orchestrator/modes/handoff_mode.py's
-    module docstring), the specialist leg is a real A2A HTTP call landing on
-    the stubbed transport, and turn 2 (post-handoff) is the specialist's
-    canned reply flowing back through the mesh.
+    """首轮发出真实交接工具调用，专业智能体经 A2A 测试传输执行，
+    随后预设回复通过交接网格返回。
     """
     stub_transport.reply = "1554"
 
@@ -257,7 +238,7 @@ async def test_handoff_mode_routes_to_specialist_and_reports_its_answer(
     assert "math" in final.payload["agents_involved"]
     assert "1554" in final.payload["text"]
 
-    # The A2A call actually happened over HTTP, landing on the stub transport.
+    # A2A 请求确实经过 HTTP 客户端到达测试传输。
     assert len(stub_transport.calls) >= 1
 
 
@@ -273,26 +254,22 @@ def test_handoff_mode_capabilities_marks_is_graph() -> None:
 
 # ─────────────── Handoff triage agent contract ───────────────
 #
-# These pin the fix for the defect where `handoff` mode produced a
-# 23,637-character monologue over 100-200 seconds and never reached a
-# specialist. The cause was not the accumulation code — updates were genuine
-# deltas — but the start agent: it was `create_orchestrator_agent()`, which
-# carries `call_specialist_agent` and a prompt telling it to use that tool.
+# 防止交接模式再次生成长篇独白却未访问专业智能体。
+# 历史故障中输出达 23637 字符、耗时 100–200 秒。
+# 根因不是增量累加，
+# 而是错误复用带业务工具的编排器作为起始智能体，
+# 提示词仍要求使用 call_specialist_agent。
 #
-# Microsoft's guidance is explicit about why that is fatal in a handoff mesh:
-# handoffs happen through tool calls, so an agent that answers instead of
-# handing off leaves the workflow nowhere to go but back to the user. With
-# autonomous mode on, that becomes an unbounded self-continuation loop.
+# 交接网格依靠交接工具推进，
+# 若起始智能体自行回答而不交接，
+# 流程只能回到用户或继续自身，
+# 自主模式下就可能反复续写。
 
 
 def test_handoff_triage_agent_has_no_tools(monkeypatch) -> None:
-    """The invariant. Every tool it carries is one more thing it can do
-    instead of handing off, and the failure is a monologue rather than an
-    error.
+    """分诊智能体不能携带让它绕过交接的业务工具。
 
-    The chat client is stubbed because constructing a real one needs provider
-    credentials, and this assertion is about the agent's tool surface — not
-    about being able to reach a model.
+    测试只检查工具表面，使用客户端替身，无需模型凭据。
     """
     import orchestrator.handoff as handoff_module
 
@@ -318,13 +295,9 @@ def test_handoff_triage_agent_has_no_tools(monkeypatch) -> None:
 
 
 def test_handoff_triage_prompt_does_not_reuse_the_tool_router_prompt() -> None:
-    """orchestrator.yaml names `call_specialist_agent`, which is the *tool*
-    mode's mechanism. Reusing it here tells the model to route by a tool it
-    does not have.
+    """交接提示词不能要求使用仅属于 tool 模式的 call_specialist_agent。
 
-    Asserted against the composed prompt rather than the Agent object, because
-    MAF's Agent does not expose its instructions — and the prompt file is the
-    thing that actually has to be right.
+    直接检查组合提示词，避免引用不存在的工具。
     """
     from shared.prompt_loader import load_prompt
 
@@ -338,9 +311,7 @@ def test_handoff_triage_prompt_does_not_reuse_the_tool_router_prompt() -> None:
 
 
 def test_handoff_autonomous_mode_is_bounded() -> None:
-    """MAF's default autonomous ceiling is 50 turns. At roughly 450 characters
-    a turn that is the 23,000-character monologue this mode used to produce, so
-    the limit is a safety net rather than a tuning knob."""
+    """自主轮次上限是防止长篇自我续写的安全限制，不能沿用过高默认值。"""
     from shared.config import settings
 
     assert settings.HANDOFF_MAX_TURNS <= 5, (

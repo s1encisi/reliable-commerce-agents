@@ -1,24 +1,9 @@
-"""Outbound content-moderation middleware.
+"""模型输出内容审核中间件。
 
-Checks the model's *own generated text* against
-``shared/guardrails/moderation.py``'s coarse local classifier — a
-different layer from ``OutputSanitizationMiddleware`` (which defangs
-adversarial instructions hiding inside untrusted tool output, not the
-model's own words) and from ``InjectionDetectionChatMiddleware`` (which
-flags what came *in*, not what goes *out*). Nothing in this codebase
-checked the model's own output for content-policy violations before
-this.
-
-Same streaming-aware shape as ``CostBudgetMiddleware`` and
-``GroundingVerificationMiddleware``: non-streaming responses are checked
-directly against ``context.result``; streaming responses are checked via
-``context.stream_result_hooks``, which MAF calls once the stream is
-fully drained (``ResponseStream.get_final_response()``) — the hook sees
-the complete text, but by then every chunk has already been forwarded to
-the caller, so ``enforce`` mode can only replace the *persisted* final
-result for a streamed response, not un-send chunks already on the wire.
-Identical trade-off to ``GROUNDING_MODE=enforce``'s own documented
-streaming caveat.
+检查模型自身生成文本，独立于工具输出净化和输入注入检测。非流式
+响应直接检查 context.result；流式响应在 stream_result_hooks 中等待
+最终文本。此时分块已发送，无法撤回，具体标记和替换行为以分支实现
+为准。
 """
 
 from __future__ import annotations
@@ -54,7 +39,7 @@ def _response_text(response: Any) -> str:
 
 
 class OutputModerationMiddleware(ChatMiddleware):
-    """Classify the agent's final response text; optionally block it."""
+    """对最终回答分类，并按配置选择是否阻止。"""
 
     def __init__(self) -> None:
         self.flagged = 0
@@ -97,8 +82,8 @@ class OutputModerationMiddleware(ChatMiddleware):
         if settings.OUTPUT_MODERATION_MODE != "enforce":
             return response
         if context.stream:
-            # Chunks are already on the wire — nothing left to block. The
-            # flag above is the only enforcement a streamed response gets.
+            # 分块已发送，无法继续阻止或撤回，
+            # 流式路径只保留前面的审核标记。
             return response
 
         return self._refusal_result()

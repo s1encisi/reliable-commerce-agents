@@ -1,9 +1,6 @@
-"""
-Phase 7 Refactor 05 — Middleware tests.
+"""中间件单元测试，通过最小上下文验证行为。
 
-Each middleware is exercised through a small fake context so we can assert
-on behavior without spinning up a live agent. Integration with a real
-agent is covered by the Ch06 tutorial tests.
+真实智能体集成由第 06 章测试覆盖。
 """
 
 from __future__ import annotations
@@ -24,7 +21,7 @@ from shared.middleware import (
 
 
 class _FakeContent:
-    """Writeable text container that matches MAF's Content shape well enough."""
+    """模拟 MAF Content 的可写文本容器。"""
 
     def __init__(self, text: str) -> None:
         self.text = text

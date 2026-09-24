@@ -1,4 +1,4 @@
-"""Orchestrator agent definition — routes requests to specialist agents via A2A."""
+"""编排器智能体定义 —— 通过 A2A 把请求路由到各专业智能体。"""
 
 from __future__ import annotations
 
@@ -28,19 +28,17 @@ from shared.telemetry import a2a_call_span
 
 logger = logging.getLogger(__name__)
 
-# Validated, not just decoded: shared.factory.parse_agent_registry rejects a
-# blank or scheme-less endpoint at import instead of letting it surface as an
-# unroutable agent on the first request that needs it.
+# 经过校验，而不仅仅是解码：shared.factory.parse_agent_registry 会在导入时
+# 拒绝空白或缺少 scheme 的端点，而不是让它在第一个需要它的请求上暴露为
+# 一个无法路由的智能体。
 AGENT_REGISTRY: dict[str, str] = parse_agent_registry(settings.AGENT_REGISTRY)
 
-# One shared transport (and therefore its per-host circuit breakers) reused
-# across every httpx.AsyncClient constructed below — a breaker only means
-# anything if it remembers failures across calls, and a fresh
-# ResilientAsyncTransport() per call would reset that memory every time.
-# Safe to share across many short-lived AsyncClient instances: closing a
-# client closes its transport's connection pool, but the pool reopens
-# lazily on the next request rather than raising — verified directly
-# against httpx's current behavior before relying on it here.
+# 一个共享的传输层（因而是它的按主机断路器）在下面构造的每个
+# httpx.AsyncClient 之间复用 —— 断路器只有在跨调用记住失败时才有意义，
+# 而每次调用都新建一个 ResilientAsyncTransport() 会每次重置那份记忆。
+# 在多个短生命周期的 AsyncClient 实例之间共享是安全的：关闭一个 client 会
+# 关闭其传输层的连接池，但连接池会在下一个请求时惰性重开而不是抛错 ——
+# 在依赖这一点之前已直接对照 httpx 的当前行为验证过。
 _A2A_TRANSPORT = ResilientAsyncTransport()
 
 
@@ -56,7 +54,7 @@ async def call_specialist_agent(
     agent_name: Annotated[str, Field(description="Name of the specialist agent to call")],
     message: Annotated[str, Field(description="The message/request to send to the specialist agent")],
 ) -> str:
-    """Call a specialist agent and return its response."""
+    """调用一个专业智能体并返回其响应。"""
     url = AGENT_REGISTRY.get(agent_name)
     if not url:
         available = ", ".join(AGENT_REGISTRY.keys()) if AGENT_REGISTRY else "none configured"
@@ -64,14 +62,21 @@ async def call_specialist_agent(
 
     logger.info("a2a.call source=orchestrator target=%s user=%s", agent_name, current_user_email.get())
 
-    # Audit fix #14: stop forwarding a truncated copy of the conversation
-    # history on every A2A call. The session id travels in the header; the
-    # specialist side rehydrates from Postgres via shared.agent_host when
-    # it needs prior context. Dropping the payload frees us from the 10-msg
-    # / 500-char window that was silently losing context on long chats.
+    # 审计修复 #14：不再在每次 A2A 调用时转发一份被截断的对话历史副本。
+    # 会话 id 通过请求头传递；专业智能体一侧在需要先前上下文时，会经由
+    # shared.agent_host 从 Postgres 重新水合。去掉这个载荷让我们摆脱了
+    # 那个 10 条消息 / 500 字符的窗口 —— 它此前会在长对话中静默地丢失上下文。
 
     stream_queue = current_stream_queue.get()
     headers = await build_a2a_headers()
+    from shared.execution_policy import current_execution_policy
+    from shared.paid_transport import current_root_run, current_run_deadline
+
+    if current_root_run.get():
+        headers["X-Root-Run-Id"] = current_root_run.get()
+    headers["X-Execution-Policy"] = current_execution_policy.get()
+    if current_run_deadline.get() is not None:
+        headers["X-Run-Deadline"] = str(current_run_deadline.get())
     from shared.after_sales.operations import current_operation_id
 
     if current_operation_id.get():
@@ -79,11 +84,10 @@ async def call_specialist_agent(
     request_body = {"message": message}
 
     with a2a_call_span("orchestrator", agent_name, url):
-        # ── Streaming path ─────────────────────────────────────────────────
-        # When an SSE context is active (stream_queue is set), connect to the
-        # specialist's /message:stream endpoint and forward response chunks to
-        # the browser as they arrive — eliminating the silent gap while the
-        # specialist's LLM generates its response.
+        # ── 流式路径 ───────────────────────────────────────────────────────
+        # 当 SSE 上下文处于活动状态（stream_queue 已设置）时，连接到专业
+        # 智能体的 /message:stream 端点，并在响应分片到达时立即转发给浏览器
+        # —— 从而消除专业智能体的 LLM 生成响应期间那段静默空白。
         if stream_queue is not None:
             try:
                 chunks: list[str] = []
@@ -96,38 +100,26 @@ async def call_specialist_agent(
                         headers=headers,
                     ) as resp:
                         resp.raise_for_status()
-                        async for line in resp.aiter_lines():
-                            if line.startswith("event: "):
-                                current_event = line[7:].strip()
-                                continue
-                            if not line:
-                                # blank line = SSE frame boundary
-                                current_event = "data"
-                                continue
-                            if not line.startswith("data: "):
-                                continue
-                            payload = line[6:]
+                        from shared.sse import iter_sse
+
+                        async for current_event, payload in iter_sse(resp.aiter_lines()):
                             if current_event == "step":
-                                # Merge specialist tool-call step into the
-                                # shared current_steps for this request, and
-                                # forward it to the browser now rather than
-                                # letting the post-stream drain report it.
+                                # 把专业智能体的工具调用步骤合并进本次请求共享的
+                                # current_steps，并立即转发给浏览器，而不是留给
+                                # 流结束后的排空阶段去上报。
                                 #
-                                # The specialist emits these as each tool
-                                # returns, so this is the point where a step is
-                                # freshest — holding it until the run ends made
-                                # the whole timeline appear at once, after the
-                                # answer had finished writing, which is exactly
-                                # when it is least useful.
+                                # 专业智能体在每个工具返回时就发出这些步骤，
+                                # 因此此刻正是该步骤最新鲜的时候 —— 一直留到
+                                # 运行结束再发，会让整条时间线在答案写完
+                                # 之后一次性出现，而那恰恰是它最没用的时候。
                                 try:
                                     step_data = json.loads(payload)
                                     bucket = current_steps.get()
                                     if bucket is not None:
                                         bucket.append(step_data)
-                                    # `_live` marks this step as already sent.
-                                    # chat.py's drain pops it, so it neither
-                                    # goes out twice nor reaches the persisted
-                                    # metadata as a transport detail.
+                                    # `_live` 标记该步骤已经发送过。
+                                    # chat.py 的排空逻辑会把它弹出，因此它既不会
+                                    # 重复发出，也不会作为传输细节进入持久化元数据。
                                     step_data["_live"] = True
                                     await stream_queue.put(("frame", "step", step_data))
                                 except (json.JSONDecodeError, ValueError):
@@ -144,9 +136,12 @@ async def call_specialist_agent(
                 return "".join(chunks) or f"The {agent_name} agent returned an empty response."
             except (httpx.TimeoutException, httpx.HTTPStatusError, Exception) as exc:
                 logger.warning("a2a.stream_fallback target=%s reason=%s", agent_name, type(exc).__name__)
-                # Fall through to blocking path
+                # 只有明确的端点不存在才可安全切换；超时或断流可能已执行工具。
+                if not (isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code in {404, 405}):
+                    return "专业智能体连接中断，执行结果待核实；系统没有重新发送业务请求。"
+                # 404/405 表示此流式端点没有处理该业务请求。
 
-        # ── Blocking path (non-streaming or stream fallback) ───────────────
+        # ── 阻塞式路径（非流式或流式回退） ────────────────────────────────
         try:
             async with httpx.AsyncClient(timeout=30, transport=_A2A_TRANSPORT) as client:
                 resp = await client.post(
@@ -172,12 +167,12 @@ async def call_specialist_agent(
             return f"Failed to reach the {agent_name} agent. Please try again later."
 
 
-# Export tools list for direct use by routes.py (bypassing MAF Responses API)
+# 导出工具列表，供 routes.py 直接使用（绕过 MAF Responses API）
 ORCHESTRATOR_TOOLS = [call_specialist_agent]
 
 
 def create_orchestrator_agent() -> Agent:
-    """Create the Customer Support orchestrator ChatAgent."""
+    """创建客服编排器 ChatAgent。"""
     return Agent(
         client=create_chat_client(),
         name="orchestrator",
@@ -186,11 +181,10 @@ def create_orchestrator_agent() -> Agent:
         tools=ORCHESTRATOR_TOOLS,
         context_providers=[ECommerceContextProvider()],
         middleware=build_specialist_middleware(),
-        # No HistoryProvider is attached today, so this is currently a no-op —
-        # but agent-framework-orchestrations>=1.0.1 requires it on every
-        # HandoffBuilder participant (see orchestrator/handoff.py), and it's
-        # also a prerequisite for wiring shared/session.py's HistoryProvider
-        # onto this agent later. Set unconditionally rather than only on the
-        # handoff path so both call sites stay consistent.
+        # 目前没有挂任何 HistoryProvider，所以这一项目前是空操作 ——
+        # 但 agent-framework-orchestrations>=1.0.1 要求每个 HandoffBuilder
+        # 参与者都带上它（见 orchestrator/handoff.py），而且它也是日后把
+        # shared/session.py 的 HistoryProvider 接到本智能体上的前提条件。
+        # 无条件设置（而不是只在处理权交接路径上设置），以保持两个调用点一致。
         require_per_service_call_history_persistence=True,
     )

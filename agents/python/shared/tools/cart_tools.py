@@ -1,4 +1,4 @@
-"""Shared cart tools — add/remove items, addresses, coupons."""
+"""共享购物车工具：商品增删、地址与优惠券。"""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from shared.db import get_pool
 
 
 async def _get_or_create_cart(conn, user_id: str) -> str:
-    """Get existing cart or create new one. Returns cart_id."""
+    """获取已有购物车或新建一个，返回 cart_id。"""
     cart = await conn.fetchrow("SELECT id FROM carts WHERE user_id = $1", user_id)
     if cart:
         return str(cart["id"])
@@ -23,13 +23,10 @@ async def _get_or_create_cart(conn, user_id: str) -> str:
 
 
 async def _resolve_product(conn, product_id: str) -> dict | None:
-    """Resolve a product by UUID or fuzzy name.
+    """按 UUID 或模糊名称解析商品。
 
-    LLMs frequently pass a product name ("Sony WH-1000XM5") instead of the
-    UUID, especially when the product wasn't looked up earlier in the turn.
-    We accept either: try parsing as UUID first, then fall back to an ILIKE
-    name search. Returns a dict with row fields + a `matches` list (for
-    ambiguous name matches) or None if nothing found.
+    先尝试 UUID，再使用 ILIKE 查询名称。返回商品字段；有歧义时附带
+    matches 列表，无匹配时返回 None，避免模型凭空编造标识。
     """
     try:
         pid = uuid.UUID(product_id)
@@ -43,7 +40,7 @@ async def _resolve_product(conn, product_id: str) -> dict | None:
         )
         return dict(row) if row else None
 
-    # Not a UUID — fuzzy name lookup, prefer exact ILIKE then prefix
+    # 不是 UUID 时查询名称，优先完整匹配，再匹配前缀。
     rows = await conn.fetch(
         """SELECT id, name, price, is_active
              FROM products
@@ -102,7 +99,7 @@ async def add_to_cart(
         resolved_product_id = product["id"]
         cart_id = await _get_or_create_cart(conn, user["id"])
 
-        # Upsert: insert or add to existing quantity
+        # 插入新项，或增加已有项数量。
         row = await conn.fetchrow(
             """INSERT INTO cart_items (cart_id, product_id, quantity)
                VALUES ($1, $2, $3)
@@ -177,7 +174,7 @@ async def get_cart() -> dict:
         total = max(subtotal - discount, 0.0)
         item_count = sum(i["quantity"] for i in item_list)
 
-        # Parse JSONB addresses (asyncpg returns them as dicts or None)
+        # 解析 JSONB 地址，兼容字典或 None。
         shipping_address = cart["shipping_address"]
         billing_address = cart["billing_address"]
         if isinstance(shipping_address, str):
@@ -274,7 +271,7 @@ async def update_cart_quantity(
 
         resolved_pid = product["id"]
 
-        # If quantity <= 0, remove the item
+        # 数量小于等于零时移除商品。
         if quantity <= 0:
             deleted = await conn.fetchrow(
                 """DELETE FROM cart_items ci
@@ -293,7 +290,7 @@ async def update_cart_quantity(
                 "message": f"Removed '{deleted['name']}' from cart.",
             }
 
-        # Update quantity
+        # 更新数量。
         updated = await conn.fetchrow(
             """UPDATE cart_items ci
                SET quantity = $3
@@ -434,7 +431,7 @@ async def set_billing_same_as_shipping() -> dict:
         if not cart["shipping_address"]:
             return {"error": "No shipping address set yet. Set a shipping address first."}
 
-        # Copy shipping to billing
+        # 将配送地址复制到账单地址。
         await conn.execute(
             """UPDATE carts
                SET billing_address = shipping_address,
@@ -473,7 +470,7 @@ async def apply_coupon_to_cart(
         if not cart:
             return {"error": "Cart is empty. Add items before applying a coupon."}
 
-        # Validate coupon
+        # 校验优惠券。
         coupon = await conn.fetchrow(
             """SELECT id, code, description, discount_type, discount_value,
                       min_spend, max_discount, usage_limit, times_used,
@@ -489,7 +486,7 @@ async def apply_coupon_to_cart(
         if not coupon["is_active"]:
             return {"error": f"Coupon '{code}' is no longer active"}
 
-        # Check expiry
+        # 检查是否过期。
         is_expired = await conn.fetchval(
             "SELECT CASE WHEN $1::timestamptz IS NOT NULL AND $1::timestamptz < NOW() THEN TRUE ELSE FALSE END",
             coupon["valid_until"],
@@ -497,7 +494,7 @@ async def apply_coupon_to_cart(
         if is_expired:
             return {"error": f"Coupon '{code}' has expired"}
 
-        # Check not before valid_from
+        # 检查是否已到 valid_from。
         is_before_start = await conn.fetchval(
             "SELECT CASE WHEN $1::timestamptz > NOW() THEN TRUE ELSE FALSE END",
             coupon["valid_from"],
@@ -505,15 +502,15 @@ async def apply_coupon_to_cart(
         if is_before_start:
             return {"error": f"Coupon '{code}' is not yet valid"}
 
-        # Check usage limit
+        # 检查使用次数上限。
         if coupon["usage_limit"] and coupon["times_used"] >= coupon["usage_limit"]:
             return {"error": f"Coupon '{code}' has reached its usage limit"}
 
-        # Check user-specific coupon
+        # 检查用户专属限制。
         if coupon["user_specific_email"] and coupon["user_specific_email"] != email:
             return {"error": f"Coupon '{code}' is not valid for your account"}
 
-        # Calculate cart subtotal
+        # 计算购物车小计。
         subtotal_row = await conn.fetchrow(
             """SELECT COALESCE(SUM(p.price * ci.quantity), 0) AS subtotal
                FROM cart_items ci
@@ -526,7 +523,7 @@ async def apply_coupon_to_cart(
         if subtotal == 0:
             return {"error": "Cart is empty. Add items before applying a coupon."}
 
-        # Check min spend
+        # 检查最低消费金额。
         min_spend = float(coupon["min_spend"]) if coupon["min_spend"] else 0
         if subtotal < min_spend:
             return {
@@ -535,22 +532,22 @@ async def apply_coupon_to_cart(
                 ): f"Cart subtotal (${subtotal:.2f}) does not meet minimum spend of ${min_spend:.2f} for this coupon."
             }
 
-        # Calculate discount
+        # 计算折扣。
         discount_value = float(coupon["discount_value"])
         if coupon["discount_type"] == "percentage":
             discount = subtotal * (discount_value / 100)
-            # Apply max_discount cap
+            # 应用 max_discount 上限。
             if coupon["max_discount"]:
                 max_disc = float(coupon["max_discount"])
                 discount = min(discount, max_disc)
         else:
-            # Fixed discount
+            # 固定金额优惠。
             discount = min(discount_value, subtotal)
 
         discount = round(discount, 2)
         new_total = round(subtotal - discount, 2)
 
-        # Save coupon and discount on cart
+        # 将优惠券和折扣保存到购物车。
         await conn.execute(
             """UPDATE carts
                SET coupon_code = $2, discount_amount = $3, updated_at = NOW()
@@ -560,7 +557,7 @@ async def apply_coupon_to_cart(
             discount,
         )
 
-        # Increment usage counter
+        # 增加使用计数。
         await conn.execute(
             "UPDATE coupons SET times_used = times_used + 1 WHERE id = $1",
             coupon["id"],

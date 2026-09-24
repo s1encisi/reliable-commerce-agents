@@ -1,20 +1,18 @@
-"""MCP Server — Inventory & Fulfillment domain.
+"""MCP 服务 —— 库存与履约领域。
 
-Exposes stock levels, warehouse availability, restock schedules, shipping
-estimates, and carrier comparison via the Model Context Protocol (MCP 1.x,
-streamable HTTP transport).
+通过 MCP（Model Context Protocol，模型上下文协议）1.x 的 streamable HTTP
+传输暴露库存水平、仓库可用性、补货计划、运费估算以及承运商对比。
 
-Any MCP-compatible agent or framework can call these tools without custom
-integration — the MCP protocol handles discovery, schema validation, and
-tool dispatch automatically.
+任何兼容 MCP 的智能体或框架都能调用这些工具，无需定制集成 —— MCP 协议
+会自动处理工具发现、schema 校验和调用分发。
 
-Run standalone (stdio for MCP Inspector):
+独立运行（供 MCP Inspector 使用的 stdio）：
     uv run python -m ecommerce_mcp_inventory.server
 
-Run as HTTP service (for uvicorn in Docker Compose):
+作为 HTTP 服务运行（供 Docker Compose 中的 uvicorn 使用）：
     uvicorn ecommerce_mcp_inventory.server:app --host 0.0.0.0 --port 9001
 
-Run via console script (installed):
+通过已安装的 console script 运行：
     ecommerce-mcp-inventory
 """
 
@@ -35,7 +33,7 @@ DATABASE_URL = os.environ.get(
     "postgresql://ecommerce:ecommerce_secret@localhost:5432/ecommerce_agents",
 )
 
-# OAuth 2.1 resource-server mode (optional — off by default, unchanged quick-start).
+# OAuth 2.1 资源服务器模式（可选 —— 默认关闭，快速上手流程不变）。
 MCP_AUTH_ENABLED = os.environ.get("MCP_AUTH_ENABLED", "false").lower() == "true"
 
 _pool: asyncpg.Pool | None = None
@@ -60,13 +58,13 @@ _mcp_kwargs: dict = {
         "shipping estimates across the East, Central, and West regional warehouses."
     ),
     "lifespan": _lifespan,
-    # FastMCP auto-enables DNS-rebinding Host-header protection whenever
-    # `host` is left at its default "127.0.0.1", allowlisting only
-    # localhost/127.0.0.1/::1 — which silently 421s every real call over
-    # the Docker network (e.g. a specialist calling http://mcp-inventory:9001).
-    # This app is actually served via `uvicorn ... --host 0.0.0.0`
-    # (see main()/the Dockerfile CMD), so declare that explicitly here too —
-    # `host="127.0.0.1"` was never accurate for how this process really runs.
+    # 只要 `host` 保持默认的 "127.0.0.1"，FastMCP 就会自动启用
+    # DNS 重绑定 Host 头保护，且仅把 localhost/127.0.0.1/::1 加入白名单 ——
+    # 这会让经由 Docker 网络发起的每一次真实调用都被静默地返回 421
+    # （例如某个专业智能体调用 http://mcp-inventory:9001）。
+    # 本应用实际上是经 `uvicorn ... --host 0.0.0.0` 提供服务的
+    # （参见 main()/Dockerfile 的 CMD），所以这里也显式声明该值 ——
+    # `host="127.0.0.1"` 从来就不符合该进程真实的运行方式。
     "host": "0.0.0.0",
 }
 
@@ -97,12 +95,12 @@ def _get_pool() -> asyncpg.Pool:
     return _pool
 
 
-# ─────────────────────── Tools ──────────────────────────────────────────────
+# ─────────────────────── 工具 ──────────────────────────────────────────────
 
 
 @mcp.tool()
 async def check_stock(product_id: Annotated[str, "UUID of the product to check"]) -> dict:
-    """Check live stock levels across all regional warehouses for a product."""
+    """查询某商品在所有区域仓库的实时库存水平。"""
     async with _get_pool().acquire() as conn:
         rows = await conn.fetch(
             """SELECT w.name as warehouse, w.region, wi.quantity, wi.reorder_threshold
@@ -137,7 +135,7 @@ async def check_stock(product_id: Annotated[str, "UUID of the product to check"]
 async def get_warehouse_availability(
     product_id: Annotated[str, "UUID of the product"],
 ) -> dict:
-    """Get warehouse inventory and upcoming restock schedule for a product."""
+    """获取某商品的仓库库存以及即将到来的补货计划。"""
     async with _get_pool().acquire() as conn:
         inventory = await conn.fetch(
             """SELECT w.name, w.region, w.location, wi.quantity, wi.reorder_threshold
@@ -181,7 +179,7 @@ async def get_warehouse_availability(
 async def get_restock_schedule(
     product_id: Annotated[str, "UUID of the product"],
 ) -> list[dict]:
-    """Get upcoming restock dates and quantities across all warehouses."""
+    """获取所有仓库即将到来的补货日期与数量。"""
     async with _get_pool().acquire() as conn:
         rows = await conn.fetch(
             """SELECT w.name as warehouse, w.region, rs.expected_quantity, rs.expected_date
@@ -207,7 +205,7 @@ async def estimate_shipping(
     product_id: Annotated[str, "UUID of the product"],
     destination_region: Annotated[str, "Destination region: east, central, or west"],
 ) -> dict:
-    """Estimate shipping cost and delivery time from the nearest stocked warehouse."""
+    """估算从最近的有货仓库发货的运费与送达时间。"""
     async with _get_pool().acquire() as conn:
         source = await conn.fetchrow(
             """SELECT w.region
@@ -257,7 +255,7 @@ async def compare_carriers(
     region_from: Annotated[str, "Origin region: east, central, or west"],
     region_to: Annotated[str, "Destination region: east, central, or west"],
 ) -> list[dict]:
-    """Compare all carriers between two regions with pricing and estimated delivery times."""
+    """对比两个区域之间的所有承运商，含价格与预计送达时间。"""
     async with _get_pool().acquire() as conn:
         rows = await conn.fetch(
             """SELECT c.name as carrier, c.speed_tier, sr.price,
@@ -280,15 +278,15 @@ async def compare_carriers(
         ]
 
 
-# ─────────────────────── ASGI entry-point ───────────────────────────────────
+# ─────────────────────── ASGI 入口点 ───────────────────────────────────
 
-# Starlette ASGI app — used by uvicorn in Docker Compose and local dev.
-# MAF's MCPStreamableHTTPTool connects to the /mcp endpoint exposed here.
+# Starlette ASGI 应用 —— 供 Docker Compose 中的 uvicorn 以及本地开发使用。
+# MAF 的 MCPStreamableHTTPTool 连接到此处暴露的 /mcp 端点。
 app = mcp.streamable_http_app()
 
 
 def main() -> None:
-    """Console script entry-point. Runs the HTTP server via uvicorn."""
+    """Console script 入口点。通过 uvicorn 运行 HTTP 服务。"""
     import uvicorn
 
     port = int(os.environ.get("PORT", "9001"))
@@ -296,5 +294,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    # stdio transport for local testing with MCP Inspector
+    # stdio 传输，用于配合 MCP Inspector 做本地测试
     mcp.run()

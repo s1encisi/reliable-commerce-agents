@@ -2,6 +2,7 @@ import { Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AgentMeta, AgentTool } from "@/lib/agents";
 
+/** 单个工具卡片；工具名为代码标识符，保持英文原样并用等宽字体呈现。 */
 function ToolCard({ tool, accentText, accentBg }: { tool: AgentTool; accentText: string; accentBg: string }) {
   return (
     <div className="rounded-xl bg-card p-4 ring-1 ring-foreground/10 transition-shadow hover:shadow-sm">
@@ -22,11 +23,12 @@ interface ToolGridProps {
   agent: AgentMeta;
 }
 
+/** 智能体可调用工具的网格展示，标题旁显示工具数量。 */
 export function ToolGrid({ agent }: ToolGridProps) {
   return (
     <section>
       <h2 className="mb-3 text-sm font-semibold text-foreground">
-        Tools
+        工具
         <span className="ml-2 rounded-full bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
           {agent.tools.length}
         </span>

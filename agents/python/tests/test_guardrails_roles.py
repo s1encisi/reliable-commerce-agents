@@ -1,7 +1,6 @@
-"""Unit tests for tool-level role enforcement (Track A4). No LLM/DB.
+"""工具角色授权测试。
 
-Covers the decorator + guard-clause behavior AND that the decorator composes
-under MAF's ``@tool`` without losing the function signature (plan Risk #1).
+覆盖装饰器、守卫及 @tool 组合后的签名保留，不使用外部服务。
 """
 
 from __future__ import annotations
@@ -56,7 +55,7 @@ async def test_disabled_bypasses(monkeypatch) -> None:
 
 
 def test_decorator_preserves_signature() -> None:
-    # functools.wraps keeps name + signature so MAF @tool can introspect.
+    # wraps 保留名称与签名，供 MAF 读取。
     assert _sample.__name__ == "_sample"
     assert "x" in inspect.signature(_sample).parameters
 
@@ -69,14 +68,14 @@ def test_composes_under_tool_decorator() -> None:
     ) -> dict:
         return {"ok": x}
 
-    # MAF wraps it into a tool object that still advertises its name and an 'x'
-    # parameter in its schema (i.e. the role decorator did not erase the sig).
+    # 工具对象仍需保留名称及 x 参数模式，
+    # 证明角色装饰器没有擦除函数签名。
     assert getattr(sample_tool, "name", None) == "sample_tool"
     blob = repr(getattr(sample_tool, "parameters", sample_tool))
     assert "x" in blob
 
 
-# ── guard-clause helper ──────────────────────────────────────────────
+# 守卫辅助函数
 
 
 async def test_ensure_role_allows() -> None:

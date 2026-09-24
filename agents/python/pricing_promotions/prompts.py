@@ -1,4 +1,4 @@
-"""Pricing & Promotions agent system prompt — loaded from YAML config."""
+"""定价与促销智能体的系统提示词 —— 从 YAML 配置加载。"""
 
 from shared.prompt_loader import load_prompt
 
@@ -7,5 +7,5 @@ def get_system_prompt(user_role: str = "customer") -> str:
     return load_prompt("pricing-promotions", user_role)
 
 
-# Backward compatibility
+# 向后兼容
 SYSTEM_PROMPT = get_system_prompt()

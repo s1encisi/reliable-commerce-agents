@@ -9,7 +9,7 @@ import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { openCommandPalette } from "@/components/command-palette";
 import { labelForPath } from "@/lib/nav";
 
-/** Desktop top app bar: breadcrumb + global search + theme toggle + avatar. */
+/** 桌面端顶部应用栏：面包屑 + 全局搜索 + 主题切换 + 头像。 */
 export function TopBar() {
   const pathname = usePathname();
   const { user } = useAuth();
@@ -26,8 +26,8 @@ export function TopBar() {
 
   return (
     <header className="hidden h-14 shrink-0 items-center gap-3 border-b bg-background px-4 lg:flex">
-      <nav className="flex items-center gap-1.5 text-sm" aria-label="Breadcrumb">
-        <span className="text-muted-foreground">E-Commerce Agents</span>
+      <nav className="flex items-center gap-1.5 text-sm" aria-label="面包屑">
+        <span className="text-muted-foreground">可靠电商多智能体平台</span>
         <ChevronRight className="size-3.5 text-muted-foreground/50" />
         <span className="font-medium">{title}</span>
       </nav>
@@ -37,10 +37,10 @@ export function TopBar() {
           type="button"
           onClick={openCommandPalette}
           className="flex items-center gap-2 rounded-lg border bg-muted/40 px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted"
-          aria-label="Search (Cmd+K)"
+          aria-label="搜索（⌘K）"
         >
           <Search className="size-4" />
-          <span className="hidden md:inline">Search…</span>
+          <span className="hidden md:inline">搜索…</span>
           <kbd className="ml-2 hidden rounded border bg-background px-1.5 py-0.5 text-[10px] md:inline">
             ⌘K
           </kbd>
@@ -50,7 +50,7 @@ export function TopBar() {
 
         <Link
           href="/profile"
-          aria-label="Profile"
+          aria-label="个人中心"
           className="rounded-full ring-offset-background transition hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Avatar className="size-8">

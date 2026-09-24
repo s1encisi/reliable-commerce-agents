@@ -1,15 +1,7 @@
-"""The cost estimate leaves the process as a metric, not only as a log line.
+"""验证费用估算实际成为可读取的指标。
 
-``shared/telemetry.py`` has exposed ``get_meter()`` since telemetry was wired
-up and nothing ever called it — every metric on the dashboard came from MAF's
-or FastAPI's instrumentation. Cost is the one number this application knows
-and they do not, and it was reachable only by grepping logs, which is not
-something an OTLP sink can alert on.
-
-These use a real in-memory ``MeterProvider`` rather than a mock: the failure
-worth catching is an instrument that is *built* but bound to the wrong (no-op)
-provider, and a mock asserts the call happened while proving nothing about
-whether a reader would ever see it.
+使用真实内存 MeterProvider，而非模拟方法调用，确保指标未错误绑定
+空操作提供器；只证明创建动作发生不足以证明读者能看到数值。
 """
 
 from __future__ import annotations
@@ -24,12 +16,12 @@ from shared.config import settings
 
 @pytest.fixture
 def reader(monkeypatch: pytest.MonkeyPatch) -> InMemoryMetricReader:
-    """Install a real SDK MeterProvider and hand back its reader."""
+    """安装真实 SDK MeterProvider，返回对应读取器。"""
     reader = InMemoryMetricReader()
     provider = MeterProvider(metric_readers=[reader])
-    # Patched at this repo's own seam rather than OTel's global provider:
-    # set_meter_provider is process-wide and one-shot, so a test that used it
-    # would leak into every later test in the session.
+    # 在项目接口处替换，不修改 OTel 全局提供器。
+    # 全局 set_meter_provider 只能设置一次，
+    # 会污染后续测试。
     import shared.telemetry
 
     monkeypatch.setattr(shared.telemetry, "get_meter", provider.get_meter)
@@ -63,8 +55,7 @@ def test_a_priced_turn_reaches_a_reader(reader: InMemoryMetricReader) -> None:
 
 
 def test_turns_accumulate_rather_than_overwrite(reader: InMemoryMetricReader) -> None:
-    """A Counter is the right instrument: spend is monotonic within a process,
-    and an alert wants the delta over a window, not the last turn's price."""
+    """费用在进程内单调累加，用 Counter 便于按窗口差值告警。"""
     for _ in range(3):
         cost_metrics.record_llm_turn_cost(0.01, model="gpt-4.1", tokens_in=10, tokens_out=5)
 
@@ -74,8 +65,7 @@ def test_turns_accumulate_rather_than_overwrite(reader: InMemoryMetricReader) ->
 
 
 def test_tokens_are_split_by_direction(reader: InMemoryMetricReader) -> None:
-    """Cost is derived from tokens through a hand-edited price table. When
-    spend jumps, only the raw counts say whether traffic or pricing moved."""
+    """同时记录原始 token 数，区分用量变化和价格表变化。"""
     cost_metrics.record_llm_turn_cost(0.01, model="gpt-4.1", tokens_in=1000, tokens_out=250)
 
     by_direction = {p.attributes["direction"]: p.value for p in _points(reader, "ecommerce.llm.tokens")}
@@ -83,9 +73,7 @@ def test_tokens_are_split_by_direction(reader: InMemoryMetricReader) -> None:
 
 
 def test_no_user_scoped_attribute_is_ever_attached(reader: InMemoryMetricReader) -> None:
-    """One time series per customer is both a metrics-cost problem and a way to
-    leak identity into a backend with no business holding it. The signature has
-    no parameter for it — this pins that no future edit adds one quietly."""
+    """禁止按客户创建指标序列，避免高基数成本和身份泄露。"""
     cost_metrics.record_llm_turn_cost(
         0.01, model="gpt-4.1", tokens_in=10, tokens_out=5, agent="orchestrator", mode="observe"
     )
@@ -95,9 +83,7 @@ def test_no_user_scoped_attribute_is_ever_attached(reader: InMemoryMetricReader)
 
 
 def test_recording_is_a_no_op_when_telemetry_is_off(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Nothing may be built when OTEL_ENABLED is false — instruments bound to
-    the default no-op provider would be silently discarded anyway, and the
-    lazy build exists precisely to avoid binding before configure_telemetry."""
+    """遥测关闭时不能创建指标，避免绑定尚未初始化的空操作提供器。"""
     monkeypatch.setattr(settings, "OTEL_ENABLED", False)
     cost_metrics._reset_for_tests()
 
@@ -109,8 +95,7 @@ def test_recording_is_a_no_op_when_telemetry_is_off(monkeypatch: pytest.MonkeyPa
 def test_a_broken_metrics_backend_cannot_fail_a_request(
     reader: InMemoryMetricReader, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A misconfigured sink is an operations problem, not a reason a customer's
-    question errors."""
+    """接收端配置错误不能导致客户请求失败。"""
     instruments = cost_metrics._get_instruments()
 
     class _Exploding:

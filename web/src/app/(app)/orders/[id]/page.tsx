@@ -50,7 +50,7 @@ import { getReturnIntent, currentReturnIntent, clearReturnIntent } from "@/lib/r
 import type { ReturnOperation } from "@/lib/return-operation";
 
 // ---------------------------------------------------------------------------
-// Types
+// 类型
 // ---------------------------------------------------------------------------
 
 interface StatusHistoryEntry {
@@ -116,19 +116,19 @@ interface OrderDetail {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// 辅助函数
 // ---------------------------------------------------------------------------
 
 function formatPrice(price: number): string {
-  return new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat("zh-CN", {
     style: "currency",
-    currency: "USD",
+    currency: "CNY",
   }).format(price);
 }
 
 function formatDate(dateStr: string): string {
   try {
-    return new Date(dateStr).toLocaleDateString("en-US", {
+    return new Date(dateStr).toLocaleDateString("zh-CN", {
       year: "numeric",
       month: "short",
       day: "numeric",
@@ -140,7 +140,7 @@ function formatDate(dateStr: string): string {
 
 function formatTimestamp(dateStr: string): string {
   try {
-    return new Date(dateStr).toLocaleString("en-US", {
+    return new Date(dateStr).toLocaleString("zh-CN", {
       month: "short",
       day: "numeric",
       hour: "2-digit",
@@ -159,37 +159,37 @@ const STATUS_CONFIG: Record<
     color: "border-blue-200 bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300 dark:border-blue-500/30",
     dotColor: "bg-blue-500",
     icon: Clock,
-    label: "Placed",
+    label: "已下单",
   },
   confirmed: {
     color: "border-indigo-200 bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300 dark:border-indigo-500/30",
     dotColor: "bg-indigo-500",
     icon: CheckCircle,
-    label: "Confirmed",
+    label: "已确认",
   },
   shipped: {
     color: "border-amber-200 bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30",
     dotColor: "bg-amber-500",
     icon: Truck,
-    label: "Shipped",
+    label: "已发货",
   },
   delivered: {
     color: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30",
     dotColor: "bg-emerald-500",
     icon: CheckCircle,
-    label: "Delivered",
+    label: "已送达",
   },
   returned: {
     color: "border-orange-200 bg-orange-50 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300 dark:border-orange-500/30",
     dotColor: "bg-orange-500",
     icon: RotateCcw,
-    label: "Returned",
+    label: "已退货",
   },
   cancelled: {
     color: "border-red-200 bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-300 dark:border-red-500/30",
     dotColor: "bg-red-500",
     icon: XCircle,
-    label: "Cancelled",
+    label: "已取消",
   },
 };
 
@@ -206,7 +206,7 @@ function getStatusConfig(status: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Status Timeline
+// 状态时间线
 // ---------------------------------------------------------------------------
 
 function StatusTimeline({ history }: { history: StatusHistoryEntry[] }) {
@@ -221,12 +221,12 @@ function StatusTimeline({ history }: { history: StatusHistoryEntry[] }) {
 
         return (
           <div key={idx} className="relative flex gap-4 pb-6 last:pb-0">
-            {/* Vertical line */}
+            {/* 竖线 */}
             {!isLast && (
               <div className="absolute left-[11px] top-6 h-[calc(100%-12px)] w-0.5 bg-border" />
             )}
 
-            {/* Dot */}
+            {/* 圆点 */}
             <div
               className={`relative z-10 mt-1 size-6 shrink-0 rounded-full border-2 ${
                 isLatest
@@ -242,7 +242,7 @@ function StatusTimeline({ history }: { history: StatusHistoryEntry[] }) {
               )}
             </div>
 
-            {/* Content */}
+            {/* 内容 */}
             <div className="flex-1 min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <span
@@ -274,7 +274,7 @@ function StatusTimeline({ history }: { history: StatusHistoryEntry[] }) {
 }
 
 // ---------------------------------------------------------------------------
-// Skeleton
+// 骨架屏
 // ---------------------------------------------------------------------------
 
 function DetailSkeleton() {
@@ -298,7 +298,7 @@ function DetailSkeleton() {
 }
 
 // ---------------------------------------------------------------------------
-// Page
+// 页面
 // ---------------------------------------------------------------------------
 
 export default function OrderDetailPage() {
@@ -313,12 +313,12 @@ export default function OrderDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Cancel order state
+  // 取消订单状态
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelling, setCancelling] = useState(false);
 
-  // Return order state
+  // 退货状态
   const [returnOpen, setReturnOpen] = useState(false);
   const [returnReason, setReturnReason] = useState("");
   const [refundMethod, setRefundMethod] = useState<"original_payment" | "store_credit">("original_payment");
@@ -336,7 +336,7 @@ export default function OrderDetailPage() {
       setOrder(data);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to load order"
+        err instanceof Error ? err.message : "订单加载失败"
       );
     } finally {
       setLoading(false);
@@ -357,7 +357,7 @@ export default function OrderDetailPage() {
       toastOrderCancelled(orderId);
       await loadOrder();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to cancel order");
+      setError(err instanceof Error ? err.message : "取消订单失败");
     } finally {
       setCancelling(false);
     }
@@ -365,7 +365,7 @@ export default function OrderDetailPage() {
 
   const showReturnResult = async (result: ReturnOperation) => {
     setReturnOutcome(result.outcome);
-    setReturnFeedback(result.message ?? result.status ?? "Request status received.");
+    setReturnFeedback(result.message ?? result.status ?? "已收到请求状态。");
     if (result.success !== false && result.return_id && (result.outcome === "SUCCEEDED" || result.status === "requested")) {
       toastReturnInitiated(result.return_id);
       setReturnOpen(false);
@@ -381,7 +381,7 @@ export default function OrderDetailPage() {
       const id = await getReturnIntent(user.email, orderId, returnReason, refundMethod);
       await showReturnResult(await api.initiateReturn(orderId, returnReason, refundMethod, id));
     } catch (err) {
-      setReturnFeedback(err instanceof Error ? err.message : "Result not confirmed. Check request status before retrying.");
+      setReturnFeedback(err instanceof Error ? err.message : "结果未确认。请在重试前查看请求状态。");
       if (err instanceof ApiError) setReturnOutcome(String(err.data.outcome ?? "UNKNOWN"));
     } finally {
       setReturning(false);
@@ -391,12 +391,12 @@ export default function OrderDetailPage() {
   const checkReturnStatus = async () => {
     if (!user) return;
     const id = currentReturnIntent(user.email, orderId);
-    if (!id) { setReturnFeedback("No saved return request for this order."); return; }
+    if (!id) { setReturnFeedback("该订单没有已保存的退货申请。"); return; }
     try {
       setReturning(true);
       await showReturnResult(await api.returnOperation(id));
     } catch (err) {
-      setReturnFeedback(err instanceof Error ? err.message : "Status could not be confirmed. Please try again.");
+      setReturnFeedback(err instanceof Error ? err.message : "无法确认状态，请重试。");
     } finally { setReturning(false); }
   };
 
@@ -406,10 +406,10 @@ export default function OrderDetailPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
+      {/* 页头 */}
       <div className="border-b border-border bg-card">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-          {/* Back button */}
+          {/* 返回按钮 */}
           <Button
             variant="ghost"
             size="sm"
@@ -417,7 +417,7 @@ export default function OrderDetailPage() {
             onClick={() => router.push("/orders")}
           >
             <ArrowLeft className="mr-1.5 size-4" />
-            Back to Orders
+            返回订单列表
           </Button>
 
           {loading && <DetailSkeleton />}
@@ -432,18 +432,18 @@ export default function OrderDetailPage() {
               <div>
                 <div className="flex flex-wrap items-center gap-3">
                   <h1 className="text-2xl font-bold text-foreground">
-                    Order #{order.id}
+                    订单 #{order.id}
                   </h1>
                   <Badge variant="outline" className={statusCfg.color}>
                     {statusCfg.label}
                   </Badge>
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Placed on {formatDate(order.date)}
+                  下单时间 {formatDate(order.date)}
                 </p>
               </div>
 
-              {/* Cancel / Return action buttons */}
+              {/* 取消/退货操作按钮 */}
               <div className="flex items-center gap-2">
                 {(order.status === "placed" || order.status === "confirmed") && (
                   <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
@@ -451,20 +451,20 @@ export default function OrderDetailPage() {
                       render={
                         <Button variant="outline" className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700">
                           <Ban className="mr-1.5 size-4" />
-                          Cancel Order
+                          取消订单
                         </Button>
                       }
                     />
                     <DialogContent>
                       <DialogHeader>
-                        <DialogTitle>Cancel Order</DialogTitle>
+                        <DialogTitle>取消订单</DialogTitle>
                       </DialogHeader>
                       <div className="space-y-4 pt-2">
                         <div className="space-y-2">
-                          <Label htmlFor="cancel-reason">Reason for cancellation</Label>
+                          <Label htmlFor="cancel-reason">取消原因</Label>
                           <Textarea
                             id="cancel-reason"
-                            placeholder="Tell us why you want to cancel this order..."
+                            placeholder="请说明您取消该订单的原因…"
                             value={cancelReason}
                             onChange={(e) => setCancelReason(e.target.value)}
                             rows={3}
@@ -476,7 +476,7 @@ export default function OrderDetailPage() {
                           onClick={handleCancelOrder}
                         >
                           {cancelling && <Loader2 className="mr-2 size-4 animate-spin" />}
-                          Confirm Cancellation
+                          确认取消
                         </Button>
                       </div>
                     </DialogContent>
@@ -489,28 +489,28 @@ export default function OrderDetailPage() {
                       render={
                         <Button variant="outline" className="border-orange-200 text-orange-600 hover:bg-orange-50 hover:text-orange-700">
                           <RotateCcw className="mr-1.5 size-4" />
-                          Return Order
+                          退货
                         </Button>
                       }
                     />
                     <DialogContent>
                       <DialogHeader>
-                        <DialogTitle>Return Order</DialogTitle>
+                        <DialogTitle>退货</DialogTitle>
                       </DialogHeader>
                       <div className="space-y-4 pt-2">
                         <div className="space-y-2">
-                          <Label htmlFor="return-reason">Reason for return</Label>
+                          <Label htmlFor="return-reason">退货原因</Label>
                           <Textarea
                             id="return-reason"
                             maxLength={255}
-                            placeholder="Tell us why you want to return this order..."
+                            placeholder="请说明您要退货的原因…"
                             value={returnReason}
                             onChange={(e) => setReturnReason(e.target.value)}
                             rows={3}
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label>Refund method</Label>
+                          <Label>退款方式</Label>
                           <div className="flex gap-2">
                             <Button
                               type="button"
@@ -519,7 +519,7 @@ export default function OrderDetailPage() {
                               className={refundMethod === "original_payment" ? "bg-primary hover:opacity-90" : ""}
                               onClick={() => setRefundMethod("original_payment")}
                             >
-                              Original Payment
+                              原路退回
                             </Button>
                             <Button
                               type="button"
@@ -528,7 +528,7 @@ export default function OrderDetailPage() {
                               className={refundMethod === "store_credit" ? "bg-primary hover:opacity-90" : ""}
                               onClick={() => setRefundMethod("store_credit")}
                             >
-                              Store Credit
+                              退至平台余额
                             </Button>
                           </div>
                         </div>
@@ -538,18 +538,18 @@ export default function OrderDetailPage() {
                           onClick={handleReturnOrder}
                         >
                           {returning && <Loader2 className="mr-2 size-4 animate-spin" />}
-                          Submit Return
+                          提交退货申请
                         </Button>
                         <Button variant="outline" disabled={returning} onClick={checkReturnStatus}>
-                          Check request status
+                          查看请求状态
                         </Button>
                         {returnFeedback && <p role="status" className="text-sm text-muted-foreground">{returnFeedback}</p>}
                         {returnOutcome === "REJECTED" && (
                           <Button variant="ghost" disabled={returning} onClick={() => {
                             if (user) clearReturnIntent(user.email, orderId);
                             setReturnOutcome(undefined);
-                            setReturnFeedback("A new request will re-check the current order and policy.");
-                          }}>Start a new request</Button>
+                            setReturnFeedback("新建申请将重新校验当前订单与退货政策。");
+                          }}>发起新申请</Button>
                         )}
                       </div>
                     </DialogContent>
@@ -561,7 +561,7 @@ export default function OrderDetailPage() {
         </div>
       </div>
 
-      {/* Order Placed Confirmation Banner */}
+      {/* 下单成功提示条 */}
       {justPlaced && !loading && !error && order && (
         <div className="border-b border-emerald-200 bg-emerald-50">
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
@@ -569,10 +569,10 @@ export default function OrderDetailPage() {
               <CheckCircle className="size-5 text-emerald-600 shrink-0" />
               <div>
                 <p className="font-medium text-emerald-800">
-                  Order placed successfully!
+                  下单成功！
                 </p>
                 <p className="text-sm text-emerald-600">
-                  Your order is being processed.
+                  您的订单正在处理中。
                 </p>
               </div>
             </div>
@@ -582,23 +582,23 @@ export default function OrderDetailPage() {
               className="shrink-0 border-emerald-300 text-emerald-700 hover:bg-emerald-100"
               onClick={() => router.push("/products")}
             >
-              Continue Shopping
+              继续购物
             </Button>
           </div>
         </div>
       )}
 
-      {/* Content */}
+      {/* 内容区 */}
       {!loading && !error && order && (
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <div className="grid gap-8 lg:grid-cols-3">
-            {/* Left column: timeline, items */}
+            {/* 左列：时间线与商品 */}
             <div className="space-y-8 lg:col-span-2">
-              {/* Status Timeline */}
+              {/* 状态时间线 */}
               {order.status_history && order.status_history.length > 0 && (
                 <Card>
                   <CardHeader>
-                    <CardTitle>Order Status</CardTitle>
+                    <CardTitle>订单状态</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <StatusTimeline history={order.status_history} />
@@ -606,11 +606,11 @@ export default function OrderDetailPage() {
                 </Card>
               )}
 
-              {/* Order Items */}
+              {/* 订单商品 */}
               <Card>
                 <CardHeader>
                   <CardTitle>
-                    Items ({order.items.length})
+                    商品（{order.items.length}）
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -618,14 +618,14 @@ export default function OrderDetailPage() {
                     <TableHeader>
                       <TableRow className="hover:bg-transparent">
                         <TableHead className="w-12"></TableHead>
-                        <TableHead>Product</TableHead>
-                        <TableHead>Category</TableHead>
-                        <TableHead className="text-right">Qty</TableHead>
+                        <TableHead>商品</TableHead>
+                        <TableHead>品类</TableHead>
+                        <TableHead className="text-right">数量</TableHead>
                         <TableHead className="text-right">
-                          Unit Price
+                          单价
                         </TableHead>
                         <TableHead className="text-right">
-                          Subtotal
+                          小计
                         </TableHead>
                       </TableRow>
                     </TableHeader>
@@ -674,15 +674,15 @@ export default function OrderDetailPage() {
               </Card>
             </div>
 
-            {/* Right column: shipping, summary, return */}
+            {/* 右列：配送、摘要、退货 */}
             <div className="space-y-6">
-              {/* Shipping Info */}
+              {/* 配送信息 */}
               {order.shipping_address && (
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <MapPin className="size-4 text-muted-foreground" />
-                      Shipping
+                      配送信息
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
@@ -712,11 +712,11 @@ export default function OrderDetailPage() {
                       </>
                     )}
 
-                    {/* Billing Address */}
+                    {/* 账单地址 */}
                     <Separator />
                     <div className="space-y-1">
                       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Billing Address
+                        账单地址
                       </p>
                       {order.billing_address &&
                        (order.billing_address.street !== order.shipping_address.street ||
@@ -738,7 +738,7 @@ export default function OrderDetailPage() {
                         </div>
                       ) : (
                         <p className="text-sm text-muted-foreground italic">
-                          Same as shipping address
+                          与收货地址相同
                         </p>
                       )}
                     </div>
@@ -746,21 +746,21 @@ export default function OrderDetailPage() {
                 </Card>
               )}
 
-              {/* Order Summary */}
+              {/* 订单摘要 */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Order Summary</CardTitle>
+                  <CardTitle>订单摘要</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="text-muted-foreground">小计</span>
                     <span className="text-muted-foreground">
                       {formatPrice(order.items?.reduce((sum: number, i: OrderItem) => sum + i.subtotal, 0) ?? 0)}
                     </span>
                   </div>
                   {order.discount > 0 && (
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Discount</span>
+                      <span className="text-muted-foreground">优惠</span>
                       <span className="text-emerald-600">
                         -{formatPrice(order.discount)}
                       </span>
@@ -769,7 +769,7 @@ export default function OrderDetailPage() {
                   <Separator />
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-muted-foreground">
-                      Total
+                      合计
                     </span>
                     <span className="text-lg font-bold text-foreground">
                       {formatPrice(order.total)}
@@ -778,25 +778,25 @@ export default function OrderDetailPage() {
                 </CardContent>
               </Card>
 
-              {/* Return Info */}
+              {/* 退货信息 */}
               {order["return"] && (
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <RotateCcw className="size-4 text-orange-500" />
-                      Return Information
+                      退货信息
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div className="space-y-2">
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Reason</span>
+                        <span className="text-muted-foreground">原因</span>
                         <span className="text-muted-foreground">
                           {(order["return"] as ReturnInfo).reason}
                         </span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Status</span>
+                        <span className="text-muted-foreground">状态</span>
                         <Badge
                           variant="outline"
                           className="border-orange-200 bg-orange-50 text-orange-700"
@@ -805,14 +805,14 @@ export default function OrderDetailPage() {
                         </Badge>
                       </div>
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Refund Method</span>
+                        <span className="text-muted-foreground">退款方式</span>
                         <span className="text-muted-foreground">
                           {(order["return"] as ReturnInfo).refund_method}
                         </span>
                       </div>
                       {(order["return"] as ReturnInfo).refund_amount != null && (
                         <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">Refund Amount</span>
+                          <span className="text-muted-foreground">退款金额</span>
                           <span className="font-medium text-emerald-600">
                             {formatPrice((order["return"] as ReturnInfo).refund_amount!)}
                           </span>
@@ -826,7 +826,7 @@ export default function OrderDetailPage() {
                         <div className="space-y-1.5">
                           {(order["return"] as ReturnInfo).created_at && (
                             <div className="flex items-center justify-between text-xs text-muted-foreground">
-                              <span>Return initiated</span>
+                              <span>退货发起时间</span>
                               <span>
                                 {formatDate((order["return"] as ReturnInfo).created_at!)}
                               </span>
@@ -834,7 +834,7 @@ export default function OrderDetailPage() {
                           )}
                           {(order["return"] as ReturnInfo).resolved_at && (
                             <div className="flex items-center justify-between text-xs text-muted-foreground">
-                              <span>Refund processed</span>
+                              <span>退款完成时间</span>
                               <span>
                                 {formatDate((order["return"] as ReturnInfo).resolved_at!)}
                               </span>
@@ -844,7 +844,7 @@ export default function OrderDetailPage() {
                       </>
                     )}
 
-                    {/* Return Label Download */}
+                    {/* 下载退货面单 */}
                     {(order["return"] as ReturnInfo).return_label_url && (
                       <>
                         <Separator />
@@ -858,10 +858,10 @@ export default function OrderDetailPage() {
                             }}
                           >
                             <Download className="mr-2 size-4" />
-                            Download Return Label
+                            下载退货面单
                           </Button>
                           <p className="text-xs text-muted-foreground text-center">
-                            Print the return label and drop off at any carrier location
+                            打印退货面单，并到任意快递网点寄回
                           </p>
                         </div>
                       </>

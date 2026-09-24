@@ -30,12 +30,12 @@ export default function SignupPage() {
     setError("");
 
     if (!name || !email || !password) {
-      setError("All fields are required.");
+      setError("所有字段均为必填项。");
       return;
     }
 
     if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
+      setError("密码长度至少为 6 位。");
       return;
     }
 
@@ -47,7 +47,7 @@ export default function SignupPage() {
       const message =
         err instanceof Error
           ? err.message
-          : "Signup failed. Please try again.";
+          : "注册失败，请稍后重试。";
       setError(message);
     } finally {
       setIsLoading(false);
@@ -59,18 +59,18 @@ export default function SignupPage() {
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            E-Commerce Agents
+            可靠电商多智能体平台
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Create your account to get started.
+            创建账号，开始使用平台。
           </p>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Sign up</CardTitle>
+            <CardTitle className="text-lg">注册</CardTitle>
             <CardDescription>
-              Fill in the details below to create your account.
+              填写以下信息以创建您的账号。
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -82,11 +82,11 @@ export default function SignupPage() {
               )}
 
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="name">Name</Label>
+                <Label htmlFor="name">姓名</Label>
                 <Input
                   id="name"
                   type="text"
-                  placeholder="Your name"
+                  placeholder="请输入姓名"
                   autoComplete="name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -95,7 +95,7 @@ export default function SignupPage() {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">邮箱</Label>
                 <Input
                   id="email"
                   type="email"
@@ -108,11 +108,11 @@ export default function SignupPage() {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password">密码</Label>
                 <Input
                   id="password"
                   type="password"
-                  placeholder="Min. 6 characters"
+                  placeholder="至少 6 位字符"
                   autoComplete="new-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -126,16 +126,16 @@ export default function SignupPage() {
                 disabled={isLoading}
                 className="mt-2 w-full"
               >
-                {isLoading ? "Creating account..." : "Create account"}
+                {isLoading ? "正在创建账号…" : "创建账号"}
               </Button>
 
               <p className="text-center text-sm text-muted-foreground">
-                Already have an account?{" "}
+                已有账号？{" "}
                 <Link
                   href="/login"
                   className="font-medium text-primary hover:underline"
                 >
-                  Sign in
+                  登录
                 </Link>
               </p>
             </form>

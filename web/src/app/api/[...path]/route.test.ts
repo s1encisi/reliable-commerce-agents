@@ -3,11 +3,10 @@ import type { NextRequest } from "next/server";
 import { GET, POST } from "./route";
 
 /**
- * The `/api/*` proxy is the frontend's whole transport path to the
- * orchestrator, so the things that would break it silently are the things
- * worth pinning: forwarding the wrong URL, dropping `Authorization`, passing
- * through a `content-encoding` that no longer describes the body, and
- * buffering an SSE stream so the chat answer arrives in one piece at the end.
+ * `/api/*` 代理是前端通往编排服务的唯一传输路径，因此这里锁定的正是那些
+ * 一旦出错就会「静默失效」的行为：转发到错误的 URL、丢掉 `Authorization`、
+ * 透传一个已不再描述响应体的 `content-encoding`，以及把 SSE 流缓冲起来，
+ * 导致对话回答在最后才一次性送达。
  */
 
 function makeRequest(init: {
@@ -30,10 +29,9 @@ function makeRequest(init: {
 }
 
 /**
- * Stub `fetch` with the signature the proxy actually calls it with. Without
- * the cast, `vi.fn(async () => ...)` infers a zero-argument function and
- * `mock.calls[i]` collapses to an empty tuple, so every argument assertion
- * below stops type-checking.
+ * 按代理实际调用 `fetch` 的签名来打桩。若不加这个类型断言，
+ * `vi.fn(async () => ...)` 会被推断为零参数函数，`mock.calls[i]` 随之退化为
+ * 空元组，下面所有针对实参的断言都将无法通过类型检查。
  */
 function stubFetch(impl: () => Promise<Response>) {
   const spy = vi.fn(impl as unknown as (url: string, init: RequestInit) => Promise<Response>);
@@ -54,8 +52,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("api proxy", () => {
-  it("forwards method, path and query string to ORCHESTRATOR_URL", async () => {
+describe("api 代理", () => {
+  it("把方法、路径与查询串转发到 ORCHESTRATOR_URL", async () => {
     const fetchSpy = stubFetch(async () => new Response("[]", { status: 200 }));
 
     await GET(makeRequest({ pathname: "/api/orders", search: "?limit=50" }));
@@ -65,7 +63,7 @@ describe("api proxy", () => {
     expect(fetchSpy.mock.calls[0][1].method).toBe("GET");
   });
 
-  it("tolerates a trailing slash on ORCHESTRATOR_URL", async () => {
+  it("容忍 ORCHESTRATOR_URL 末尾带斜杠", async () => {
     process.env.ORCHESTRATOR_URL = "http://orchestrator:8080/";
     const fetchSpy = stubFetch(async () => new Response("[]", { status: 200 }));
 
@@ -74,7 +72,7 @@ describe("api proxy", () => {
     expect(fetchSpy.mock.calls[0][0]).toBe("http://orchestrator:8080/api/orders");
   });
 
-  it("keeps Authorization, drops hop-by-hop headers, pins accept-encoding", async () => {
+  it("保留 Authorization、丢弃逐跳首部、钉住 accept-encoding", async () => {
     const fetchSpy = stubFetch(async () => new Response("{}", { status: 200 }));
 
     await GET(
@@ -90,15 +88,14 @@ describe("api proxy", () => {
 
     const sent = fetchSpy.mock.calls[0][1].headers as Headers;
     expect(sent.get("authorization")).toBe("Bearer token-123");
-    // Pinned to identity rather than dropped: undici substitutes its own
-    // default when the header is absent, so dropping it would not actually
-    // stop the orchestrator compressing a response — including an SSE stream.
+    // 钉为 identity 而非删除：首部缺失时 undici 会替换为自己的默认值，所以
+    // 直接删掉并不能真正阻止编排服务压缩响应——包括 SSE 流。
     expect(sent.get("accept-encoding")).toBe("identity");
     expect(sent.get("connection")).toBeNull();
     expect(sent.get("host")).toBeNull();
   });
 
-  it("forwards a request body on POST and not on GET", async () => {
+  it("POST 转发请求体，GET 不转发", async () => {
     const fetchSpy = stubFetch(async () => new Response("{}", { status: 200 }));
 
     await POST(makeRequest({ method: "POST", pathname: "/api/chat/stream", body: "{}" }));
@@ -108,7 +105,7 @@ describe("api proxy", () => {
     expect(fetchSpy.mock.calls[1][1].body).toBeUndefined();
   });
 
-  it("marks SSE responses un-buffered so the chat stream stays live", async () => {
+  it("把 SSE 响应标记为不缓冲，保证对话流实时", async () => {
     stubFetch(
       async () =>
         new Response("data: hi\n\n", {
@@ -123,7 +120,7 @@ describe("api proxy", () => {
     expect(res.headers.get("cache-control")).toBe("no-cache, no-transform");
   });
 
-  it("strips response headers that no longer describe the body", async () => {
+  it("剥离已不再描述响应体的响应首部", async () => {
     stubFetch(
       async () =>
         new Response("{}", {
@@ -140,21 +137,21 @@ describe("api proxy", () => {
 
     expect(res.headers.get("content-encoding")).toBeNull();
     expect(res.headers.get("content-type")).toBe("application/json");
-    // Everything else the orchestrator sets must survive the hop.
+    // 编排服务设置的其余首部必须原样穿过这一跳。
     expect(res.headers.get("x-request-id")).toBe("abc");
   });
 
-  it("preserves the upstream status rather than flattening it", async () => {
+  it("保留上游状态码，不做归一化", async () => {
     stubFetch(async () => new Response("{}", { status: 401 }));
 
     const res = await GET(makeRequest({}));
 
-    // api.ts drives its whole refresh-and-replay path off a 401, so a proxy
-    // that turned this into a 502 would log the user out instead.
+    // api.ts 的整个「刷新并重放」流程都由 401 驱动，代理若把它变成 502，
+    // 反而会把用户登出。
     expect(res.status).toBe(401);
   });
 
-  it("answers 502 when the orchestrator is unreachable", async () => {
+  it("编排服务不可达时返回 502", async () => {
     stubFetch(async () => {
       throw new Error("ECONNREFUSED");
     });
@@ -163,10 +160,10 @@ describe("api proxy", () => {
     const res = await GET(makeRequest({}));
 
     expect(res.status).toBe(502);
-    await expect(res.json()).resolves.toEqual({ detail: "The orchestrator is unreachable." });
+    await expect(res.json()).resolves.toEqual({ detail: "无法连接编排服务。" });
   });
 
-  it("does not report a cancelled stream as a gateway failure", async () => {
+  it("不把被取消的流当作网关故障", async () => {
     stubFetch(async () => {
       throw new DOMException("The operation was aborted.", "AbortError");
     });

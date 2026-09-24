@@ -1,3 +1,5 @@
+// 标签页基础原语：基于 base-ui Tabs，提供标签列表与标签面板。
+
 "use client"
 
 import { Tabs as TabsPrimitive } from "@base-ui/react/tabs"

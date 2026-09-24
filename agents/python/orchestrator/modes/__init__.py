@@ -1,25 +1,23 @@
-"""Orchestration mode registry.
+"""编排模式注册表。
 
-``/api/chat`` and ``/api/chat/stream`` no longer hardcode "build the
-tool-router agent and run it" — they resolve a mode name to an
-:class:`OrchestrationMode` and call its ``run()``. This is what makes the
-capstone's flagship claim true: the same domain, run through the plain LLM
-tool router, MAF's ``HandoffBuilder`` mesh, MAF ``WorkflowBuilder`` fan-out/
-fan-in and sequential+HITL graphs, and a round-table debate, side by side,
-from one endpoint.
+``/api/chat`` 与 ``/api/chat/stream`` 不再硬编码「构建工具路由智能体并运行它」
+—— 它们把一个模式名解析为一个 :class:`OrchestrationMode`，然后调用它的
+``run()``。正因如此，这个毕业项目的旗舰主张才成立：同一个业务领域，
+经由普通 LLM 工具路由、MAF ``HandoffBuilder`` 网格、MAF ``WorkflowBuilder``
+扇出/扇入与顺序+人工参与图，以及一场圆桌辩论，都能从同一个端点并排运行。
 
-Six modes are registered as of this step — ``tool`` and ``handoff`` (Phase
-1.2), ``workflow:pre-purchase``/``workflow:return-replace`` (fixed MAF
-workflow graphs, previously tests-only) and ``group-chat`` (sequential
-shared-transcript debate, also previously tests-only). ``magentic`` and a
-declarative-YAML mode may land in later steps; ``get_mode()`` already
-raises a clear, named error for an unregistered mode rather than a bare
-``KeyError``, so requesting one of those early is diagnosable.
+截至本步骤共注册了六个模式 —— ``tool`` 与 ``handoff``（Phase 1.2）、
+``workflow:pre-purchase``/``workflow:return-replace``（固定的 MAF 工作流图，
+此前仅有测试）以及 ``group-chat``（顺序共享记录辩论，同样此前仅有测试）。
+``magentic`` 与声明式 YAML 模式可能在后续步骤落地；``get_mode()`` 对未注册的
+模式已经会抛出清晰、带名字的错误，而不是裸的 ``KeyError``，因此提前请求
+其中之一是可诊断的。
 """
 
 from __future__ import annotations
 
 from .base import ModeCapabilities, OrchestrationMode, RunContext
+from .decision_router import DecisionRouterMode
 from .group_chat_mode import GroupChatMode
 from .handoff_mode import HandoffMode
 from .tool_router import ToolRouterMode
@@ -27,6 +25,7 @@ from .workflow_mode import PrePurchaseMode, ReturnReplaceMode
 
 MODES: dict[str, OrchestrationMode] = {
     "tool": ToolRouterMode(),
+    "decision-router": DecisionRouterMode(),
     "handoff": HandoffMode(),
     "workflow:pre-purchase": PrePurchaseMode(),
     "workflow:return-replace": ReturnReplaceMode(),
@@ -37,16 +36,16 @@ DEFAULT_MODE = "tool"
 
 
 class UnknownModeError(ValueError):
-    """Raised by ``get_mode`` for a name not in the registry."""
+    """``get_mode`` 对不在注册表中的名字抛出的错误。"""
 
 
 def get_mode(name: str | None) -> OrchestrationMode:
-    """Resolve a mode name to its :class:`OrchestrationMode`.
+    """把模式名解析为对应的 :class:`OrchestrationMode`。
 
-    ``None`` or ``""`` resolves to :data:`DEFAULT_MODE` — callers doing the
-    full precedence chain (request body ``mode`` → ``settings.ORCHESTRATION_MODE``
-    → default) should already have substituted a real name before calling
-    this; it only defends against an explicitly blank one reaching here.
+    ``None`` 或 ``""`` 会解析为 :data:`DEFAULT_MODE` —— 执行完整优先级链
+    （请求体 ``mode`` → ``settings.ORCHESTRATION_MODE`` → 默认值）的调用方，
+    在调用本函数之前应当已经替换为真实的名字；这里只是防御一个显式为空的
+    名字抵达此处。
     """
     resolved = name or DEFAULT_MODE
     try:
@@ -59,12 +58,12 @@ def get_mode(name: str | None) -> OrchestrationMode:
 
 
 def list_modes() -> list[dict[str, object]]:
-    """Serializable mode listing for ``GET /api/orchestration/modes``."""
+    """供 ``GET /api/orchestration/modes`` 使用的可序列化模式清单。"""
     return [
         {
             "name": name,
-            "label": mode.label,
-            "description": mode.description,
+            "label": mode.label,  # UI 显示名（面向用户，中文）
+            "description": mode.description,  # UI 显示描述（面向用户，中文）
             "capabilities": mode.capabilities.__dict__,
             "default": name == DEFAULT_MODE,
         }

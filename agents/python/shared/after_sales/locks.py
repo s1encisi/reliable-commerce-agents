@@ -1,4 +1,4 @@
-"""Session locks release on disconnect: never reclaim live work by elapsed time."""
+"""会话锁在断开时释放：绝不按经过时间回收仍然存活的作业。"""
 
 import hashlib
 from collections.abc import AsyncIterator

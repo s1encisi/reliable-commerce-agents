@@ -56,7 +56,7 @@ export default function SellerProductsPage() {
       setProducts(data.products);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to load products",
+        err instanceof Error ? err.message : "商品加载失败",
       );
     } finally {
       setLoading(false);
@@ -75,10 +75,10 @@ export default function SellerProductsPage() {
         <div className="text-center">
           <Package className="mx-auto size-12 text-muted-foreground" />
           <h2 className="mt-4 text-lg font-semibold text-foreground">
-            Access Denied
+            无权访问
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Product management is only available to sellers and admins.
+            商品管理仅对商家和管理员开放。
           </p>
         </div>
       </div>
@@ -87,7 +87,7 @@ export default function SellerProductsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
+      {/* 页头 */}
       <div className="border-b border-border bg-card">
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
@@ -97,10 +97,10 @@ export default function SellerProductsPage() {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-foreground">
-                  My Products
+                  我的商品
                 </h1>
                 <p className="text-sm text-muted-foreground">
-                  {products.length} products in your catalog
+                  商品目录中共 {products.length} 件商品
                 </p>
               </div>
             </div>
@@ -112,15 +112,14 @@ export default function SellerProductsPage() {
                 }
               >
                 <Plus className="mr-2 size-4" />
-                Add Product
+                添加商品
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Coming Soon</DialogTitle>
+                  <DialogTitle>即将上线</DialogTitle>
                   <DialogDescription>
-                    Product creation is not yet available. Full seller
-                    capabilities including product creation, editing,
-                    and inventory management are on the roadmap.
+                    商品创建功能尚未开放。完整的商家能力（商品创建、编辑与库存管理）
+                    已在规划中。
                   </DialogDescription>
                 </DialogHeader>
                 <DialogFooter showCloseButton>
@@ -131,45 +130,45 @@ export default function SellerProductsPage() {
         </div>
       </div>
 
-      {/* Content */}
+      {/* 内容区 */}
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Loading */}
+        {/* 加载中 */}
         {loading && (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="size-6 animate-spin text-muted-foreground" />
           </div>
         )}
 
-        {/* Error */}
+        {/* 错误提示 */}
         {error && (
           <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             {error}
           </div>
         )}
 
-        {/* Empty */}
+        {/* 空状态 */}
         {!loading && !error && products.length === 0 && (
           <div className="py-20 text-center">
             <Package className="mx-auto size-10 text-muted-foreground" />
             <p className="mt-3 text-sm text-muted-foreground">
-              You have no products yet.
+              您还没有商品。
             </p>
           </div>
         )}
 
-        {/* Product table */}
+        {/* 商品表格 */}
         {!loading && !error && products.length > 0 && (
           <Card>
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[60px]">Image</TableHead>
-                    <TableHead>Product</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead className="text-right">Price</TableHead>
-                    <TableHead className="text-right">Rating</TableHead>
-                    <TableHead className="text-center">Status</TableHead>
+                    <TableHead className="w-[60px]">图片</TableHead>
+                    <TableHead>商品</TableHead>
+                    <TableHead>品类</TableHead>
+                    <TableHead className="text-right">价格</TableHead>
+                    <TableHead className="text-right">评分</TableHead>
+                    <TableHead className="text-center">状态</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -219,9 +218,9 @@ export default function SellerProductsPage() {
                       <TableCell className="text-right">
                         <span className="flex items-center justify-end gap-1 text-xs">
                           <Star className="size-3 fill-amber-400 text-amber-400" />
-                          {product.rating?.toFixed(1) ?? "N/A"}
+                          {product.rating?.toFixed(1) ?? "暂无"}
                           <span className="text-muted-foreground">
-                            ({product.review_count ?? 0})
+                            （{product.review_count ?? 0}）
                           </span>
                         </span>
                       </TableCell>
@@ -229,12 +228,12 @@ export default function SellerProductsPage() {
                         {product.is_active ? (
                           <span className="inline-flex items-center gap-1 text-xs text-green-700">
                             <CheckCircle className="size-3" />
-                            Active
+                            已上架
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-xs text-red-600">
                             <XCircle className="size-3" />
-                            Inactive
+                            已下架
                           </span>
                         )}
                       </TableCell>

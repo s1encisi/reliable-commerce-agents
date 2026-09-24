@@ -52,7 +52,7 @@ import { deriveSuggestions } from "@/lib/suggestions";
 import { AGENT_MODES } from "@/components/ui/ai-prompt-box";
 
 // ---------------------------------------------------------------------------
-// Types
+// 类型
 // ---------------------------------------------------------------------------
 
 interface Message {
@@ -63,22 +63,22 @@ interface Message {
   steps?: AgentStep[];
   created_at?: string;
   streaming?: boolean;
-  /** Orchestration mode this turn ran through — set on the assistant
-   * message so OrchestrationGraph knows which mode's graph to render,
-   * independent of whatever's currently selected in the switcher. */
+  /** 本轮所走的编排模式——挂在助手消息上，使 OrchestrationGraph 知道该渲染
+   * 哪个模式的图，而不受切换器当前选择的影响。 */
   mode?: string;
-  /** The `usage_logs` id this turn was recorded under — from the `event: run` SSE
-   * frame, which arrives after persistence because the id does not exist before
-   * then. Needed to resume a run that paused on a human. */
+  /** 本轮记录所在的 `usage_logs` id——来自 SSE 的 `event: run` 帧；该帧在持久化
+   * 之后才到达，因为在此之前 id 尚不存在。用于恢复一个因等待人工决策而暂停的
+   * 运行。 */
   runId?: string;
-  /** Set when the run stopped at an in-workflow HITL gate and is waiting on a
-   * decision. Drives the inline approval card. */
+  /** 当运行停在工作流内的人工参与（HITL）关卡并等待决策时置位。驱动内联审批卡。 */
   pendingApproval?: boolean;
-  /** Executor ids (dashed, live form) currently mid-run / completed / errored — from `event: node`/`error` SSE frames. */
+  /** 当前运行中 / 已完成 / 出错的执行器 id（连字符形式，实时值）——来自
+   * `event: node` / `error` SSE 帧。 */
   activeNodeIds?: string[];
   doneNodeIds?: string[];
   errorNodeIds?: string[];
-  /** Server-side fact-check report from `event: grounding` (tool mode only, GROUNDING_MODE != off). */
+  /** 来自 `event: grounding` 的服务端事实核验报告（仅工具模式，且
+   * GROUNDING_MODE != off）。 */
   grounding?: GroundingReport;
 }
 
@@ -90,11 +90,9 @@ interface Conversation {
 }
 
 // ---------------------------------------------------------------------------
-// Orchestration mode persistence — remembered per conversation (and for a
-// not-yet-created conversation, under a "draft" key) so a reload keeps the
-// same mode selected. Distinct from AGENT_MODES/agentMode in
-// ai-prompt-box.tsx, which pick a specialist to route to directly — this
-// picks how the orchestrator itself runs the turn.
+// 编排模式持久化——按会话记忆（尚未创建的会话记在 "draft" 键下），因此刷新后
+// 仍保持同一模式选中。它与 ai-prompt-box.tsx 中的 AGENT_MODES / agentMode 不同：
+// 后者用于直接指定某个专业智能体，这里决定的是编排器本身以何种方式运行本轮。
 // ---------------------------------------------------------------------------
 
 const ORCH_MODE_STORAGE_PREFIX = "ecommerce_orch_mode:";
@@ -114,13 +112,12 @@ function storeOrchestrationMode(conversationId: string | null, mode: string): vo
   try {
     localStorage.setItem(ORCH_MODE_STORAGE_PREFIX + (conversationId ?? ORCH_MODE_DRAFT_KEY), mode);
   } catch {
-    // Private browsing / storage full — the mode still works for this
-    // session via component state, it just won't survive a reload.
+    // 无痕浏览 / 存储已满——模式在本会话内仍通过组件状态生效，只是无法在刷新后保留。
   }
 }
 
 // ---------------------------------------------------------------------------
-// Thinking indicator (replaces generic typing dots)
+// 思考中指示器（替代通用的打字省略号）
 // ---------------------------------------------------------------------------
 
 function ThinkingIndicator({ label }: { label: string }) {
@@ -144,7 +141,7 @@ function ThinkingIndicator({ label }: { label: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// Message action bar (copy, retry, share)
+// 消息操作栏（复制、重试、分享）
 // ---------------------------------------------------------------------------
 
 function MessageActions({
@@ -162,7 +159,7 @@ function MessageActions({
       await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-    } catch { /* clipboard unavailable */ }
+    } catch { /* 剪贴板不可用 */ }
   };
 
   const handleShare = async () => {
@@ -171,7 +168,7 @@ function MessageActions({
       await navigator.clipboard.writeText(url);
       setShared(true);
       setTimeout(() => setShared(false), 1500);
-    } catch { /* clipboard unavailable */ }
+    } catch { /* 剪贴板不可用 */ }
   };
 
   return (
@@ -182,7 +179,7 @@ function MessageActions({
         className="inline-flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
       >
         {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
-        {copied ? "Copied" : "Copy"}
+        {copied ? "已复制" : "复制"}
       </button>
       <button
         type="button"
@@ -190,7 +187,7 @@ function MessageActions({
         className="inline-flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
       >
         <RotateCcw className="size-3" />
-        Retry
+        重试
       </button>
       <button
         type="button"
@@ -198,14 +195,14 @@ function MessageActions({
         className="inline-flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
       >
         {shared ? <Check className="size-3" /> : <Share2 className="size-3" />}
-        {shared ? "Copied link" : "Share"}
+        {shared ? "已复制链接" : "分享"}
       </button>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Conversation list (shared between desktop panel and mobile sheet)
+// 会话列表（桌面端面板与移动端抽屉共用）
 // ---------------------------------------------------------------------------
 
 function ConversationList({
@@ -225,13 +222,13 @@ function ConversationList({
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between px-3 py-2.5">
         <span className="text-sm font-semibold text-foreground">
-          Conversations
+          会话
         </span>
         <Button
           variant="ghost"
           size="icon-sm"
           onClick={onNew}
-          title="New chat"
+          title="新对话"
         >
           <MessageSquarePlusIcon className="size-4" />
         </Button>
@@ -241,7 +238,7 @@ function ConversationList({
         <div className="flex flex-col gap-0.5 p-1.5">
           {conversations.length === 0 && (
             <p className="px-2 py-8 text-center text-xs text-muted-foreground">
-              No conversations yet. Send a message to start one.
+              还没有会话。发送一条消息即可开始。
             </p>
           )}
           {conversations.map((conv) => (
@@ -268,7 +265,7 @@ function ConversationList({
                   e.stopPropagation();
                   onDelete(conv.id);
                 }}
-                title="Delete conversation"
+                title="删除会话"
               >
                 <Trash2Icon className="size-3" />
               </Button>
@@ -281,7 +278,7 @@ function ConversationList({
 }
 
 // ---------------------------------------------------------------------------
-// Message content renderer
+// 消息内容渲染器
 // ---------------------------------------------------------------------------
 
 function MessageContent({ content }: { content: string }) {
@@ -304,7 +301,7 @@ function MessageContent({ content }: { content: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// Chat Page
+// 对话页
 // ---------------------------------------------------------------------------
 
 export default function ChatPage() {
@@ -317,7 +314,7 @@ export default function ChatPage() {
   >(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isResponding, setIsResponding] = useState(false);
-  const [thinkingLabel, setThinkingLabel] = useState<string>("Routing to specialists...");
+  const [thinkingLabel, setThinkingLabel] = useState<string>("正在路由到专业智能体…");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [orchestrationMode, setOrchestrationMode] = useState<string>("");
 
@@ -327,18 +324,16 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   /**
-   * Follow-up chips, derived from the assistant's last completed message.
+   * 追问胶囊，由助手最后一条已完成的消息推导而来。
    *
-   * Was `DEMO_SCENARIOS.slice(0, 4)` — the same four canned prompts after every
-   * turn, including when the assistant had just asked a direct question the
-   * chips ignored (issue #4).
+   * 原先写死为 `DEMO_SCENARIOS.slice(0, 4)`——每轮之后都是同样四条固定提示词，
+   * 即便助手刚刚提出了一个直接问题，胶囊也对此视而不见（issue #4）。
    *
-   * Skips a message that is still streaming: deriving from a half-arrived
-   * answer makes the chips flicker and, worse, briefly show suggestions for a
-   * card that has not finished rendering.
+   * 仍在流式输出的消息会被跳过：从半截回答推导会让胶囊闪烁，更糟的是会短暂
+   * 展示一张尚未渲染完成的卡片的建议。
    *
-   * `deriveSuggestions` is a pure function over text the client already has —
-   * no request, no latency, and testable in isolation (`lib/suggestions.test.ts`).
+   * `deriveSuggestions` 是作用于客户端已有文本的纯函数——不发请求、没有延迟，
+   * 且可独立测试（`lib/suggestions.test.ts`）。
    */
   const suggestions = useMemo(() => {
     const lastAssistant = [...messages]
@@ -350,16 +345,14 @@ export default function ChatPage() {
       DEMO_SCENARIOS.slice(0, 4).map((s) => ({ label: s.label, prompt: s.prompt }))
     );
   }, [messages]);
-  // Per-message abort controller. New send aborts any in-flight stream;
-  // unmount aborts whatever's still running. Plugs the SSE-leak finding.
+  // 每条消息各自的取消控制器。新的发送会中止任何进行中的流；组件卸载时中止
+  // 仍在运行的那个。用于封堵 SSE 泄漏问题。
   const streamAbortRef = useRef<AbortController | null>(null);
-  // Set by sendMessage() right after it creates a new conversation, so the
-  // "load messages when active conversation changes" effect below can skip
-  // its usual server reload for that one transition — see that effect's
-  // comment.
+  // 由 sendMessage() 在创建新会话后立即设置，使下方「活动会话变化时加载消息」
+  // 的 effect 能对该次切换跳过常规的服务端重载——详见该 effect 的注释。
   const justCreatedConversationRef = useRef<string | null>(null);
 
-  // Cancel in-flight stream when the component unmounts (route change).
+  // 组件卸载（路由切换）时取消进行中的流。
   useEffect(
     () => () => {
       streamAbortRef.current?.abort();
@@ -367,24 +360,23 @@ export default function ChatPage() {
     []
   );
 
-  // ---- Load conversations on mount ----
+  // ---- 挂载时加载会话列表 ----
   useEffect(() => {
     if (!isAuthenticated) return;
     loadConversations();
   }, [isAuthenticated]);
 
-  // ---- Auto-send ?q= query param on mount ----
+  // ---- 挂载时自动发送 ?q= 查询参数 ----
   useEffect(() => {
     if (!isAuthenticated) return;
-    // `prompt` is the deep-link param from home quick-prompts / product pages;
-    // `q` is kept for back-compat.
+    // `prompt` 是来自首页快捷提示词 / 商品页的深链参数；`q` 为向后兼容保留。
     const q = searchParams.get("prompt") ?? searchParams.get("q");
     if (q) {
       pendingQueryRef.current = q;
     }
   }, [isAuthenticated, searchParams]);
 
-  // Fire the pending query once conversations have loaded (initial mount)
+  // 会话加载完成后触发待发送的查询（首次挂载）
   useEffect(() => {
     if (pendingQueryRef.current && !isResponding) {
       const q = pendingQueryRef.current;
@@ -399,32 +391,30 @@ export default function ChatPage() {
       const data = await api.getConversations();
       setConversations(data);
     } catch {
-      // Silently handle -- empty list is fine on first load
+      // 静默处理——首次加载时列表为空是正常的
     }
   }
 
-  // ---- Load messages when active conversation changes ----
+  // ---- 活动会话变化时加载消息 ----
   useEffect(() => {
     if (!activeConversationId) {
       setMessages([]);
       return;
     }
     if (justCreatedConversationRef.current === activeConversationId) {
-      // sendMessage() just set this id after creating the conversation for
-      // its own first turn — local `messages` state is already complete
-      // (and richer: it carries client-only fields like an assistant
-      // message's `mode`/`activeNodeIds` that OrchestrationGraph needs and
-      // the server has nowhere to persist). Reloading from the server here
-      // would silently replace those messages and wipe those fields —
-      // found live, as the graph rendering then disappearing a few hundred
-      // ms after every first send in a new conversation.
+      // sendMessage() 在为它自己的首轮创建会话后刚设置了这个 id——本地
+      // `messages` 状态已经完整（而且更丰富：它携带了仅客户端才有的字段，
+      // 例如助手消息的 `mode` / `activeNodeIds`，OrchestrationGraph 需要它们，
+      // 而服务端无处持久化）。此处从服务端重载会静默替换这些消息并抹掉那些
+      // 字段——这是线上实际发现的：每个新会话首次发送后几百毫秒，图先渲染
+      // 出来又消失。
       justCreatedConversationRef.current = null;
       return;
     }
     loadMessages(activeConversationId);
   }, [activeConversationId]);
 
-  // ---- Restore the orchestration mode remembered for this conversation ----
+  // ---- 恢复该会话记住的编排模式 ----
   useEffect(() => {
     setOrchestrationMode(loadStoredOrchestrationMode(activeConversationId));
   }, [activeConversationId]);
@@ -446,25 +436,25 @@ export default function ChatPage() {
     }
   }
 
-  // ---- Auto-scroll to bottom ----
+  // ---- 自动滚动到底部 ----
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isResponding]);
 
-  // ---- Start new conversation ----
+  // ---- 开始新会话 ----
   const handleNewChat = useCallback(() => {
     setActiveConversationId(null);
     setMessages([]);
     setSheetOpen(false);
   }, []);
 
-  // ---- Select conversation ----
+  // ---- 选择会话 ----
   const handleSelectConversation = useCallback((id: string) => {
     setActiveConversationId(id);
     setSheetOpen(false);
   }, []);
 
-  // ---- Delete conversation ----
+  // ---- 删除会话 ----
   const handleDeleteConversation = useCallback(
     async (id: string) => {
       try {
@@ -475,27 +465,27 @@ export default function ChatPage() {
           setMessages([]);
         }
       } catch {
-        // Swallow -- UI stays consistent regardless
+        // 静默吞掉——无论成败，界面保持一致
       }
     },
     [activeConversationId],
   );
 
-  // ---- Core send logic (shared by form submit and ?q= auto-send) ----
+  // ---- 核心发送逻辑（表单提交与 ?q= 自动发送共用）----
   async function sendMessage(text: string, agentMode?: string | null) {
     if (!text.trim() || isResponding) return;
 
     const trimmed = text.trim();
 
-    // Set initial thinking label from the selected mode
+    // 依据所选模式设置初始的思考提示
     const modeEntry = AGENT_MODES.find((m) => m.id === agentMode);
     setThinkingLabel(
       modeEntry && modeEntry.id
-        ? `Routing to ${modeEntry.label}...`
-        : "Routing to specialists..."
+        ? `正在路由到${modeEntry.label}…`
+        : "正在路由到专业智能体…"
     );
 
-    // Optimistic user message
+    // 乐观渲染用户消息
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: "user",
@@ -506,22 +496,18 @@ export default function ChatPage() {
 
     const assistantId = crypto.randomUUID();
     let assistantCreated = false;
-    // Set once the orchestrator's own final text (onChunk) starts arriving
-    // for this turn. Before that, any content shown is a specialist's live
-    // `delta` preview (onDeltaChunk) — the first real-text chunk *replaces*
-    // it rather than appending, since the backend no longer persists the
-    // preview into the saved message either (Phase 8.1): the specialist's
-    // preview and the orchestrator's own final answer restate the same
-    // content in independently-generated wording, so showing both was a
-    // visible duplication, not two genuinely different things.
+    // 本轮编排器自身的最终文本（onChunk）开始到达后置位。在此之前展示的任何
+    // 内容都是专业智能体的实时 `delta` 预览（onDeltaChunk）——第一个真实文本
+    // 分片会*替换*它而不是追加，因为后端也不再把这个预览持久化进保存的消息
+    // （Phase 8.1）：专业智能体的预览与编排器自身的最终回答用各自独立生成的
+    // 措辞复述同一内容，同时展示会造成可见的重复，而不是两件真正不同的东西。
     let receivedFinalText = false;
-    // Snapshot now — orchestrationMode may change before this turn resolves
-    // (e.g. the user picks a different mode for their next message while
-    // this one is still streaming), but this message ran through whatever
-    // was selected at send time.
+    // 此处快照——本轮结束前 orchestrationMode 可能变化（例如用户在本轮仍在
+    // 流式输出时为下一条消息选了另一个模式），但这条消息走的是发送那一刻所选
+    // 的模式。
     const messageMode = orchestrationMode || "tool";
 
-    // Abort any prior stream still draining before starting a new one.
+    // 启动新流之前，先中止仍在排空的旧流。
     streamAbortRef.current?.abort();
     const controller = new AbortController();
     streamAbortRef.current = controller;
@@ -558,12 +544,10 @@ export default function ChatPage() {
         controller.signal,
         {
           onDeltaChunk: (chunk) => {
-            // Guard only — MAF's own execution order means a specialist's
-            // delta block completes and closes before the orchestrator's
-            // final block starts (verified: they never interleave), so
-            // this should never actually fire once receivedFinalText is
-            // true. If it somehow did, dropping it is strictly safer than
-            // re-appending a stale preview onto the real answer.
+            // 仅作防御——MAF 自身的执行顺序保证专业智能体的 delta 块在编排器
+            // 最终块开始前就已完成并关闭（已核实：二者从不交错），因此当
+            // receivedFinalText 为 true 时这里不应真的触发。万一触发了，丢弃
+            // 它也比把一个过期的预览重新追加到真实回答上更安全。
             if (receivedFinalText) return;
             if (!assistantCreated) {
               assistantCreated = true;
@@ -586,17 +570,17 @@ export default function ChatPage() {
             }
           },
           onStep: (step) => {
-            // Update thinking label with the active agent
+            // 用当前活跃智能体更新思考提示
             const agent = step.agent ?? "orchestrator";
             const AGENT_LABELS: Record<string, string> = {
-              orchestrator: "Routing...",
-              "product-discovery": "Product Discovery is searching...",
-              "order-management": "Order Management is looking up...",
-              "pricing-promotions": "Pricing is calculating...",
-              "review-sentiment": "Reviews is analysing...",
-              "inventory-fulfillment": "Inventory is checking stock...",
+              orchestrator: "正在路由…",
+              "product-discovery": "商品发现正在检索…",
+              "order-management": "订单管理正在查询…",
+              "pricing-promotions": "定价与促销正在计算…",
+              "review-sentiment": "评论情感分析正在分析…",
+              "inventory-fulfillment": "库存与履约正在检查库存…",
             };
-            setThinkingLabel(AGENT_LABELS[agent] ?? `${agent} is working...`);
+            setThinkingLabel(AGENT_LABELS[agent] ?? `${agent} 正在处理…`);
 
             setMessages((prev) => {
               if (!prev.some((m) => m.id === assistantId)) {
@@ -677,9 +661,8 @@ export default function ChatPage() {
         },
       );
 
-      // If this was the first message, a new conversation was created —
-      // re-key the draft-stored mode under the real conversation id so a
-      // reload still picks it up.
+      // 如果这是第一条消息，则已创建新会话——把存在 draft 键下的模式重新挂到
+      // 真实会话 id 上，刷新后仍能取回。
       if (!activeConversationId && meta.conversation_id) {
         storeOrchestrationMode(meta.conversation_id, orchestrationMode);
         justCreatedConversationRef.current = meta.conversation_id;
@@ -687,7 +670,7 @@ export default function ChatPage() {
         await loadConversations();
       }
 
-      // Finalize: drop streaming flag, attach agents_involved
+      // 收尾：去掉流式标记，附上 agents_involved
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantId
@@ -697,19 +680,19 @@ export default function ChatPage() {
       );
     } catch (err) {
       const errMsg =
-        err instanceof Error ? err.message : "Something went wrong.";
+        err instanceof Error ? err.message : "出了点问题。";
       setMessages((prev) => {
         const existing = prev.find((m) => m.id === assistantId);
         if (existing) {
           return prev.map((m) =>
             m.id === assistantId
-              ? { ...m, content: `Error: ${errMsg}`, streaming: false }
+              ? { ...m, content: `错误：${errMsg}`, streaming: false }
               : m,
           );
         }
         return [
           ...prev,
-          { id: assistantId, role: "assistant", content: `Error: ${errMsg}` },
+          { id: assistantId, role: "assistant", content: `错误：${errMsg}` },
         ];
       });
     } finally {
@@ -717,10 +700,10 @@ export default function ChatPage() {
     }
   }
 
-  // ---- Render ----
+  // ---- 渲染 ----
   return (
     <div className="flex h-full">
-      {/* -------- Conversation list panel (desktop) -------- */}
+      {/* -------- 会话列表面板（桌面端）-------- */}
       <aside className="hidden w-60 shrink-0 flex-col border-r bg-muted/30 lg:flex">
         <ConversationList
           conversations={conversations}
@@ -731,11 +714,11 @@ export default function ChatPage() {
         />
       </aside>
 
-      {/* -------- Main chat area -------- */}
+      {/* -------- 主对话区 -------- */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        {/* ---- Top bar ---- */}
+        {/* ---- 顶栏 ---- */}
         <div className="flex h-11 items-center gap-2 border-b px-3">
-          {/* Mobile conversation list toggle */}
+          {/* 移动端会话列表开关 */}
           <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
             <SheetTrigger
               render={
@@ -750,7 +733,7 @@ export default function ChatPage() {
             </SheetTrigger>
             <SheetContent side="left" className="w-72 p-0">
               <SheetHeader className="sr-only">
-                <SheetTitle>Conversations</SheetTitle>
+                <SheetTitle>会话</SheetTitle>
               </SheetHeader>
               <ConversationList
                 conversations={conversations}
@@ -765,8 +748,8 @@ export default function ChatPage() {
           <h2 className="flex-1 truncate text-sm font-medium">
             {activeConversationId
               ? conversations.find((c) => c.id === activeConversationId)
-                  ?.title ?? "Chat"
-              : "New chat"}
+                  ?.title ?? "对话"
+              : "新对话"}
           </h2>
 
           <Link
@@ -786,13 +769,13 @@ export default function ChatPage() {
             size="icon-sm"
             className="lg:hidden"
             onClick={handleNewChat}
-            title="New chat"
+            title="新对话"
           >
             <MessageSquarePlusIcon className="size-4" />
           </Button>
         </div>
 
-        {/* ---- Messages ---- */}
+        {/* ---- 消息区 ---- */}
         <div className="flex-1 overflow-y-auto">
           {messages.length === 0 && !isResponding ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 px-4 text-center">
@@ -800,12 +783,11 @@ export default function ChatPage() {
                 <BotIcon className="size-7 text-primary" />
               </div>
               <h3 className="text-base font-semibold">
-                How can I help you today?
+                今天有什么可以帮您？
               </h3>
               <p className="max-w-sm text-sm text-muted-foreground">
-                Ask about products, orders, pricing, reviews, inventory, or
-                anything else. Our specialist agents will collaborate to help
-                you.
+                您可以咨询商品、订单、价格、评论、库存等任何问题，我们的专业智能体
+                会协作帮您解决。
               </p>
               <div className="mt-2 flex flex-wrap justify-center gap-2">
                 {QUICK_PROMPTS.map((s) => (
@@ -886,10 +868,9 @@ export default function ChatPage() {
                       <ApprovalCard
                         runId={msg.runId}
                         onResolved={(outcome) => {
-                          // Clear the gate on this message and append the
-                          // resumed turn as its own assistant message, so the
-                          // thread reads as the conversation it actually was:
-                          // paused, decided, continued.
+                          // 清除这条消息上的关卡，并把恢复后的轮次作为独立的助手
+                          // 消息追加，使整段对话读起来就是它真实的样子：暂停、
+                          // 决策、继续。
                           setMessages((prev) => [
                             ...prev.map((m) =>
                               m.id === msg.id ? { ...m, pendingApproval: false } : m,
@@ -918,7 +899,7 @@ export default function ChatPage() {
                       <MessageActions
                         text={msg.content}
                         onRetry={() => {
-                          // Find the user message immediately preceding this assistant message
+                          // 找到紧邻这条助手消息之前的用户消息
                           const msgIndex = messages.findIndex((m) => m.id === msg.id);
                           const userMsg = messages
                             .slice(0, msgIndex)
@@ -950,7 +931,7 @@ export default function ChatPage() {
           )}
         </div>
 
-        {/* ---- Input area ---- */}
+        {/* ---- 输入区 ---- */}
         <div className="border-t bg-background px-4 py-3">
           <div className="mx-auto max-w-3xl space-y-2">
             <div className="flex items-center justify-end gap-2">

@@ -1,11 +1,6 @@
-"""
-Audit fix #4 — every destructive (state-mutating, hard-to-undo) tool
-must be wired with ``approval_mode="always_require"`` so MAF emits an
-approval request to the host instead of executing the function blind.
+"""敏感状态变更工具必须声明 always_require 审批。
 
-Read-only tools (lookups, listings, sentiment summaries) stay
-``never_require``; cart mutations are deliberately *not* gated because
-they're easy to undo and the friction would dominate the chat UX.
+只读工具不要求审批；购物车变更易撤销，按现有产品约定不增加该门控。
 """
 
 from __future__ import annotations
@@ -16,7 +11,7 @@ import pytest
 
 
 def _required_approval_tools():
-    """Lazy import so collection doesn't trip the prod-fail-fast guard."""
+    """延迟导入，避免测试收集触发生产密钥校验。"""
     from inventory_fulfillment.tools import place_backorder
     from order_management.tools import cancel_order, modify_order
     from shared.tools.return_tools import initiate_return, process_refund

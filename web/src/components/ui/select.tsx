@@ -1,3 +1,5 @@
+// 下拉选择框基础原语：基于 base-ui Select，提供触发器、选项列表与选项。
+
 "use client"
 
 import * as React from "react"

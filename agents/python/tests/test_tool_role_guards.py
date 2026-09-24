@@ -1,18 +1,8 @@
-"""RBAC coverage for the six tools guarded by ``@requires_role`` in this change:
+"""真实工具的角色授权接线测试。
 
-- ``review_sentiment.tools.draft_seller_response`` -> seller/admin
-- ``inventory_fulfillment.tools.calculate_fulfillment_plan`` -> seller/admin
-- ``inventory_fulfillment.tools.place_backorder`` -> seller/admin
-- ``order_management.tools.cancel_order`` -> customer/seller/admin
-- ``order_management.tools.modify_order`` -> customer/seller/admin
-- ``shared.tools.return_tools.process_refund`` -> customer/seller/admin
-
-The generic decorator/guard-clause behavior (admin-always-allowed, signature
-preservation, disabled-bypass) is already exhaustively covered by
-``test_guardrails_roles.py`` against a synthetic tool. This file only proves
-each REAL tool got the decorator wired at the right role set and that a
-denial happens before any DB work (no seed fixtures needed for the denied
-cases — the guard is the outermost check in every one of these functions).
+覆盖商家回复、履约规划、预订、取消订单、修改订单及退款所需角色。
+通用装饰器行为另有测试；此处确认每个真实工具使用正确角色集合，
+并在访问数据库前拒绝未授权调用。
 """
 
 from __future__ import annotations
@@ -36,7 +26,7 @@ pytestmark = pytest.mark.asyncio
 
 @pytest_asyncio.fixture
 async def db_pool(clean_db: asyncpg.Pool, monkeypatch: pytest.MonkeyPatch) -> asyncpg.Pool:
-    """Inject clean_db into shared.db so get_pool() resolves for allowed-role calls."""
+    """允许角色的调用使用 clean_db 连接池。"""
     monkeypatch.setattr(shared_db, "_pool", clean_db)
     return clean_db
 
@@ -61,7 +51,7 @@ async def test_draft_seller_response_denied_for_customer() -> None:
 async def test_draft_seller_response_allowed_for_seller(db_pool: asyncpg.Pool) -> None:
     current_user_role.set("seller")
     result = await draft_seller_response(review_id=str(uuid.uuid4()))
-    # Guard passed through to real logic (a random id simply isn't found).
+    # 角色守卫已通过，随机标识仅导致业务查无结果。
     assert result["error"] != "permission_denied"
     assert result["error"].startswith("Review not found")
 
@@ -81,8 +71,8 @@ async def test_calculate_fulfillment_plan_denied_for_customer() -> None:
 
 async def test_calculate_fulfillment_plan_allowed_for_seller() -> None:
     current_user_role.set("seller")
-    # Empty product_ids short-circuits before any DB access — proves pass-through
-    # without needing seed data.
+    # 空商品列表在访问数据库前返回，
+    # 无需种子数据即可证明角色守卫已放行。
     result = await calculate_fulfillment_plan(product_ids=[], destination_region="east")
     assert result == {"error": "No product IDs provided"}
 
@@ -96,8 +86,8 @@ async def test_place_backorder_denied_for_customer() -> None:
 
 async def test_place_backorder_allowed_for_seller() -> None:
     current_user_role.set("seller")
-    # No user context set — reaches the tool's own "no user" guard clause,
-    # proving the role check passed through without needing seed data.
+    # 进入工具自身的缺用户守卫，
+    # 说明外层角色校验已通过。
     result = await place_backorder(product_id=str(uuid.uuid4()), quantity=1)
     assert result["error"] != "permission_denied"
 
@@ -160,6 +150,6 @@ async def test_guardrails_disabled_bypasses_tool_guard(monkeypatch: pytest.Monke
     monkeypatch.setattr(settings, "GUARDRAILS_ENABLED", False)
     current_user_role.set("customer")
     result = await calculate_fulfillment_plan(product_ids=[], destination_region="east")
-    # With guardrails off, the role check is skipped entirely and we reach the
-    # tool's own validation ("No product IDs provided"), not permission_denied.
+    # 护栏关闭后跳过角色校验，
+    # 应到达工具自身参数校验，而非权限拒绝。
     assert result == {"error": "No product IDs provided"}

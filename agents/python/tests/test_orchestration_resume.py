@@ -1,10 +1,7 @@
-"""Phase 1.5 — POST /api/orchestration/{run_id}/resume and
-GET /api/runs/{run_id}/checkpoints, end to end against real Postgres.
+"""恢复与检查点端点的真实数据库端到端测试。
 
-Full lifecycle: pause a real workflow:return-replace run via /api/chat,
-resume it via the real endpoint, and confirm both the HTTP response and
-the DB bookkeeping (hitl_requests.status/responded_at/response) are
-correct — plus that ownership scoping actually blocks a different user.
+先通过聊天暂停退货工作流，再恢复，检查 HTTP 结果、审批状态、
+响应时间及归属隔离。
 """
 
 from __future__ import annotations
@@ -75,7 +72,7 @@ def _app_for(email: str, user_id: uuid.UUID) -> FastAPI:
 
 
 async def _pause_a_return(clean_db, monkeypatch: pytest.MonkeyPatch, email: str, user_id: uuid.UUID) -> tuple[str, str]:
-    """Returns (order_id, run_id)."""
+    """返回订单标识与运行标识。"""
     import orchestrator.modes as modes_module
     import order_management.tools as order_tools
     from orchestrator.modes.workflow_mode import ReturnReplaceMode

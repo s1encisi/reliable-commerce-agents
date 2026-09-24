@@ -1,4 +1,4 @@
-"""Durable operation identity, scoped to the authenticated user on every read."""
+"""持久化操作标识，每次读取都按已认证用户隔离。"""
 
 import json
 from contextvars import ContextVar
@@ -27,7 +27,7 @@ def decode(value: Any) -> dict[str, Any]:
 
 
 async def reserve(request: InitiateReturnInput, operation_id: UUID) -> asyncpg.Record | None:
-    """Autocommit reservation survives a later business-transaction rollback."""
+    """以自动提交预留操作，即使后续业务事务回滚也保留记录。"""
     async with get_pool().acquire() as conn:
         return await reserve_on(conn, request, operation_id)
 
@@ -35,7 +35,7 @@ async def reserve(request: InitiateReturnInput, operation_id: UUID) -> asyncpg.R
 async def reserve_on(
     conn: asyncpg.Connection, request: InitiateReturnInput, operation_id: UUID
 ) -> asyncpg.Record | None:
-    """Use the caller's transaction when linking a workflow approval atomically."""
+    """复用调用方事务，原子地关联工作流审批。"""
     await conn.execute(
         """INSERT INTO after_sales_operations
            (user_id, operation_id, order_id, payload_hash, request_payload, policy_version)
@@ -107,7 +107,7 @@ async def save_result(
 
 
 async def confirm(operation_id: UUID, *, expected_hash: str | None = None) -> dict[str, Any] | None:
-    """Wait for any in-flight writer, rather than treating its old READY row as rollback."""
+    """等待在途写入者，不能把旧 READY 记录误判为已回滚。"""
     async with get_pool().acquire() as conn:
         async with conn.transaction():
             await conn.execute("SET LOCAL lock_timeout = '1500ms'")
@@ -132,7 +132,7 @@ async def confirm(operation_id: UUID, *, expected_hash: str | None = None) -> di
 
 
 async def reject_workflow(request: InitiateReturnInput, operation_id: UUID) -> dict[str, Any]:
-    """A denied workflow intent remains denied across retries and entry points."""
+    """被拒绝的工作流意图在重试和切换入口后仍保持拒绝。"""
     from shared.after_sales.service import failure
 
     async with get_pool().acquire() as conn:
@@ -151,7 +151,7 @@ async def reject_workflow(request: InitiateReturnInput, operation_id: UUID) -> d
 
 
 async def deny_tool_approval(request_id: str, admin_email: str, note: str | None) -> bool | None:
-    """Lock operation before approval, matching the execution lock order."""
+    """先锁操作记录再锁审批记录，与执行路径的锁顺序一致。"""
     from shared.after_sales.service import failure
 
     async with get_pool().acquire() as conn:
@@ -160,7 +160,7 @@ async def deny_tool_approval(request_id: str, admin_email: str, note: str | None
                 "SELECT * FROM after_sales_operations WHERE approval_id = $1 FOR UPDATE", request_id
             )
             if row is None:
-                return None  # legacy/non-return approval
+                return None  # 兼容旧审批或非退货审批。
             if row["status"] in {"SUCCEEDED", "REJECTED"}:
                 return False
             changed = await conn.fetchval(

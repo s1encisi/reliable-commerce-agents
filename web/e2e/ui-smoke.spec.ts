@@ -1,11 +1,11 @@
 import { test, expect, type Page } from "@playwright/test";
 
 /**
- * UI smoke suite for the enhanced shell + Phase 2 surfaces.
+ * 增强版应用外壳 + 第 2 阶段各界面的 UI 冒烟测试套件。
  *
- * Auth and the backend API are mocked (localStorage session + request
- * interception) so this runs against the frontend alone — no live stack.
- * Like the rest of e2e/, it runs locally against `pnpm dev`, not in CI.
+ * 登录态与后端 API 均为模拟（localStorage 会话 + 请求拦截），因此本套件
+ * 可脱离完整技术栈、仅针对前端运行。与 e2e/ 下的其他文件一样，它在本地
+ * 针对 `pnpm dev` 运行，不进 CI。
  */
 
 const IMG =
@@ -74,127 +74,122 @@ async function mockApi(page: Page) {
     if (url.includes("/api/cart"))
       return route.fulfill({ json: { items: [], item_count: 2, subtotal: 174.9 } });
     if (url.includes("/api/conversations")) return route.fulfill({ json: [] });
-    // The chat page reads the mode registry on mount. Returning {} here sent it
-    // to an error boundary ("This page couldn't load"), which is why the admin
-    // sidebar assertions failed against a page that never rendered — nothing to
-    // do with the backend under test.
+    // 对话页在挂载时会读取编排模式注册表。此处返回 {} 会让它落到错误边界
+    // （「此页面无法加载」），这正是当时针对一个根本没渲染出来的页面做管理
+    // 端侧边栏断言会失败的原因——与所测后端无关。
     if (url.includes("/api/orchestration/modes"))
-      return route.fulfill({ json: { modes: [{ name: "tool", label: "Tool Router", description: "", is_graph: false }] } });
-    // Anything unmatched gets an empty ARRAY rather than an empty object: most
-    // of this app's endpoints return collections, and {} is the shape most
-    // likely to throw in a .map().
+      return route.fulfill({ json: { modes: [{ name: "tool", label: "工具路由", description: "", is_graph: false }] } });
+    // 未匹配到的请求返回空「数组」而不是空对象：本应用绝大多数接口返回的是
+    // 集合，而 {} 是最容易在 .map() 里抛错的那种形状。
     return route.fulfill({ json: [] });
   });
 }
 
-test.describe("public", () => {
-  test("landing renders hero, agents and CTA", async ({ page }) => {
+test.describe("公开页面", () => {
+  test("落地页渲染主视觉、智能体与行动号召", async ({ page }) => {
     await page.goto("/");
     await expect(
-      page.getByRole("heading", { name: /multi-agent platform/i }),
+      page.getByRole("heading", { name: /多智能体平台/ }),
     ).toBeVisible();
-    await expect(page.getByText("Meet the agents")).toBeVisible();
+    await expect(page.getByText("认识这些智能体")).toBeVisible();
     await expect(
-      page.getByText("Product Discovery", { exact: true }),
+      page.getByText("商品发现", { exact: true }),
     ).toBeVisible();
-    await expect(page.getByRole("link", { name: /try the demo/i })).toBeVisible();
+    await expect(page.getByRole("link", { name: /立即体验/ })).toBeVisible();
   });
 
-  test("login page renders the form", async ({ page }) => {
+  test("登录页渲染表单", async ({ page }) => {
     await page.goto("/login");
     await expect(page.locator('input[type="email"]')).toBeVisible();
     await expect(page.locator('input[type="password"]')).toBeVisible();
-    await expect(page.getByRole("button", { name: /sign in/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /登录/ })).toBeVisible();
   });
 });
 
-test.describe("authenticated shell", () => {
-  test("home dashboard renders greeting, quick prompts and orders", async ({ page }) => {
+test.describe("已登录应用外壳", () => {
+  test("首页仪表盘渲染问候语、快捷提问与订单", async ({ page }) => {
     await seedAuth(page);
     await mockApi(page);
     await page.goto("/home");
-    await expect(page.getByText(/Good (morning|afternoon|evening), Alice/)).toBeVisible();
-    // Quick prompts are derived from DEMO_SCENARIOS (web/src/lib/scenarios.ts),
-    // so assert a label that actually exists rather than a hardcoded sentence
-    // that drifted the moment the scenario list was edited.
+    await expect(page.getByText(/(早上好|下午好|晚上好)，Alice/)).toBeVisible();
+    // 快捷提问派生自 DEMO_SCENARIOS（web/src/lib/scenarios.ts），因此断言一个
+    // 真实存在的标签，而不是一句在场景列表被改动的那一刻就已过时的硬编码
+    // 文案。
     await expect(
-      page.getByRole("link", { name: "Product Search" }).first(),
+      page.getByRole("link", { name: "商品搜索" }).first(),
     ).toBeVisible();
-    await expect(page.getByText("Recent Orders")).toBeVisible();
-    await expect(page.getByText("Specialist Agents")).toBeVisible();
+    await expect(page.getByText("最近订单")).toBeVisible();
+    await expect(page.getByText("专业智能体")).toBeVisible();
   });
 
-  test("grouped sidebar shows admin nav (Usage, Audit) for admins", async ({ page }) => {
+  test("分组侧边栏对管理员显示管理端导航（用量统计、审计）", async ({ page }) => {
     await seedAuth(page, "admin");
     await mockApi(page);
-    // /home, not /chat. This test is about the SIDEBAR, and the sidebar renders
-    // on every authenticated page — while /chat needs enough live data that a
-    // mocked API sends it to an error boundary ("This page couldn't load"),
-    // which then fails every assertion here for a reason that has nothing to do
-    // with navigation.
+    // 用 /home 而不是 /chat。本用例考察的是「侧边栏」，而侧边栏在每个已登录
+    // 页面都会渲染——相比之下 /chat 需要足够多的实时数据，模拟 API 会把它送
+    // 进错误边界（「此页面无法加载」），随后这里每一条断言都会因与导航毫不
+    // 相干的原因失败。
     //
-    // Worth noting separately: that the chat page hard-crashes rather than
-    // degrading when an API returns an unexpected shape is a real robustness
-    // gap, not a test artefact. Recorded in plan 20; not fixed here, because
-    // widening an error boundary is not a navigation change.
+    // 另外值得单独记一笔：API 返回意外形状时对话页会硬崩溃而不是降级，这是
+    // 一个真实的健壮性缺口，不是测试假象。已记录在计划 20 中；此处不修，因为
+    // 扩大错误边界并不属于导航改动。
     await page.goto("/home");
-    await expect(page.getByRole("link", { name: "Chat" }).first()).toBeVisible();
-    await expect(page.getByRole("link", { name: "Usage" })).toBeVisible();
-    // No "Audit": /admin/audit duplicated /runs and its nav entry was removed
-    // deliberately. src/lib/nav.test.ts asserts its absence, so expecting it
-    // here made the two suites contradict each other — this e2e test simply
-    // never caught up. The page itself still exists; only the link went.
+    await expect(page.getByRole("link", { name: "对话" }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: "用量统计" })).toBeVisible();
+    // 没有「审计」：/admin/audit 与 /runs 重复，其导航入口已被有意移除。
+    // src/lib/nav.test.ts 断言它不存在，因此在这里期待它会让两个套件互相
+    // 矛盾——这个 e2e 用例只是没能跟上改动。页面本身仍然存在，只是链接没了。
     await expect(page.getByRole("link", { name: "Audit" })).toHaveCount(0);
-    // The agent marketplace was removed entirely.
+    // 智能体市场已被整体移除。
     await expect(page.getByRole("link", { name: "Marketplace" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Requests" })).toHaveCount(0);
   });
 
-  test("buyers see only shop + account nav", async ({ page }) => {
+  test("买家只能看到「购物」+「账户」导航", async ({ page }) => {
     await seedAuth(page, "customer");
     await mockApi(page);
     await page.goto("/home");
-    // Scope to the sidebar — "Chat"/"Profile" also appear as the home "Open chat"
-    // quick-prompt and the top-bar avatar (aria-label="Profile").
+    // 限定在侧边栏内——「对话」/「个人中心」也会出现在首页的「进入对话」
+    // 快捷入口以及顶栏头像（aria-label="个人中心"）上。
     const sidebar = page.getByRole("complementary");
-    await expect(sidebar.getByRole("link", { name: "Chat", exact: true })).toBeVisible();
-    await expect(sidebar.getByRole("link", { name: "Profile" })).toBeVisible();
+    await expect(sidebar.getByRole("link", { name: "对话", exact: true })).toBeVisible();
+    await expect(sidebar.getByRole("link", { name: "个人中心" })).toBeVisible();
     await expect(sidebar.getByRole("link", { name: "Marketplace" })).toHaveCount(0);
     await expect(sidebar.getByRole("link", { name: "My Agents" })).toHaveCount(0);
-    await expect(sidebar.getByRole("link", { name: "Usage" })).toHaveCount(0);
+    await expect(sidebar.getByRole("link", { name: "用量统计" })).toHaveCount(0);
   });
 
-  test("command palette opens and navigates", async ({ page }) => {
+  test("命令面板可打开并完成跳转", async ({ page }) => {
     await seedAuth(page);
     await mockApi(page);
     await page.goto("/home");
-    // Open via the top-bar search button (also covers the ⌘K integration).
-    await page.getByRole("button", { name: /search/i }).click();
-    const search = page.getByPlaceholder(/Search pages/);
+    // 通过顶栏搜索按钮打开（同时覆盖 ⌘K 集成）。
+    await page.getByRole("button", { name: /搜索/ }).click();
+    const search = page.getByPlaceholder(/搜索页面/);
     await expect(search).toBeVisible();
-    await search.fill("products");
+    await search.fill("商品");
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/\/products/);
   });
 
-  test("theme toggle switches to dark", async ({ page }) => {
+  test("主题切换可切换到深色模式", async ({ page }) => {
     await seedAuth(page, "customer", "light");
     await mockApi(page);
     await page.goto("/home");
-    const toggle = page.getByRole("button", { name: /switch to dark mode/i });
+    const toggle = page.getByRole("button", { name: /切换到深色模式/ });
     await toggle.click();
     await expect(page.locator("html")).toHaveClass(/dark/);
   });
 
-  test("admin usage renders KPIs and a chart", async ({ page }) => {
+  test("管理端用量页渲染 KPI 与图表", async ({ page }) => {
     await seedAuth(page, "admin");
     await mockApi(page);
     await page.goto("/admin/usage");
     await expect(
-      page.getByRole("heading", { name: /usage analytics/i }),
+      page.getByRole("heading", { name: /用量分析/ }),
     ).toBeVisible();
-    await expect(page.getByText("Daily Activity")).toBeVisible();
-    // recharts renders an SVG surface
+    await expect(page.getByText("每日活跃度")).toBeVisible();
+    // recharts 会渲染一个 SVG 画布
     await expect(page.locator("svg.recharts-surface").first()).toBeVisible();
   });
 });

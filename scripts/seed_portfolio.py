@@ -1,4 +1,4 @@
-"""Small synthetic dataset for the isolated, no-model portfolio demo."""
+"""隔离、无模型作品演示使用的小型合成数据集。"""
 
 import json
 from datetime import UTC, datetime, timedelta
@@ -16,7 +16,7 @@ ORDERS = {
     "expired": UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3"),
     "response_loss": UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4"),
 }
-# Public, synthetic credentials for a localhost-only demo. Never used for production.
+# 仅用于本地演示的公开合成账号，不用于生产。
 DEMO_PASSWORD = "DemoPass123!"
 
 

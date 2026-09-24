@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
-// Types
+// 类型
 // ---------------------------------------------------------------------------
 
 interface Order {
@@ -39,19 +39,19 @@ interface Order {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// 辅助函数
 // ---------------------------------------------------------------------------
 
 function formatPrice(price: number): string {
-  return new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat("zh-CN", {
     style: "currency",
-    currency: "USD",
+    currency: "CNY",
   }).format(price);
 }
 
 function formatDate(dateStr: string): string {
   try {
-    return new Date(dateStr).toLocaleDateString("en-US", {
+    return new Date(dateStr).toLocaleDateString("zh-CN", {
       year: "numeric",
       month: "short",
       day: "numeric",
@@ -68,32 +68,32 @@ const STATUS_CONFIG: Record<
   placed: {
     color: "border-blue-200 bg-blue-50 text-blue-700",
     icon: Clock,
-    label: "Placed",
+    label: "已下单",
   },
   confirmed: {
     color: "border-indigo-200 bg-indigo-50 text-indigo-700",
     icon: CheckCircle,
-    label: "Confirmed",
+    label: "已确认",
   },
   shipped: {
     color: "border-amber-200 bg-amber-50 text-amber-700",
     icon: Truck,
-    label: "Shipped",
+    label: "已发货",
   },
   delivered: {
     color: "border-emerald-200 bg-emerald-50 text-emerald-700",
     icon: CheckCircle,
-    label: "Delivered",
+    label: "已送达",
   },
   returned: {
     color: "border-orange-200 bg-orange-50 text-orange-700",
     icon: RotateCcw,
-    label: "Returned",
+    label: "已退货",
   },
   cancelled: {
     color: "border-red-200 bg-red-50 text-red-700",
     icon: XCircle,
-    label: "Cancelled",
+    label: "已取消",
   },
 };
 
@@ -109,21 +109,21 @@ function getStatusConfig(status: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Status tabs
+// 状态筛选标签
 // ---------------------------------------------------------------------------
 
 const STATUS_TABS = [
-  { value: "", label: "All" },
-  { value: "placed", label: "Placed" },
-  { value: "confirmed", label: "Confirmed" },
-  { value: "shipped", label: "Shipped" },
-  { value: "delivered", label: "Delivered" },
-  { value: "returned", label: "Returned" },
-  { value: "cancelled", label: "Cancelled" },
+  { value: "", label: "全部" },
+  { value: "placed", label: "已下单" },
+  { value: "confirmed", label: "已确认" },
+  { value: "shipped", label: "已发货" },
+  { value: "delivered", label: "已送达" },
+  { value: "returned", label: "已退货" },
+  { value: "cancelled", label: "已取消" },
 ];
 
 // ---------------------------------------------------------------------------
-// Skeleton
+// 骨架屏
 // ---------------------------------------------------------------------------
 
 function OrderCardSkeleton() {
@@ -145,7 +145,7 @@ function OrderCardSkeleton() {
 }
 
 // ---------------------------------------------------------------------------
-// Page
+// 页面
 // ---------------------------------------------------------------------------
 
 export default function OrdersPage() {
@@ -167,7 +167,7 @@ export default function OrdersPage() {
       setTotal(data.total);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to load orders"
+        err instanceof Error ? err.message : "订单加载失败"
       );
     } finally {
       setLoading(false);
@@ -182,7 +182,7 @@ export default function OrdersPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
+      {/* 页头 */}
       <div className="border-b border-border bg-card">
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
@@ -191,15 +191,15 @@ export default function OrdersPage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-foreground">
-                Order History
+                订单记录
               </h1>
               <p className="text-sm text-muted-foreground">
-                View and track all your orders
+                查看并跟踪您的全部订单
               </p>
             </div>
           </div>
 
-          {/* Status filter tabs */}
+          {/* 状态筛选标签 */}
           <div className="mt-6 flex flex-wrap gap-2">
             {STATUS_TABS.map((tab) => (
               <Button
@@ -220,14 +220,14 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      {/* Content */}
+      {/* 内容区 */}
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Total count */}
+        {/* 订单总数 */}
         {!loading && !error && orders.length > 0 && (
-          <p className="mb-6 text-sm text-muted-foreground">{total} orders</p>
+          <p className="mb-6 text-sm text-muted-foreground">共 {total} 笔订单</p>
         )}
 
-        {/* Loading */}
+        {/* 加载中 */}
         {loading && (
           <div className="space-y-4">
             {Array.from({ length: 4 }).map((_, i) => (
@@ -236,21 +236,21 @@ export default function OrdersPage() {
           </div>
         )}
 
-        {/* Error */}
+        {/* 错误提示 */}
         {error && (
           <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             {error}
           </div>
         )}
 
-        {/* Empty state */}
+        {/* 空状态 */}
         {!loading && !error && orders.length === 0 && (
           <div className="py-20 text-center">
             <ShoppingCart className="mx-auto size-10 text-muted-foreground" />
             <p className="mt-3 text-sm text-muted-foreground">
               {activeStatus
-                ? `No ${activeStatus} orders found.`
-                : "No orders yet."}
+                ? `没有${STATUS_TABS.find((t) => t.value === activeStatus)?.label ?? activeStatus}的订单。`
+                : "暂无订单。"}
             </p>
             {activeStatus && (
               <Button
@@ -259,13 +259,13 @@ export default function OrdersPage() {
                 className="mt-4"
                 onClick={() => setActiveStatus("")}
               >
-                View all orders
+                查看全部订单
               </Button>
             )}
           </div>
         )}
 
-        {/* Order list */}
+        {/* 订单列表 */}
         {!loading && !error && orders.length > 0 && (
           <div className="space-y-4">
             {orders.map((order) => {
@@ -280,11 +280,11 @@ export default function OrdersPage() {
                 >
                   <CardContent className="py-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      {/* Left section */}
+                      {/* 左侧信息 */}
                       <div className="flex-1 space-y-2">
                         <div className="flex flex-wrap items-center gap-3">
                           <span className="font-mono text-sm font-medium text-foreground">
-                            #{order.id}
+                            订单 #{order.id}
                           </span>
                           <Badge
                             variant="outline"
@@ -298,8 +298,7 @@ export default function OrdersPage() {
                         <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                           <span>{formatDate(order.date)}</span>
                           <span>
-                            {order.item_count} item
-                            {order.item_count !== 1 ? "s" : ""}
+                            {order.item_count} 件商品
                           </span>
                           {order.carrier && (
                             <span className="flex items-center gap-1">
@@ -315,7 +314,7 @@ export default function OrdersPage() {
                         </div>
                       </div>
 
-                      {/* Right section */}
+                      {/* 右侧金额 */}
                       <div className="flex items-center gap-3">
                         <span className="text-lg font-bold text-foreground">
                           {formatPrice(order.total)}

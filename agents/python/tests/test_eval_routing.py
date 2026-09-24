@@ -1,8 +1,4 @@
-"""Tests for orchestrator routing eval (Track B2). No LLM/DB.
-
-Unit-tests the pure routing scorer and validates the routing dataset shape +
-that every expected_route names a registered specialist.
-"""
+"""路由评分器和数据集测试，核对 expected_route 均已注册，无外部调用。"""
 
 from __future__ import annotations
 

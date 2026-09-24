@@ -42,9 +42,9 @@ interface HomeProduct {
 
 function timeGreeting(): string {
   const h = new Date().getHours();
-  if (h < 12) return "morning";
-  if (h < 18) return "afternoon";
-  return "evening";
+  if (h < 12) return "早上好";
+  if (h < 18) return "下午好";
+  return "晚上好";
 }
 
 export default function HomePage() {
@@ -68,7 +68,7 @@ export default function HomePage() {
       .catch(() => setProducts([]));
   }, []);
 
-  const firstName = user?.name?.split(" ")[0] ?? "there";
+  const firstName = user?.name?.split(" ")[0] ?? "朋友";
 
   return (
     <motion.div
@@ -77,17 +77,17 @@ export default function HomePage() {
       animate="visible"
       className="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6 lg:px-8"
     >
-      {/* Greeting + quick prompts */}
+      {/* 问候语与快捷提问 */}
       <div>
         <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
           {formatDate(new Date().toISOString())}
         </p>
         <h1 className="mt-1 flex items-center gap-2 text-2xl font-bold tracking-tight">
           <Sparkles className="size-6 text-primary" />
-          Good {timeGreeting()}, {firstName}
+          {timeGreeting()}，{firstName}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Your multi-agent shopping concierge. Ask anything, or jump back in.
+          您的多智能体购物助手。随时提问，或继续上次的会话。
         </p>
 
         <div className="mt-4 flex flex-wrap gap-2">
@@ -104,12 +104,12 @@ export default function HomePage() {
             href="/chat"
             className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
           >
-            Open chat <ArrowRight className="size-3.5" />
+            进入对话 <ArrowRight className="size-3.5" />
           </Link>
         </div>
       </div>
 
-      {/* Stat row */}
+      {/* 统计行 */}
       <motion.div
         variants={reduce ? undefined : listStagger}
         initial={reduce ? undefined : "hidden"}
@@ -118,28 +118,28 @@ export default function HomePage() {
       >
         {[
           {
-            label: "Your Orders",
+            label: "我的订单",
             value: orders == null ? "—" : orders.length,
             icon: Package,
-            hint: "recent",
+            hint: "近期",
           },
           {
-            label: "Cart Items",
+            label: "购物车商品",
             value: cart?.item_count ?? 0,
             icon: ShoppingCart,
-            hint: cart?.subtotal ? formatPrice(cart.subtotal) : "empty",
+            hint: cart?.subtotal ? formatPrice(cart.subtotal) : "空",
           },
           {
-            label: "Specialist Agents",
+            label: "专业智能体",
             value: 6,
             icon: Bot,
-            hint: "collaborating",
+            hint: "协同工作",
           },
           {
-            label: "Avg Response",
+            label: "平均响应",
             value: "~1.2s",
             icon: Activity,
-            hint: "across agents",
+            hint: "全部智能体",
           },
         ].map((s) => (
           <motion.div key={s.label} variants={reduce ? undefined : listItem}>
@@ -153,17 +153,17 @@ export default function HomePage() {
         ))}
       </motion.div>
 
-      {/* Main grid */}
+      {/* 主网格 */}
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Recent orders */}
+        {/* 最近订单 */}
         <div className="rounded-xl bg-card ring-1 ring-foreground/10 lg:col-span-2">
           <div className="flex items-center justify-between px-4 py-3">
-            <h2 className="text-sm font-semibold">Recent Orders</h2>
+            <h2 className="text-sm font-semibold">最近订单</h2>
             <Link
               href="/orders"
               className="text-xs font-medium text-primary hover:underline"
             >
-              View all
+              查看全部
             </Link>
           </div>
           <div className="border-t">
@@ -175,9 +175,9 @@ export default function HomePage() {
               </div>
             ) : orders.length === 0 ? (
               <div className="px-4 py-10 text-center text-sm text-muted-foreground">
-                No orders yet.{" "}
+                暂无订单。{" "}
                 <Link href="/products" className="text-primary hover:underline">
-                  Browse products
+                  浏览商品
                 </Link>
               </div>
             ) : (
@@ -190,7 +190,7 @@ export default function HomePage() {
                     >
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">
-                          Order #{o.id.slice(0, 8)}
+                          订单 #{o.id.slice(0, 8)}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {formatDate(o.created_at)}
@@ -210,54 +210,53 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Cart snapshot + agent activity */}
+        {/* 购物车快照与智能体动态 */}
         <div className="space-y-6">
           <div className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold">Your Cart</h2>
+              <h2 className="text-sm font-semibold">我的购物车</h2>
               <ShoppingCart className="size-4 text-muted-foreground" />
             </div>
             <p className="mt-3 text-2xl font-semibold tabular-nums">
               {cart?.item_count ?? 0}{" "}
               <span className="text-sm font-normal text-muted-foreground">
-                items
+                件商品
               </span>
             </p>
             <p className="text-sm text-muted-foreground">
-              Subtotal {formatPrice(cart?.subtotal ?? 0)}
+              小计 {formatPrice(cart?.subtotal ?? 0)}
             </p>
             <Link
               href="/cart"
               className="mt-4 inline-flex w-full items-center justify-center gap-1 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
             >
-              Go to cart <ArrowRight className="size-3.5" />
+              前往购物车 <ArrowRight className="size-3.5" />
             </Link>
           </div>
 
           <div className="rounded-xl border border-dashed bg-card/50 p-4">
             <div className="flex items-center gap-2">
               <Activity className="size-4 text-primary" />
-              <h2 className="text-sm font-semibold">Agent Activity</h2>
+              <h2 className="text-sm font-semibold">智能体动态</h2>
             </div>
             <p className="mt-2 text-sm text-muted-foreground">
-              A live timeline of which specialists handled your requests is
-              coming soon.
+              展示各专业智能体处理您请求的实时时间线即将上线。
             </p>
           </div>
         </div>
       </div>
 
-      {/* Demo scenarios */}
+      {/* 演示场景 */}
       <div>
         <SectionHeader
-          eyebrow="See the agents in action"
-          title="Demo Scenarios"
+          eyebrow="看智能体如何工作"
+          title="演示场景"
           action={
             <Link
               href="/agents"
               className="text-xs font-medium text-primary hover:underline"
             >
-              View all agents
+              查看全部智能体
             </Link>
           }
         />
@@ -272,17 +271,17 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Recommended */}
+      {/* 推荐商品 */}
       <div>
         <SectionHeader
-          eyebrow="Picked for you"
-          title="Recommended Products"
+          eyebrow="为您推荐"
+          title="推荐商品"
           action={
             <Link
               href="/products"
               className="text-xs font-medium text-primary hover:underline"
             >
-              Browse all
+              浏览全部
             </Link>
           }
         />

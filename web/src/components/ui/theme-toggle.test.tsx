@@ -9,20 +9,20 @@ describe("ThemeToggle", () => {
     localStorage.clear();
   });
 
-  it("toggles the dark class and persists the choice", async () => {
+  it("切换 dark 类并持久化用户选择", async () => {
     const user = userEvent.setup();
     render(<ThemeToggle />);
 
-    const button = screen.getByRole("button", { name: /switch to dark mode/i });
+    const button = screen.getByRole("button", { name: /切换到深色模式/ });
     expect(document.documentElement.classList.contains("dark")).toBe(false);
 
     await user.click(button);
 
     expect(document.documentElement.classList.contains("dark")).toBe(true);
     expect(localStorage.getItem("theme")).toBe("dark");
-    // label flips to offer the reverse action
+    // 标签翻转为反向操作
     expect(
-      screen.getByRole("button", { name: /switch to light mode/i }),
+      screen.getByRole("button", { name: /切换到浅色模式/ }),
     ).toBeInTheDocument();
   });
 });

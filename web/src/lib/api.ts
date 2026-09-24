@@ -2,23 +2,23 @@ import { returnOperationSchema, type ReturnOperation } from "./return-operation"
 
 export class ApiError extends Error {
   constructor(public readonly status: number, public readonly data: Record<string, unknown>) {
-    super(typeof data.detail === "string" ? data.detail : typeof data.error === "string" ? data.error : `API error ${status}`);
+    super(typeof data.detail === "string" ? data.detail : typeof data.error === "string" ? data.error : `接口请求失败（${status}）`);
   }
 }
 
 /**
- * Base URL for API calls. Empty by default: the browser talks to its own
- * origin and `src/app/api/[...path]/route.ts` forwards to the orchestrator, so
- * nothing about the backend's address is compiled into this bundle. Set
- * NEXT_PUBLIC_API_URL only to bypass that proxy and call an orchestrator
- * directly — it works, and it brings CORS back with it.
+ * API 调用的基础地址。默认为空：浏览器与自身同源通信，
+ * 由 `src/app/api/[...path]/route.ts` 转发到编排器，因此后端地址不会被
+ * 编译进这个产物包。只有在需要绕过该代理、直连某个编排器时才设置
+ * NEXT_PUBLIC_API_URL——这样可行，但也会把跨域资源共享（CORS）问题一并
+ * 带回来。
  */
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 /**
- * Absolutize a server-issued `/api/...` path for use outside `fetch` — an
- * anchor href or `window.open`, where a relative path would resolve against
- * the current route rather than the origin.
+ * 把服务端下发的 `/api/...` 路径补全为绝对地址，供 `fetch` 之外的地方使用
+ * ——例如 <a> 的 href 或 `window.open`，在这些场景下相对路径会基于当前路由
+ * 而非站点根解析。
  */
 export function apiUrl(path: string): string {
   return path.startsWith("/api") ? `${API_URL}${path}` : path;
@@ -49,8 +49,8 @@ export interface CartItem {
   available_qty?: number;
 }
 
-/** One step in the agentic timeline streamed via `event: step` SSE frames. */
-/** Where a step's data came from — shared/agent_observability.py's StepRecorderMiddleware. */
+/** 通过 `event: step` SSE 帧流式推送的智能体时间线中的一个步骤。 */
+/** 该步骤数据的来源——shared/agent_observability.py 的 StepRecorderMiddleware。 */
 export interface StepProvenance {
   source: string;
   row_ids: string[];
@@ -66,7 +66,7 @@ export interface AgentStep {
   provenance?: StepProvenance;
 }
 
-/** One verified/unverified claim inside a GroundingReport (shared/grounding/verifier.py::ClaimVerdict). */
+/** GroundingReport 中的一条已核验/未核验声明（shared/grounding/verifier.py::ClaimVerdict）。 */
 export interface GroundingClaim {
   type: "product" | "order" | "bare_id" | "amount" | "tracking";
   id: string;
@@ -76,10 +76,10 @@ export interface GroundingClaim {
 }
 
 /**
- * Server-side grounding verdict for one assistant message — how many of its
- * product/order card claims were checked against Postgres, not just
- * format-validated (shared/grounding/middleware.py::_attach_report). Present
- * only when `GROUNDING_MODE` is `annotate` or `enforce` (default: annotate).
+ * 服务端对某条助手消息给出的事实核验（grounding）结论——其中有多少条
+ * 商品/订单卡片声明是真的对照 Postgres 校验过，而不仅仅是通过了格式校验
+ * （shared/grounding/middleware.py::_attach_report）。仅当 `GROUNDING_MODE`
+ * 为 `annotate` 或 `enforce` 时存在（默认：annotate）。
  */
 export interface GroundingReport {
   total: number;
@@ -88,7 +88,7 @@ export interface GroundingReport {
   claims: GroundingClaim[];
 }
 
-/** What a mode supports — from `GET /api/orchestration/modes` (orchestrator/modes/base.py::ModeCapabilities). */
+/** 某个模式支持哪些能力——来自 `GET /api/orchestration/modes`（orchestrator/modes/base.py::ModeCapabilities）。 */
 export interface OrchestrationModeCapabilities {
   streams: boolean;
   supports_hitl: boolean;
@@ -96,7 +96,7 @@ export interface OrchestrationModeCapabilities {
   is_graph: boolean;
 }
 
-/** One entry in `GET /api/orchestration/modes` — a mode `/api/chat`'s `mode` field can select. */
+/** `GET /api/orchestration/modes` 中的一条记录——`/api/chat` 的 `mode` 字段可选择的模式。 */
 export interface OrchestrationMode {
   name: string;
   label: string;
@@ -105,7 +105,7 @@ export interface OrchestrationMode {
   default: boolean;
 }
 
-/** One mode's result from `POST /api/orchestration/compare`. */
+/** `POST /api/orchestration/compare` 中某个模式的结果。 */
 export interface CompareModeResult {
   mode: string;
   label: string;
@@ -160,7 +160,7 @@ export interface CartResponse {
   billing_same_as_shipping: boolean;
 }
 
-// Stale JWT → clear auth and bounce to /login. Idempotent.
+// JWT 失效 → 清除登录态并跳转到 /login。幂等操作。
 function handleUnauthorized() {
   if (typeof window === "undefined") return;
   localStorage.removeItem("ecommerce_user");
@@ -174,7 +174,7 @@ function handleUnauthorized() {
 class ApiClient {
   private token: string | null = null;
   private refreshToken: string | null = null;
-  // Single in-flight refresh — rapid concurrent 401s share one network call.
+  // 只允许一个进行中的刷新——并发的多个 401 共用同一次网络请求。
   private inflightRefresh: Promise<string | null> | null = null;
 
   setToken(token: string | null) {
@@ -190,9 +190,9 @@ class ApiClient {
   }
 
   /**
-   * Attempt to swap the current refresh_token for a fresh access token.
-   * Returns the new access token, or `null` if refresh isn't possible —
-   * caller should then bounce the user to /login.
+   * 尝试用当前的 refresh_token 换取新的访问令牌。
+   * 返回新的访问令牌；若无法刷新则返回 `null`——此时调用方应把用户
+   * 跳转到 /login。
    */
   private async tryRefresh(): Promise<string | null> {
     if (!this.refreshToken) return null;
@@ -237,9 +237,8 @@ class ApiClient {
     const res = await fetch(`${API_URL}${path}`, { ...options, headers });
 
     if (res.status === 401) {
-      // One retry: if we have a refresh token, swap it for a fresh
-      // access token and replay the request once. Avoids the silent
-      // session-death audit finding on long chat sessions.
+      // 只重试一次：如果有刷新令牌，就用它换取新的访问令牌并重放该请求
+      // 一次。这避免了长对话会话中「会话静默失效」这一问题。
       if (allowRefresh) {
         const fresh = await this.tryRefresh();
         if (fresh) {
@@ -248,7 +247,7 @@ class ApiClient {
       }
       this.token = null;
       handleUnauthorized();
-      throw new Error("Session expired — please log in again.");
+      throw new Error("登录已过期——请重新登录。");
     }
 
     if (!res.ok) {
@@ -259,7 +258,7 @@ class ApiClient {
     return res.json();
   }
 
-  // Auth
+  // 认证
   signup(email: string, password: string, name: string) {
     return this.request<{
       access_token: string;
@@ -289,7 +288,7 @@ class ApiClient {
     });
   }
 
-  // Chat
+  // 对话
   chat(message: string, conversationId?: string, signal?: AbortSignal) {
     return this.request<{
       response: string;
@@ -305,12 +304,12 @@ class ApiClient {
   }
 
   /**
-   * Streaming chat — reads SSE events and calls onChunk for each text delta.
-   * Returns conversation metadata once the stream completes.
+   * 流式对话——读取 SSE 事件，并为每个文本增量调用 onChunk。
+   * 流结束后返回会话元数据。
    *
-   * Pass an `AbortSignal` to cancel mid-stream (e.g. user navigates away
-   * or hits "Stop"). On a 401 the client refreshes once and retries the
-   * stream; if the refresh fails the user is bounced to /login.
+   * 传入 `AbortSignal` 可在流中途取消（例如用户离开页面或点击「停止」）。
+   * 遇到 401 时客户端会刷新一次并重试该流；若刷新失败则把用户跳转到
+   * /login。
    */
   async chatStream(
     message: string,
@@ -321,39 +320,36 @@ class ApiClient {
       allowRefresh?: boolean;
       onStep?: (step: AgentStep) => void;
       /**
-       * Fired for any SSE frame that isn't `step`/`metadata`/display text —
-       * currently `node`, `handoff`, `checkpoint`, `request_info`, `error`
-       * from a non-"tool" orchestration mode (see `orchestrator/routes/chat.py`),
-       * plus `run` — `{run_id, pending_approval}`, emitted by every mode after
-       * persistence, since the run's id is the `usage_logs` row created there
-       * and so cannot be known when `metadata` goes out. Both stacks emit it.
+       * 对任何不是 `step`/`metadata`/展示文本的 SSE 帧触发——目前包括来自
+       * 非「tool」编排模式的 `node`、`handoff`、`checkpoint`、`request_info`、
+       * `error`（见 `orchestrator/routes/chat.py`），以及 `run`
+       * ——`{run_id, pending_approval}`，由每种模式在持久化之后发出，
+       * 因为 run 的 id 就是此时创建的 `usage_logs` 行，在 `metadata` 发出时
+       * 还无从得知。所有技术栈都会发出该事件。
        */
       onOrchestrationEvent?: (eventName: string, data: unknown) => void;
       /**
-       * Fired once per `event: grounding` frame — currently only "tool" mode
-       * emits it (see `orchestrator/modes/tool_router.py` and
-       * `orchestrator/routes/chat.py`'s streaming generator).
+       * 每个 `event: grounding` 帧触发一次——目前只有「tool」模式会发出它
+       * （见 `orchestrator/modes/tool_router.py` 与
+       * `orchestrator/routes/chat.py` 的流式生成器）。
        */
       onGrounding?: (report: GroundingReport) => void;
       /**
-       * Fired for `event: delta` frames — a specialist's own live-streamed
-       * text, forwarded in real time during a "tool" mode turn's
-       * `call_specialist_agent` tool call, so the user sees a continuous
-       * stream instead of silence during the tool-call gap. This is a
-       * *preview*, not the final answer: the orchestrator's own separately-
-       * composed final text (delivered via `onChunk`) restates the same
-       * content afterward, and the backend never persists delta text into
-       * the saved message (Phase 8.1) — kept as a distinct callback rather
-       * than folded into `onChunk` so callers can render it as a
-       * replaceable preview instead of accumulating it into the same
-       * buffer the final answer also writes to, which is what caused the
-       * visible duplication this callback's separation fixes.
+       * 对 `event: delta` 帧触发——专业智能体自身实时流式输出的文本，在
+       * 「tool」模式某一轮的 `call_specialist_agent` 工具调用期间实时转发，
+       * 使用户在工具调用空档期看到连续的输出流而不是一片沉默。这是一个
+       * *预览*，不是最终回答：编排器随后会通过 `onChunk` 送出它自己单独
+       * 组织的最终文本，内容与之重复；而后端从不会把 delta 文本持久化进
+       * 保存的消息中（第 8.1 阶段）——之所以保留为独立回调而不并入
+       * `onChunk`，是为了让调用方把它渲染成可替换的预览，而不是累积进
+       * 最终回答也在写入的同一个缓冲区，那正是本次回调拆分所修复的可见
+       * 重复问题的成因。
        */
       onDeltaChunk?: (text: string) => void;
       /**
-       * Orchestration mode to run this turn through — a `name` from
-       * `GET /api/orchestration/modes`. Omitted (or `undefined`) lets the
-       * backend fall back to `settings.ORCHESTRATION_MODE` (default `"tool"`).
+       * 本轮对话使用的编排模式——取自 `GET /api/orchestration/modes` 的
+       * `name`。省略（或为 `undefined`）时后端回退到
+       * `settings.ORCHESTRATION_MODE`（默认 `"tool"`）。
        */
       mode?: string;
     } = {}
@@ -389,7 +385,7 @@ class ApiClient {
       }
       this.token = null;
       handleUnauthorized();
-      throw new Error("Session expired — please log in again.");
+      throw new Error("登录已过期——请重新登录。");
     }
 
     if (!res.ok) {
@@ -399,7 +395,7 @@ class ApiClient {
 
     const reader = res.body?.getReader();
     if (!reader) {
-      throw new Error("ReadableStream not supported");
+      throw new Error("当前环境不支持 ReadableStream");
     }
 
     const decoder = new TextDecoder();
@@ -413,15 +409,14 @@ class ApiClient {
 
         buffer += decoder.decode(value, { stream: true });
 
-        // Split on double-newline to get complete SSE events.
-        // Splitting on "\n" alone loses newlines embedded in data payloads
-        // (e.g. the \n between a ```product fence and its JSON body), because
-        // each \n-split line is treated independently and empty data: lines
-        // (from a lone-\n token) are silently dropped. Per SSE spec, an event
-        // is terminated by \n\n; multiple data: lines within one event must be
-        // joined with \n to reconstruct the original value.
+        // 按双换行切分以获得完整的 SSE 事件。
+        // 只按 "\n" 切分会丢失 data 载荷中内嵌的换行（例如 ```product
+        // 代码块与其 JSON 正文之间的 \n），因为每一行都会被独立处理，而
+        // 空的 data: 行（来自单独的 \n token）会被静默丢弃。按 SSE 规范，
+        // 事件以 \n\n 结束；同一事件内的多行 data: 必须用 \n 连接，才能
+        // 还原出原始值。
         const events = buffer.split("\n\n");
-        // Last entry is an incomplete event — keep it in the buffer
+        // 最后一项是不完整的事件——保留在缓冲区中
         buffer = events.pop() ?? "";
 
         for (const event of events) {
@@ -439,7 +434,7 @@ class ApiClient {
 
           if (dataParts.length === 0) continue;
 
-          // Rejoin multi-line data fields with \n (SSE spec §9.2.6)
+          // 用 \n 重新连接多行的 data 字段（SSE 规范 §9.2.6）
           const data = dataParts.join("\n");
 
           if (data === "[DONE]") continue;
@@ -448,7 +443,7 @@ class ApiClient {
             try {
               options.onStep?.(JSON.parse(data) as AgentStep);
             } catch {
-              // Ignore malformed step
+              // 忽略格式错误的 step
             }
             continue;
           }
@@ -457,7 +452,7 @@ class ApiClient {
             try {
               metadata = JSON.parse(data);
             } catch {
-              // Ignore malformed metadata
+              // 忽略格式错误的 metadata
             }
             continue;
           }
@@ -466,16 +461,15 @@ class ApiClient {
             try {
               options.onGrounding?.(JSON.parse(data) as GroundingReport);
             } catch {
-              // Ignore malformed grounding report
+              // 忽略格式错误的事实核验报告
             }
             continue;
           }
 
-          // "" (plain `data:` frame) is the orchestrator's own final text —
-          // the persisted answer. "delta" (a specialist's live-streamed
-          // token) is a preview only, routed to its own callback so callers
-          // can treat it as replaceable rather than accumulating it into
-          // the same buffer as the final answer (see onDeltaChunk's doc).
+          // ""（裸 `data:` 帧）是编排器自己的最终文本——也就是被持久化的
+          // 回答。"delta"（专业智能体实时流式输出的 token）只是预览，会
+          // 被路由到它自己的回调，好让调用方把它视为可替换的内容，而不是
+          // 累积进与最终回答相同的缓冲区（见 onDeltaChunk 的文档）。
           if (currentEventType === "") {
             onChunk(data);
             continue;
@@ -485,20 +479,19 @@ class ApiClient {
             continue;
           }
 
-          // Any other named frame (e.g. `node`/`handoff`/`checkpoint`/
-          // `request_info`/`error` from a non-"tool" orchestration mode) is
-          // structured data, not display text — forward it to the optional
-          // hook rather than falling through to onChunk, which would render
-          // its raw JSON payload as if it were part of the chat message.
+          // 其他任何具名帧（例如来自非「tool」编排模式的
+          // `node`/`handoff`/`checkpoint`/`request_info`/`error`）都是结构化
+          // 数据，不是展示文本——转发给可选钩子，而不是落到 onChunk，
+          // 否则会把它的原始 JSON 载荷当作对话消息的一部分渲染出来。
           try {
             options.onOrchestrationEvent?.(currentEventType, JSON.parse(data));
           } catch {
-            // Ignore malformed frame
+            // 忽略格式错误的帧
           }
         }
       }
     } catch (err) {
-      // AbortError on user-initiated cancel: don't throw, just stop.
+      // 用户主动取消时抛出的 AbortError：不要向上抛，直接停止即可。
       if (err instanceof DOMException && err.name === "AbortError") {
         return metadata ?? { conversation_id: conversationId ?? "", agents_involved: [] };
       }
@@ -510,7 +503,7 @@ class ApiClient {
     return metadata ?? { conversation_id: conversationId ?? "", agents_involved: [] };
   }
 
-  // Orchestration modes
+  // 编排模式
   getOrchestrationModes() {
     return this.request<OrchestrationMode[]>("/api/orchestration/modes");
   }
@@ -528,7 +521,7 @@ class ApiClient {
     });
   }
 
-  // Conversations
+  // 会话
   getConversations() {
     return this.request<any[]>("/api/conversations");
   }
@@ -541,7 +534,7 @@ class ApiClient {
     return this.request<any>(`/api/conversations/${id}`, { method: "DELETE" });
   }
 
-  // Marketplace
+  // 智能体市场
   getAgentCatalog() {
     return this.request<any[]>("/api/marketplace/agents");
   }
@@ -561,7 +554,7 @@ class ApiClient {
     return this.request<any[]>("/api/marketplace/my-agents");
   }
 
-  // Admin
+  // 管理后台
   getAccessRequests() {
     return this.request<any[]>("/api/admin/requests");
   }
@@ -586,7 +579,7 @@ class ApiClient {
     >("/api/agents/stats");
   }
 
-  // HITL
+  // 人工参与（HITL）
   getHitlRequests(status?: string) {
     const q = status ? `?status=${encodeURIComponent(status)}` : "";
     return this.request<{
@@ -704,7 +697,7 @@ class ApiClient {
     }>(`/api/admin/audit${qs ? `?${qs}` : ""}`);
   }
 
-  // Seller
+  // 商家
   getSellerProducts() {
     return this.request<{ products: any[]; total: number }>("/api/seller/products");
   }
@@ -717,7 +710,7 @@ class ApiClient {
     return this.request<any>("/api/seller/stats");
   }
 
-  // Products
+  // 商品
   getProducts(params?: { category?: string; min_price?: number; max_price?: number; search?: string; sort?: string }) {
     const qs = new URLSearchParams();
     if (params?.category) qs.set("category", params.category);
@@ -733,7 +726,7 @@ class ApiClient {
     return this.request<any>(`/api/products/${id}`);
   }
 
-  // Cart
+  // 购物车
   getCart() {
     return this.request<{
       id: string;
@@ -851,7 +844,7 @@ class ApiClient {
     return returnOperationSchema.parse(await this.request<unknown>(`/api/returns/operations/${operationId}`));
   }
 
-  // Orders
+  // 订单
   getOrders(status?: string) {
     const q = status ? `?status=${status}` : "";
     return this.request<{ orders: any[]; total: number }>(`/api/orders${q}`);
@@ -861,7 +854,7 @@ class ApiClient {
     return this.request<any>(`/api/orders/${id}`);
   }
 
-  // Profile
+  // 个人中心
   getProfile() {
     return this.request<any>("/api/profile");
   }
@@ -882,7 +875,7 @@ class ApiClient {
 
 export const api = new ApiClient();
 
-// Named function exports for convenience (delegates to the singleton)
+// 便于使用的具名函数导出（委托给单例）
 export function getConversations() {
   return api.getConversations();
 }

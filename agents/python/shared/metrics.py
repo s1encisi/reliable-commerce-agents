@@ -1,29 +1,14 @@
-"""OTel instruments this repo owns, as opposed to the ones MAF emits for us.
+"""应用自有的 OTel 费用与 token 指标。
 
-``shared/telemetry.py`` has exposed ``get_meter()`` since telemetry was wired
-up and nothing has ever called it: every metric reaching the Aspire dashboard
-today comes from MAF's or FastAPI's own instrumentation. That is fine for
-latency and request counts, which those libraries measure honestly, but it
-leaves the one number this application knows and they do not — what a run
-costs — visible only as a log line.
+CostBudgetMiddleware 已逐轮估算模型费用；这里把相同结果写入计数器，
+供支持指标的 OTLP 后端统计和告警。Jaeger 本身只接收追踪，不能作为
+本模块指标的存储端。
 
-``CostBudgetMiddleware`` already prices every LLM turn (it has to, to enforce
-a ceiling) and writes ``cost_budget.turn_recorded`` to the log. A log line is
-not something you can alert on without shipping and parsing logs; a counter
-is. So the estimate the middleware already computes is emitted here as well,
-and an OTLP sink can alarm on the delta.
+标签保持低基数，仅含模型、模式和智能体；不附加用户邮箱，避免
+为每个用户创建时间序列或向遥测系统泄露身份。
 
-**Attributes are deliberately low-cardinality.** ``model`` and ``mode`` have a
-handful of values each; ``agent`` has six. Nothing user-scoped is attached —
-``current_user_email`` would turn one time series into one per customer, which
-is both a metrics-cost problem and a way to leak identity into a telemetry
-backend that has no business holding it.
-
-**Cost here is an estimate, not a bill.** It is ``shared/cost.py``'s price
-table applied to token counts, so it drifts whenever real pricing changes and
-it is silently zero for any provider whose response omits ``usage_details``
-(replay fixtures, notably). Alert on *change*, not on an absolute figure, and
-reconcile against the provider's own billing before believing a number.
+费用由 token 数和手工价格表推算，不是账单；缺少用量时无法得到
+有效估算，实际支出应与提供方账单核对。
 """
 
 from __future__ import annotations
@@ -35,16 +20,16 @@ from shared.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Created on first use rather than at import. Building an instrument binds it to
-# whichever MeterProvider is installed at that moment, and this module is
-# imported by middleware that loads well before `configure_telemetry()` has run
-# — binding at import time would attach every instrument to the default no-op
-# provider and silently drop everything.
+# 首次使用时创建指标，避免在导入阶段绑定 MeterProvider。
+# 指标会绑定创建时的提供器，
+# 而中间件导入往往早于遥测初始化。
+# 过早绑定默认空操作提供器，
+# 可能导致指标静默丢失。
 _instruments: dict[str, Any] | None = None
 
 
 def _get_instruments() -> dict[str, Any] | None:
-    """Build (once) the instruments, or return None when telemetry is off."""
+    """按需初始化一次指标；遥测关闭时返回 None。"""
     global _instruments
 
     if not settings.OTEL_ENABLED:
@@ -69,9 +54,9 @@ def _get_instruments() -> dict[str, Any] | None:
             ),
         }
     except Exception:
-        # Telemetry must never be able to fail a request. A metrics backend
-        # that is misconfigured or unreachable is an operations problem, not a
-        # reason for a customer's question to error.
+        # 遥测不能使业务请求失败。
+        # 指标后端配置错误或不可达是运维问题，
+        # 不能让客户问题因此报错。
         logger.warning("metrics.instrument_init_failed — cost metrics disabled", exc_info=True)
         _instruments = {}
 
@@ -87,12 +72,10 @@ def record_llm_turn_cost(
     agent: str = "",
     mode: str = "",
 ) -> None:
-    """Record one priced LLM turn.
+    """记录一轮可计价的模型调用。
 
-    Tokens are recorded alongside the dollar figure because cost is *derived*
-    from them through a price table that is edited by hand. When spend jumps,
-    the first question is whether the traffic changed or the table did, and
-    only tokens can answer it.
+    费用和 token 数同时保存，便于区分支出变化来自用量变化，
+    还是手工价格表变更。
     """
     instruments = _get_instruments()
     if not instruments:
@@ -113,6 +96,6 @@ def record_llm_turn_cost(
 
 
 def _reset_for_tests() -> None:
-    """Drop the cached instruments so a test can install its own MeterProvider."""
+    """清空缓存指标，供测试安装独立的 MeterProvider。"""
     global _instruments
     _instruments = None

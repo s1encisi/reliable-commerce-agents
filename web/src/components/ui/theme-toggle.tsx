@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 
 type Theme = "light" | "dark";
 
-/** Re-read the theme whenever the <html> class attribute changes. */
+/** 每当 <html> 的 class 属性变化时重新读取主题。 */
 function subscribe(callback: () => void): () => void {
   const observer = new MutationObserver(callback);
   observer.observe(document.documentElement, {
@@ -20,15 +20,15 @@ function getSnapshot(): Theme {
   return document.documentElement.classList.contains("dark") ? "dark" : "light";
 }
 
-/** Server render assumes light; the inline init script + client store correct it. */
+/** 服务端渲染默认按浅色处理；随后由内联初始化脚本与客户端 store 修正。 */
 function getServerSnapshot(): Theme {
   return "light";
 }
 
 /**
- * Light/dark toggle. State is read from the <html> `dark` class via
- * useSyncExternalStore (no effect-setState, no hydration mismatch); the
- * initial class is applied before paint by the root layout init script.
+ * 浅色 / 深色主题切换按钮。状态通过 useSyncExternalStore 从 <html> 的 `dark`
+ * 类读取（不依赖 effect-setState，也不会产生 hydration 不一致）；初始类由根
+ * 布局的初始化脚本在首次绘制前写入。
  */
 export function ThemeToggle() {
   const theme = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
@@ -39,19 +39,19 @@ export function ThemeToggle() {
     try {
       localStorage.setItem("theme", next);
     } catch {
-      // ignore storage failures (private mode, etc.)
+      // 忽略存储失败（无痕模式等）
     }
   }
 
-  const nextLabel = theme === "dark" ? "light" : "dark";
+  const nextLabel = theme === "dark" ? "浅色" : "深色";
 
   return (
     <Button
       variant="ghost"
       size="icon"
       onClick={toggle}
-      aria-label={`Switch to ${nextLabel} mode`}
-      title={`Switch to ${nextLabel} mode`}
+      aria-label={`切换到${nextLabel}模式`}
+      title={`切换到${nextLabel}模式`}
     >
       {theme === "dark" ? (
         <Sun className="size-4" />

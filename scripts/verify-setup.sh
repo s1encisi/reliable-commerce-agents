@@ -1,17 +1,16 @@
 #!/usr/bin/env bash
 # ============================================================
-# verify-setup.sh — sanity-check a dev environment for MAF v1 tutorials
-# Usage: ./scripts/verify-setup.sh
+# verify-setup.sh — 可靠电商多智能体平台开发环境自检
+# 用法: ./scripts/verify-setup.sh
 # ============================================================
-# Checks:
-#   - uv installed (Python package manager)
+# 检查项:
+#   - 已安装 uv（Python 包管理器）
 #   - Python 3.12+
-#   - .NET 9 SDK
 #   - Docker + docker compose
-#   - .env file present (or .env.example noted)
-#   - Required LLM env var set for active LLM_PROVIDER
+#   - 存在 .env 文件（否则提示 .env.example）
+#   - 针对当前 LLM_PROVIDER 设置了必需的 LLM 环境变量
 #
-# Exits 0 on success, non-zero on first failure.
+# 成功返回 0，遇到第一个失败项即返回非零。
 
 set -o pipefail
 
@@ -50,87 +49,72 @@ section() {
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT" || exit 2
 
-section "Tooling"
-check "uv (Python package manager)" "command -v uv"
+section "工具链"
+check "uv（Python 包管理器）" "command -v uv"
 check "Python 3.12+" "python3 --version | grep -E 'Python 3\.(12|13|14)'"
-check ".NET SDK 9+" "dotnet --list-sdks | grep -E '^(9|10)\.'"
 check "Docker" "command -v docker"
 check "Docker Compose v2" "docker compose version"
-check "Node 20+ (for Next.js frontend)" "node --version | grep -E 'v(20|21|22|23|24)'"
+check "Node 20+（用于 Next.js 前端）" "node --version | grep -E 'v(20|21|22|23|24)'"
 check "pnpm" "command -v pnpm"
 
-section "Repository state"
+section "仓库状态"
 if [[ -f "$REPO_ROOT/.env" ]]; then
-    info ".env present"
+    info "已存在 .env"
     # shellcheck disable=SC1091
     set -a
     . "$REPO_ROOT/.env"
     set +a
 elif [[ -f "$REPO_ROOT/.env.example" ]]; then
-    warn ".env not found — copy .env.example → .env and fill in secrets"
+    warn "未找到 .env —— 请复制 .env.example → .env 并填入密钥"
     fail_count=$((fail_count + 1))
 else
-    printf "  ${RED}✗${RESET} neither .env nor .env.example found\n"
+    printf "  ${RED}✗${RESET} 既没有 .env 也没有 .env.example\n"
     fail_count=$((fail_count + 1))
 fi
 
-section "LLM provider configuration"
+section "LLM 提供商配置"
 LLM_PROVIDER="${LLM_PROVIDER:-openai}"
 echo "  LLM_PROVIDER=$LLM_PROVIDER"
 case "$LLM_PROVIDER" in
     openai)
         if [[ -n "${OPENAI_API_KEY:-}" && "$OPENAI_API_KEY" != "sk-your-openai-api-key-here" ]]; then
-            info "OPENAI_API_KEY set"
+            info "已设置 OPENAI_API_KEY"
         else
-            printf "  ${RED}✗${RESET} OPENAI_API_KEY is empty or placeholder\n"
+            printf "  ${RED}✗${RESET} OPENAI_API_KEY 为空或仍是占位值\n"
             fail_count=$((fail_count + 1))
         fi
         ;;
     azure)
-        check "AZURE_OPENAI_ENDPOINT set" "[[ -n \"\${AZURE_OPENAI_ENDPOINT:-}\" ]]"
-        # Accept either AZURE_OPENAI_KEY (repo convention) or AZURE_OPENAI_API_KEY (MAF convention)
+        check "已设置 AZURE_OPENAI_ENDPOINT" "[[ -n \"\${AZURE_OPENAI_ENDPOINT:-}\" ]]"
+        # 接受 AZURE_OPENAI_KEY（本仓库约定）或 AZURE_OPENAI_API_KEY（MAF 约定）
         if [[ -n "${AZURE_OPENAI_KEY:-}" || -n "${AZURE_OPENAI_API_KEY:-}" ]]; then
-            info "Azure key set"
+            info "已设置 Azure 密钥"
         else
-            printf "  ${RED}✗${RESET} AZURE_OPENAI_KEY (or AZURE_OPENAI_API_KEY) is empty\n"
+            printf "  ${RED}✗${RESET} AZURE_OPENAI_KEY（或 AZURE_OPENAI_API_KEY）为空\n"
             fail_count=$((fail_count + 1))
         fi
-        check "AZURE_OPENAI_DEPLOYMENT set" "[[ -n \"\${AZURE_OPENAI_DEPLOYMENT:-}\${AZURE_OPENAI_DEPLOYMENT_NAME:-}\" ]]"
+        check "已设置 AZURE_OPENAI_DEPLOYMENT" "[[ -n \"\${AZURE_OPENAI_DEPLOYMENT:-}\${AZURE_OPENAI_DEPLOYMENT_NAME:-}\" ]]"
         ;;
     *)
-        printf "  ${RED}✗${RESET} unknown LLM_PROVIDER: %s (expected 'openai' or 'azure')\n" "$LLM_PROVIDER"
+        printf "  ${RED}✗${RESET} 未知的 LLM_PROVIDER: %s（应为 'openai' 或 'azure'）\n" "$LLM_PROVIDER"
         fail_count=$((fail_count + 1))
         ;;
 esac
 
-section "Workspace structure"
-check "tutorials/ present" "[[ -d tutorials ]]"
-check "agents/dotnet/ solution present" "[[ -f agents/dotnet/ECommerceAgents.sln ]]"
-check "docker-compose.yml present" "[[ -f docker-compose.yml ]]"
-check "docker-compose.dotnet.yml present" "[[ -f docker-compose.dotnet.yml ]]"
-check "agents/python/ backend present" "[[ -d agents/python ]]"
-check "web/ Next.js frontend present" "[[ -d web ]]"
+section "工作区结构"
+check "存在 tutorials/ 目录" "[[ -d tutorials ]]"
+check "存在 docker-compose.yml" "[[ -f docker-compose.yml ]]"
+check "存在 agents/python/ 后端" "[[ -d agents/python ]]"
+check "存在 web/ Next.js 前端" "[[ -d web ]]"
 
-section "Quick-build smoke"
-if command -v dotnet >/dev/null 2>&1; then
-    if (cd agents/dotnet && dotnet build --nologo --verbosity quiet 2>&1 | grep -q "Build succeeded"); then
-        info ".NET solution builds green"
-    else
-        warn ".NET solution build failed (run 'cd agents/dotnet && dotnet build' for details)"
-        fail_count=$((fail_count + 1))
-    fi
-else
-    warn ".NET SDK missing — skipping build smoke"
-fi
-
-section "Summary"
+section "汇总"
 passed=$((check_count - fail_count))
 if [[ $fail_count -eq 0 ]]; then
-    printf "  ${GREEN}All %d checks passed.${RESET}\n" "$check_count"
-    printf "  You're ready to run tutorials — start with ${GREEN}tutorials/01-first-agent/${RESET}.\n"
+    printf "  ${GREEN}全部 %d 项检查通过。${RESET}\n" "$check_count"
+    printf "  可以开始学习教程了 —— 从 ${GREEN}tutorials/01-first-agent/${RESET} 开始。\n"
     exit 0
 else
-    printf "  ${RED}%d of %d checks failed.${RESET}\n" "$fail_count" "$check_count"
-    printf "  Fix the items marked ${RED}✗${RESET} above and re-run this script.\n"
+    printf "  ${RED}%d / %d 项检查失败。${RESET}\n" "$fail_count" "$check_count"
+    printf "  请修复上方标记为 ${RED}✗${RESET} 的项，然后重新运行本脚本。\n"
     exit 1
 fi

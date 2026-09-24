@@ -1,34 +1,31 @@
-"""``workflow:pre-purchase`` and ``workflow:return-replace`` modes.
+"""``workflow:pre-purchase`` 与 ``workflow:return-replace`` 模式。
 
-Wraps the already-built, already-tested MAF ``WorkflowBuilder`` graphs in
-``workflows/pre_purchase.py`` (concurrent fan-out/fan-in) and
-``workflows/return_replace.py`` (sequential with an in-workflow HITL
-gate) — per the audit, previously reachable only from their own test
-suites, never from a live request.
+包装 ``workflows/pre_purchase.py``（并发扇出/扇入）与
+``workflows/return_replace.py``（顺序执行 + 工作流内人工参与门控）中
+早已构建、早已有测试覆盖的 MAF ``WorkflowBuilder`` 图 —— 按审计结论，
+它们此前只能从各自的测试套件触达，从未能由实际请求触达。
 
-ID resolution: neither workflow's ``execute(state)`` accepts free text —
-both were only ever driven by a hand-built dataclass in tests. Each mode
-here resolves a product_id / order_id out of the chat message before
-building that initial state: a UUID literal in the message if present,
-else a lightweight lookup (``search_products`` for pre-purchase, the
-current user's unambiguous order for return-replace).
+ID 解析：两个工作流的 ``execute(state)`` 都不接受自由文本 —— 在测试中它们
+都只是由手工构造的 dataclass 驱动的。这里的每个模式都会在构建初始状态之前，
+先从聊天消息中解析出 product_id / order_id：消息里若有 UUID 字面量就直接用，
+否则做一次轻量查询（购前调研用 ``search_products``，退货换货用当前用户
+唯一确定的那笔订单）。
 
-HITL + checkpoints (Phase 1.5): every ``.run()`` call on the built MAF
-workflow attaches a checkpoint storage backend (``shared.factory.get_checkpoint_storage``,
-``None`` if no pool is configured — checkpointing degrades to a no-op
-rather than failing), wrapped in ``RecordingCheckpointStorage`` so each
-save can be surfaced as its own ``kind="checkpoint"`` event — MAF's own
-event stream never mentions a save, verified directly. Every
-``run_completed`` payload carries ``latest_checkpoint_id``. For
-return-replace specifically, a pause also carries ``request_id`` (MAF's
-own resume token, read off the adapted ``request_info`` event) — together
-these are exactly what a *separate* request needs to resume a *different*
-``Workflow`` object from the paused one: verified directly that
+人工参与（HITL）与检查点（Phase 1.5）：每次对构建好的 MAF 工作流调用
+``.run()`` 都会挂上一个检查点存储后端（``shared.factory.get_checkpoint_storage``，
+未配置连接池时为 ``None`` —— 此时检查点会退化为空操作而不是报错），并用
+``RecordingCheckpointStorage`` 包装，使每次保存都能作为独立的
+``kind="checkpoint"`` 事件呈现出来 —— 经直接验证，MAF 自己的事件流
+从不提及保存动作。每个 ``run_completed`` 载荷都会携带
+``latest_checkpoint_id``。具体到退货换货，暂停时还会携带 ``request_id``
+（MAF 自己的恢复令牌，从适配后的 ``request_info`` 事件中读取）—— 这两者
+合起来，正好是让一个*独立*请求从暂停的那个 ``Workflow`` 对象恢复一个
+*不同* ``Workflow`` 对象所需的全部信息：经直接验证，在全新构建的工作流上
+（而非暂停的那个实例）调用
 ``workflow.run(responses={request_id: ...}, checkpoint_id=..., checkpoint_storage=...)``
-on a freshly-built workflow (not the one that paused) replays correctly
-through to ``finalize``. ``ReturnReplaceMode.resume()`` is that second
-call; ``orchestrator/routes/orchestration.py``'s resume endpoint is what
-reaches it from a live request — the first caller for both.
+能够正确地重放到 ``finalize``。``ReturnReplaceMode.resume()`` 就是那次
+第二次调用；``orchestrator/routes/orchestration.py`` 的恢复端点正是让它
+从实际请求触达的入口 —— 两者都是首次被调用。
 """
 
 from __future__ import annotations
@@ -52,7 +49,7 @@ def _extract_uuid(text: str) -> str | None:
 
 
 async def _resolve_product_id(message: str) -> tuple[str | None, str | None]:
-    """Returns ``(product_id, error_message)`` — exactly one is set."""
+    """返回 ``(product_id, error_message)`` —— 两者中恰好只有一个被设置。"""
     uid = _extract_uuid(message)
     if uid:
         return uid, None
@@ -67,7 +64,7 @@ async def _resolve_product_id(message: str) -> tuple[str | None, str | None]:
 
 
 async def _resolve_order(message: str) -> tuple[str | None, float | None, str | None]:
-    """Returns ``(order_id, order_total, error_message)``."""
+    """返回 ``(order_id, order_total, error_message)``。"""
     import order_management.tools as order_tools
 
     candidates = list(dict.fromkeys(uid.lower() for uid in _UUID_RE.findall(message)))
@@ -92,12 +89,11 @@ async def _resolve_order(message: str) -> tuple[str | None, float | None, str | 
 
 class PrePurchaseMode:
     name = "workflow:pre-purchase"
-    label = "Pre-Purchase Research (fan-out/fan-in)"
+    label = "购前调研（扇出/扇入）"
     description = (
-        "MAF concurrent workflow: reviews, stock, and price history are fetched in "
-        "parallel, merged, and (if in stock) followed by a sequential shipping "
-        "estimate — then synthesized into one recommendation. Contrast with `tool`, "
-        "which would make these same calls one at a time, serially."
+        "MAF 并发工作流：评论、库存与价格历史并行获取后合并，"
+        "若在库则再接一段顺序的运费估算 —— 最后综合为一条推荐。"
+        "对比 `tool` 模式：它会把这些同样的调用一个一个串行发出。"
     )
     capabilities = ModeCapabilities(streams=True, supports_hitl=False, supports_checkpoints=False, is_graph=True)
 
@@ -164,13 +160,12 @@ class PrePurchaseMode:
         )
 
     def graph_mermaid(self) -> str | None:
-        # Node ids are the real executor ids (workflows/pre_purchase.py's
-        # Executor(id=...) strings) with dashes swapped for underscores —
-        # Mermaid doesn't allow dashes in bare node ids. That systematic,
-        # reversible transform is deliberate: it's what lets a client
-        # correlate a live `node_id` from an OrchestrationEvent (which
-        # carries the real dashed executor id) back to a node in this
-        # diagram without a hardcoded per-mode alias table.
+        # 节点 id 就是真实的执行器 id（workflows/pre_purchase.py 中
+        # Executor(id=...) 的字符串），只是把短横线换成了下划线 ——
+        # Mermaid 不允许裸节点 id 中含短横线。这个系统化、可逆的转换是
+        # 刻意为之：正因如此，客户端才能把 OrchestrationEvent 里实时的
+        # `node_id`（携带带短横线的真实执行器 id）对应回本图中的节点，
+        # 而无需一张按模式硬编码的别名表。
         return (
             "graph LR\n"
             "  fan_out[fan-out] --> reviews\n"
@@ -185,13 +180,13 @@ class PrePurchaseMode:
 
 class ReturnReplaceMode:
     name = "workflow:return-replace"
-    label = "Return & Replace (sequential + in-workflow HITL)"
+    label = "退货与换货（顺序执行 + 工作流内人工参与）"
     description = (
-        "MAF sequential workflow: eligibility check, return initiation, replacement "
-        "search, an in-workflow HITL gate for high-value returns (ctx.request_info — "
-        "structurally different from the middleware-based approval flow `tool` mode "
-        "uses; see shared/hitl.py vs this workflow's hitl-gate executor), then "
-        "loyalty discount and finalize."
+        "MAF 顺序工作流：资格校验、退货发起、换货搜索，"
+        "高价值退货经工作流内的人工参与门控（ctx.request_info —— "
+        "与 `tool` 模式所用的基于中间件的审批流程在结构上不同；"
+        "参见 shared/hitl.py 与本工作流的 hitl-gate 执行器），"
+        "随后是忠诚度折扣与最终确认。"
     )
     capabilities = ModeCapabilities(streams=True, supports_hitl=True, supports_checkpoints=False, is_graph=True)
 
@@ -316,18 +311,17 @@ class ReturnReplaceMode:
         )
 
     async def resume(self, *, checkpoint_id: str, request_id: str, approved: bool) -> AsyncIterator[OrchestrationEvent]:
-        """Resume a paused return-replace run from a saved checkpoint.
+        """从已保存的检查点恢复一次暂停的退货换货运行。
 
-        Not part of the ``OrchestrationMode`` protocol — ``tool``/``handoff``
-        never pause, and ``workflow:pre-purchase``/``group-chat`` have no
-        HITL gate, so this is specific to the one mode that needs it.
-        Builds a *fresh* ``Workflow`` (not the paused instance — there is
-        none; it lived in a prior request's process memory and is long
-        gone) and resumes purely from ``checkpoint_id`` + ``responses``,
-        verified directly to replay correctly through discount + finalize.
-        Caller (``orchestrator/routes/orchestration.py``) is responsible
-        for knowing which checkpoint/request_id belong to which paused run
-        — see ``hitl_requests`` in ``docker/postgres/init.sql``.
+        它不属于 ``OrchestrationMode`` 协议 —— ``tool``/``handoff``
+        从不暂停，``workflow:pre-purchase``/``group-chat`` 也没有人工参与
+        门控，因此这是唯一需要它的模式所特有的。它会构建一个*全新的*
+        ``Workflow``（不是暂停的那个实例 —— 那个已经不存在了；它曾活在前一个
+        请求的进程内存里，早已消失），并纯粹从 ``checkpoint_id`` + ``responses``
+        恢复，经直接验证可正确重放至折扣 + 最终确认。调用方
+        （``orchestrator/routes/orchestration.py``）负责知道哪个
+        checkpoint/request_id 属于哪次暂停的运行 —— 见
+        ``docker/postgres/init.sql`` 中的 ``hitl_requests``。
         """
         from workflows.return_replace import ReturnAndReplaceWorkflow, WorkflowState
 
@@ -390,8 +384,8 @@ class ReturnReplaceMode:
         )
 
     def graph_mermaid(self) -> str | None:
-        # Same dash-to-underscore node-id convention as PrePurchaseMode's
-        # graph_mermaid() — see its comment.
+        # 与 PrePurchaseMode 的 graph_mermaid() 采用同一套「短横线转下划线」
+        # 节点 id 约定 —— 见其注释。
         return (
             "graph LR\n"
             "  check_eligibility[check-eligibility] --> hitl_gate[hitl-gate]\n"

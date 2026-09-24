@@ -1,6 +1,4 @@
-"""Tests for evals/scorers/. Real Postgres for db_groundedness's from-scratch
-path (never mock the database); pure/no-network for llm_judge's parsing.
-"""
+"""评分器测试：数据库事实核验使用真实 PostgreSQL，模型裁判解析使用纯逻辑。"""
 
 from __future__ import annotations
 

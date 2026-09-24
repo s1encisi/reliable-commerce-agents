@@ -1,4 +1,4 @@
-"""Review & Sentiment agent definition."""
+"""评论与情感分析（review sentiment）智能体定义。"""
 
 from agent_framework import Agent
 
@@ -39,7 +39,7 @@ AGENT_TOOLS = [
 
 
 def create_review_sentiment_agent() -> Agent:
-    """Create the Review & Sentiment ChatAgent with all tools."""
+    """创建带全部工具的评论与情感分析 ChatAgent。"""
     return Agent(
         client=create_chat_client(),
         name="review-sentiment",

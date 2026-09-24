@@ -1,29 +1,28 @@
 #!/usr/bin/env python3
-"""Chapter contract linter — enforces tutorials/_template/README.md's shape.
+"""章节契约检查器 —— 强制校验 tutorials/_template/README.md 规定的章节形态。
 
-Per Phase 4.1's chapter contract, every tutorials/<NN-slug>/README.md must
-have, and have *for real* (not just a heading with nothing under it):
+按章节契约，每个 tutorials/<NN-slug>/README.md 都必须**真正具备**
+（而不是只有一个空标题）：
 
-1. A Concept section (## Why this chapter + ## The concept) over a minimum
-   prose length, so a stub heading can't pass.
-2. At least one ```mermaid fenced block.
-3. A Run command whose target path exists on disk.
-4. A Walkthrough — an inline code block showing real source, not just the
-   run command.
-5. A capstone-pointer section containing a `path:line` that resolves to a
-   real file with at least that many lines.
-6. A Gotchas section with at least one bullet.
-7. No dead relative links (repo-internal paths that don't exist).
+1. 概念小节（## 本章动机 + ## 核心概念），且正文长度达到下限，
+   使空壳标题无法通过检查。
+2. 至少一个 ```mermaid 围栏代码块。
+3. 一条可运行的命令，且其目标路径在磁盘上真实存在。
+4. 代码走读 —— 一段展示真实源码的内联代码块，而不仅仅是一条运行命令。
+5. 一个「完整项目落点」小节，其中含有 `路径:行号` 指针，且该文件真实存在、
+   行数不少于指针所指行号。
+6. 一个「常见坑」小节，且至少含一条列表项。
+7. 没有失效的相对链接（指向仓库内不存在的路径）。
 
-Two chapters are structurally different from a concept-teaching chapter and
-get a reduced check set — see CHAPTER_OVERRIDES:
-  - 00-setup: a prerequisites/environment chapter, not a concept chapter.
-  - 21-capstone-tour: a pointer chapter touring the live app, not a
-    standalone runnable example (its own README says so explicitly).
+有两个章节在结构上不属于「概念教学章」，适用精简后的检查项 —— 见
+CHAPTER_OVERRIDES：
+  - 00-setup：环境准备章，不是概念章。
+  - 21-capstone-tour：完整项目导览章，不是可独立运行的示例
+    （其 README 已明确说明这一点）。
 
-Usage:
-    python scripts/check_tutorial_readmes.py            # full report, all chapters
-    python scripts/check_tutorial_readmes.py --check     # CI mode: exit 1 on any failure
+用法：
+    python scripts/check_tutorial_readmes.py            # 全量报告，检查所有章节
+    python scripts/check_tutorial_readmes.py --check     # CI 模式：任一失败即退出码 1
     python scripts/check_tutorial_readmes.py 01-first-agent 22-group-chat-debate
 """
 
@@ -45,14 +44,20 @@ _PATH_LINE_RE = re.compile(r"`?([a-zA-Z0-9_./-]+\.(?:py|cs|tsx?|ts))(?::(\d+))?`
 _RELATIVE_LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 _MIN_CONCEPT_CHARS = 200
 
-# Checks not applicable to structurally different chapters. A check name
-# absent from a chapter's override set still runs normally.
+# 章节契约要求的小节标题（中文）。
+# 这四行是全仓库 36 个章节 README 的硬契约：标题必须逐字相等，
+# 否则 CI 的 --check 模式会判定该章失败。修改此处必须同步修改所有章节。
+HEADING_WHY = "本章动机"
+HEADING_CONCEPT = "核心概念"
+HEADING_CAPSTONE = "在完整项目中的落点"
+HEADING_GOTCHAS = "常见坑"
+
+# 结构上不适用某些检查的章节。某检查名未出现在该章的豁免集合中时，照常执行。
 CHAPTER_OVERRIDES: dict[str, set[str]] = {
     "00-setup": {"walkthrough", "run_command", "capstone_pointer"},
-    # 21-capstone-tour's whole body IS the capstone mapping (a table of
-    # many file:line pointers per Phase 4.4's plan), not a single labeled
-    # "## How this shows up in the capstone" section — the dedicated check
-    # doesn't fit its actual planned shape.
+    # 21-capstone-tour 的正文本身就是完整项目映射（一张按计划 4.4 列出
+    # 大量 文件:行号 指针的表格），而不是一个单独标注的
+    # 「## 在完整项目中的落点」小节 —— 专用检查不适配它的实际形态。
     "21-capstone-tour": {"walkthrough", "run_command", "capstone_pointer"},
 }
 
@@ -77,37 +82,35 @@ def discover_chapters() -> list[str]:
 
 
 def _section(text: str, heading: str) -> str | None:
-    """Return the body text under a `## <heading>` line, up to the next `##`."""
+    """返回 `## <heading>` 这一行下方的正文，直到下一个 `##` 为止。"""
     pattern = re.compile(rf"^##\s+{re.escape(heading)}\s*$(.*?)(?=^##\s|\Z)", re.MULTILINE | re.DOTALL)
     m = pattern.search(text)
     return m.group(1).strip() if m else None
 
 
 def check_concept(text: str, result: ChapterResult) -> None:
-    why = _section(text, "Why this chapter") or ""
-    concept = _section(text, "The concept") or ""
+    why = _section(text, HEADING_WHY) or ""
+    concept = _section(text, HEADING_CONCEPT) or ""
     combined = f"{why}\n{concept}".strip()
     if not combined:
-        result.failures.append("no '## Why this chapter' or '## The concept' section found")
+        result.failures.append(f"未找到「## {HEADING_WHY}」或「## {HEADING_CONCEPT}」小节")
         return
     prose_len = len(re.sub(r"\s+", " ", combined))
     if prose_len < _MIN_CONCEPT_CHARS:
-        result.failures.append(
-            f"concept prose too short ({prose_len} chars < {_MIN_CONCEPT_CHARS}) — looks like a stub"
-        )
+        result.failures.append(f"概念正文过短（{prose_len} 字符 < {_MIN_CONCEPT_CHARS}）—— 疑似空壳")
 
 
 def check_diagram(text: str, result: ChapterResult) -> None:
     if not _MERMAID_RE.search(text):
-        result.failures.append("no ```mermaid block — every chapter needs at least one diagram")
+        result.failures.append("缺少 ```mermaid 代码块 —— 每章都至少需要一张图")
 
 
 def check_run_command(text: str, result: ChapterResult) -> None:
-    # Two valid patterns seen in the wild: the standard
-    # `uv run --project tutorials python tutorials/<ch>/python/main.py`
-    # (path relative to TUTORIALS_DIR appears inline), and a chapter with
-    # its own pyproject.toml using `cd tutorials/<ch>/python` + a bare
-    # `python main.py` on a later line (e.g. 20b-devui).
+    # 支持两种运行命令形式：
+    # 直接执行 uv run --project tutorials python tutorials/<ch>/python/main.py，
+    # 或进入章节独立项目目录后运行，
+    # 例如先 cd tutorials/<ch>/python，
+    # 随后 python main.py，第 20b 章采用此形式。
     code_blocks = [body for lang, body in _CODE_BLOCK_RE.findall(text) if lang in ("bash", "sh", "")]
     candidates: list[str] = []
     for block in code_blocks:
@@ -120,14 +123,13 @@ def check_run_command(text: str, result: ChapterResult) -> None:
             if m:
                 candidates.append(m.group(1))
     if not candidates:
-        result.failures.append("no runnable command referencing a tutorials/... path found")
+        result.failures.append("未找到引用 tutorials/... 路径的可运行命令")
         return
-    # Matched groups already exclude the "tutorials/" prefix, so they're
-    # relative to TUTORIALS_DIR itself.
+    # 捕获组已排除 "tutorials/" 前缀，因此它们是相对于 TUTORIALS_DIR 的路径。
     for rel in candidates:
         target = TUTORIALS_DIR / rel
         if not target.exists():
-            result.failures.append(f"run command references '{rel}', which does not exist")
+            result.failures.append(f"运行命令引用了「{rel}」，但该路径不存在")
 
 
 def check_walkthrough(text: str, result: ChapterResult) -> None:
@@ -137,46 +139,45 @@ def check_walkthrough(text: str, result: ChapterResult) -> None:
         if len(body.strip().splitlines()) >= 3:
             return
     result.failures.append(
-        "no inline source-code walkthrough (a non-bash code block with >=3 lines) — "
-        "a run command alone isn't a walkthrough"
+        "缺少内联源码走读（一个不少于 3 行的非 bash 代码块）—— 只有运行命令不算走读"
     )
 
 
 def check_capstone_pointer(text: str, result: ChapterResult) -> None:
-    section = _section(text, "How this shows up in the capstone")
+    section = _section(text, HEADING_CAPSTONE)
     if section is None:
-        result.failures.append("no '## How this shows up in the capstone' section")
+        result.failures.append(f"未找到「## {HEADING_CAPSTONE}」小节")
         return
     matches = [(p, ln) for p, ln in _PATH_LINE_RE.findall(section) if ln]
     if not matches:
-        result.failures.append("capstone section has no `path/to/file.py:LINE` pointer")
+        result.failures.append("完整项目落点小节中没有 `路径/文件.py:行号` 指针")
         return
     for rel_path, line_str in matches:
         target = REPO_ROOT / rel_path
         if not target.exists():
-            result.failures.append(f"capstone pointer '{rel_path}' does not exist")
+            result.failures.append(f"完整项目落点指针「{rel_path}」不存在")
             continue
         line_no = int(line_str)
         line_count = sum(1 for _ in target.open(encoding="utf-8", errors="replace"))
         if line_count < line_no:
             result.failures.append(
-                f"capstone pointer '{rel_path}:{line_no}' exceeds the file's {line_count} lines"
+                f"完整项目落点指针「{rel_path}:{line_no}」超出该文件的 {line_count} 行"
             )
 
 
 def check_gotchas(text: str, result: ChapterResult) -> None:
-    section = _section(text, "Gotchas")
+    section = _section(text, HEADING_GOTCHAS)
     if section is None:
-        result.failures.append("no '## Gotchas' section")
+        result.failures.append(f"未找到「## {HEADING_GOTCHAS}」小节")
         return
     bullets = [line for line in section.splitlines() if line.strip().startswith(("-", "*"))]
     if not bullets:
-        result.failures.append("'## Gotchas' section has no bullet points")
+        result.failures.append(f"「## {HEADING_GOTCHAS}」小节没有任何列表项")
 
 
 def check_dead_links(text: str, chapter_dir: Path, result: ChapterResult) -> None:
     for target in _RELATIVE_LINK_RE.findall(text):
-        target = target.split(" ", 1)[0].strip()  # drop an optional "title" suffix
+        target = target.split(" ", 1)[0].strip()  # 去掉可选的 "title" 后缀
         if target.startswith(("http://", "https://", "#", "mailto:")):
             continue
         path_part = target.split("#", 1)[0]
@@ -184,7 +185,7 @@ def check_dead_links(text: str, chapter_dir: Path, result: ChapterResult) -> Non
             continue
         resolved = (chapter_dir / path_part).resolve()
         if not resolved.exists():
-            result.warnings.append(f"relative link target does not exist: {target}")
+            result.warnings.append(f"相对链接目标不存在：{target}")
 
 
 def check_chapter(chapter: str) -> ChapterResult:
@@ -214,25 +215,20 @@ def check_chapter(chapter: str) -> ChapterResult:
 
 
 # ---------------------------------------------------------------------------
-# docs/concepts/** source pointers
+# docs/concepts/** 的源码指针
 #
-# The concept pages point into real source. They used to do that with
-# `file.py:123` line citations, which drift silently: the file changes, the
-# number does not, and the pointer then aims confidently at unrelated code.
-# Two were already past end-of-file when this check was written, and several
-# others were off by single-digit amounts -- which is worse, because a reader
-# cannot tell the wrong ones from the right ones.
+# 概念页会指向真实源码。过去用的是 `file.py:123` 这种行号引用，而它会无声
+# 漂移：文件改了，行号没改，指针于是自信地指向了毫不相干的代码。写这个检查
+# 时已经有两个指针越过了文件末尾，还有几个只差个位数 —— 后者更糟，因为读者
+# 无法分辨哪些是错的、哪些是对的。
 #
-# They now cite a file and name the symbol in prose. This guards the fix from
-# regressing.
+# 现在它们改为引用文件、并在正文中点名符号。本检查防止该修复回退。
 #
-# Note on scope: an earlier version of this check also tried to verify that
-# each named symbol still exists in its cited file, which would additionally
-# catch deletions. A regex cannot reliably tell "symbol cited for this file"
-# from "identifier that happens to appear near a filename" -- the attempt
-# matched 6 of ~45 links and two of those were false pairs. Verifying symbols
-# properly needs an explicit machine-readable annotation in the pages, not a
-# heuristic. Deleted symbols therefore remain a known gap.
+# 关于范围的说明：本检查的早期版本还试图校验被点名的符号仍存在于所引文件
+# 中，那样还能顺带发现删除。但正则无法可靠区分「为这个文件引用的符号」和
+# 「恰好出现在文件名附近的标识符」—— 那次尝试在约 45 条链接中只匹配到 6 条，
+# 其中还有两条是错配。要真正校验符号，需要在页面里写显式的机器可读标注，
+# 而不是靠启发式。因此「符号被删除」仍是一个已知缺口。
 # ---------------------------------------------------------------------------
 
 CONCEPTS_DIR = REPO_ROOT / "docs" / "concepts"
@@ -240,28 +236,28 @@ _LINE_CITATION = re.compile(r"`?[A-Za-z0-9_/.-]+\.(?:py|tsx|ts|sql|cs):[0-9]+")
 
 
 def check_concept_pointers() -> list[str]:
-    """Fail if a line-number source citation reappears in docs/concepts/."""
+    """若 docs/concepts/ 中重新出现带行号的源码引用，则判定失败。"""
     failures: list[str] = []
     if not CONCEPTS_DIR.exists():
         return failures
     for page in sorted(CONCEPTS_DIR.glob("*.md")):
         for m in _LINE_CITATION.finditer(page.read_text(encoding="utf-8")):
             failures.append(
-                f"{page.name}: line-number citation {m.group(0)!r} — cite the file and "
-                f"name the symbol in prose instead; line numbers drift silently"
+                f"{page.name}：出现带行号的引用 {m.group(0)!r} —— 请改为引用文件、"
+                f"并在正文中点名符号；行号会无声漂移"
             )
     return failures
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("chapters", nargs="*", help="Specific chapter dirs to check (default: all)")
-    parser.add_argument("--check", action="store_true", help="CI mode: exit 1 if any chapter fails")
+    parser.add_argument("chapters", nargs="*", help="指定要检查的章节目录（默认：全部）")
+    parser.add_argument("--check", action="store_true", help="CI 模式：任一章节失败即退出码 1")
     parser.add_argument(
         "--exclude",
         action="append",
         default=[],
-        help="Chapter dir to skip (repeatable) — e.g. a chapter still being restored",
+        help="要跳过的章节目录（可重复）—— 例如某个仍在恢复中的章节",
     )
     args = parser.parse_args()
 
@@ -269,7 +265,7 @@ def main() -> int:
     results = [check_chapter(c) for c in chapters]
 
     passed = sum(1 for r in results if r.passed)
-    print(f"Chapter contract check — {passed}/{len(results)} passing\n")
+    print(f"章节契约检查 —— {passed}/{len(results)} 通过\n")
 
     for r in results:
         status = "PASS" if r.passed else "FAIL"
@@ -281,11 +277,11 @@ def main() -> int:
 
     pointer_failures = check_concept_pointers()
     if pointer_failures:
-        print("\nConcept source pointers")
+        print("\n概念页源码指针")
         for f in pointer_failures:
             print(f"    x {f}")
     else:
-        print("\nConcept source pointers — no line-number citations")
+        print("\n概念页源码指针 —— 无带行号的引用")
 
     any_failed = any(not r.passed for r in results) or bool(pointer_failures)
     if args.check and any_failed:

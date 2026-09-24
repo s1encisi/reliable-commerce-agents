@@ -28,21 +28,21 @@ function Catalog() {
   }, [search, category]);
 
   const heading = search
-    ? `Results for “${search}”`
+    ? `“${search}” 的搜索结果`
     : category
       ? category
-      : "All products";
+      : "全部商品";
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
       <div className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight">{heading}</h1>
         <p className="text-sm text-muted-foreground">
-          {products == null ? "Loading…" : `${products.length} products`}
+          {products == null ? "加载中…" : `共 ${products.length} 件商品`}
         </p>
       </div>
 
-      {/* Category chips */}
+      {/* 品类标签 */}
       {categories.length > 0 && (
         <div className="mb-6 flex flex-wrap gap-2">
           <Link
@@ -52,7 +52,7 @@ function Catalog() {
               !category && !search ? "border-primary/40 bg-primary/10 text-primary" : "bg-card",
             )}
           >
-            All
+            全部
           </Link>
           {categories.map((c) => (
             <Link
@@ -77,7 +77,7 @@ function Catalog() {
         </div>
       ) : products.length === 0 ? (
         <div className="rounded-xl border border-dashed py-16 text-center text-sm text-muted-foreground">
-          No products found. <Link href="/shop/products" className="text-primary hover:underline">Clear filters</Link>
+          未找到商品。 <Link href="/shop/products" className="text-primary hover:underline">清除筛选</Link>
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
@@ -91,7 +91,7 @@ function Catalog() {
 }
 
 export default function ProductsPage() {
-  // useSearchParams requires a Suspense boundary in Next App Router.
+  // 在 Next App Router 中，useSearchParams 需要 Suspense 边界。
   return (
     <Suspense fallback={<div className="mx-auto max-w-7xl px-4 py-8 sm:px-6" />}>
       <Catalog />

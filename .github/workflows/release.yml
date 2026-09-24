@@ -1,29 +1,25 @@
-name: Release
+name: 发布
 
-# Cutting a release. Triggered by pushing a semver tag.
+# 切一个发布版本。由推送 semver 标签触发。
 #
 #   git tag v1.1.0 && git push origin v1.1.0
 #
-# Five jobs, in sequence. The ordering is the whole point:
+# 五个 job，按顺序执行。顺序本身就是重点：
 #
-#   gate           re-run the FULL test suite against the tagged commit. Before
-#                  this workflow existed, the tag path ran no tests at all --
-#                  build-images.yml pushed on a tag with no `needs:` on anything,
-#                  so a tag on a red commit published images.
-#   version-check  the tag and agents/python/pyproject.toml must agree. This is
-#                  what stops the drift that left the repo with pyproject saying
-#                  0.1.0, the only tag saying v1.0.0, and the README saying v1.1.
-#   approve        blocks on the `release` GitHub environment's required
-#                  reviewer. You see the gate results, then click.
-#   publish        build and push :vX.Y.Z (+ :latest for a final release).
-#   release        create the GitHub release, with notes read out of CHANGELOG.md.
+#   gate           对被打标签的提交重跑**完整**测试套件。在本工作流出现之前，
+#                  标签路径根本不跑测试 —— build-images.yml 在标签上推送且对任何
+#                  东西都没有 `needs:`，因此打在一个红色提交上的标签会发布镜像。
+#   version-check  标签与 agents/python/pyproject.toml 必须一致。正是它阻止了那种漂移：
+#                  仓库一度是 pyproject 写 0.1.0、唯一的标签写 v1.0.0、README 写 v1.1。
+#   approve        阻塞在 `release` GitHub 环境的必需审批人上。你先看到门禁结果，再点确认。
+#   publish        构建并推送 :vX.Y.Z（正式发布时附带 :latest）。
+#   release        创建 GitHub release，说明从 CHANGELOG.md 中读出。
 #
-# SETUP REQUIRED, and it fails silently without it: the `release` environment
-# must exist with required reviewers configured. If it does not, `environment:`
-# is a no-op, the approval gate does not exist, and releases proceed
-# automatically with no error and nothing to indicate anything is missing.
+# 需要额外配置，否则它会静默失效：`release` 环境必须存在且配置了必需审批人。
+# 如果它不存在，`environment:` 就是个空操作，审批门禁并不存在，发布会自动进行，
+# 既不报错，也没有任何迹象表明少了什么。
 #
-# See docs/releasing.md.
+# 见 docs/releasing.md。
 
 on:
   push:
@@ -34,22 +30,20 @@ permissions:
 
 concurrency:
   group: release-${{ github.ref }}
-  cancel-in-progress: false # never cancel a release mid-publish
+  cancel-in-progress: false # 绝不在发布中途取消
 
 jobs:
-  # ── 1. The full test suite, re-run against the tagged commit ───────────────
+  # ── 1. 对被打标签的提交重跑完整测试套件 ───────────────────────────────────
   gate:
-    name: Gate
-    # A called workflow cannot request more permission than its caller grants,
-    # and the failure mode is `startup_failure` with no log and no annotation —
-    # nothing points at permissions. tests.yml declares `pull-requests: write`
-    # (its coverage comment step), which exceeds this workflow's top-level
-    # `contents: read`, so the gate has to grant at least that superset here.
+    name: 门禁
+    # 被调用的工作流不能请求超过调用方授予的权限，而失败形态是 `startup_failure`，
+    # 既没有日志也没有注解 —— 什么都指不到权限上。tests.yml 声明了
+    # `pull-requests: write`（它的覆盖率评论步骤），超过了本工作流顶层的
+    # `contents: read`，所以门禁在这里至少要授予那个超集。
     #
-    # `packages: write` is included because tests.yml's own publish-main job
-    # calls build-images.yml. That job is skipped on a tag (it is gated on a
-    # push to main), but the permission set is validated at startup regardless
-    # of whether the job ends up running.
+    # 包含 `packages: write` 是因为 tests.yml 自己的 publish-main job 会调用
+    # build-images.yml。该 job 在标签上会被跳过（它以推送到 main 为条件），
+    # 但权限集在启动时就会校验，与该 job 最终是否运行无关。
     permissions:
       contents: read
       pull-requests: write
@@ -57,15 +51,15 @@ jobs:
     uses: ./.github/workflows/tests.yml
     secrets: inherit
 
-  # ── 2. The tag and the committed version must agree ───────────────────────
+  # ── 2. 标签与已提交的版本必须一致 ────────────────────────────────────────
   version-check:
-    name: Version check
+    name: 版本校验
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
 
-      - name: Tag must match pyproject.toml
+      - name: 标签必须与 pyproject.toml 一致
         run: |
           TAG="${GITHUB_REF_NAME#v}"
           FILE_VERSION=$(grep -m1 '^version = ' agents/python/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
@@ -74,34 +68,34 @@ jobs:
           echo "pyproject:  ${FILE_VERSION}"
 
           if [[ "$TAG" != "$FILE_VERSION" ]]; then
-            echo "::error::tag ${GITHUB_REF_NAME} does not match pyproject.toml version ${FILE_VERSION}."
-            echo "::error::Run 'python scripts/bump_version.py ${TAG}', commit, then re-tag."
+            echo "::error::标签 ${GITHUB_REF_NAME} 与 pyproject.toml 的版本 ${FILE_VERSION} 不一致。"
+            echo "::error::请运行 'python scripts/bump_version.py ${TAG}'，提交，然后重新打标签。"
             exit 1
           fi
 
-      - name: CHANGELOG must have a section for this version
+      - name: CHANGELOG 必须包含该版本的章节
         run: |
           TAG="${GITHUB_REF_NAME#v}"
           if ! grep -q "^## \[${TAG}\]" CHANGELOG.md; then
-            echo "::error::CHANGELOG.md has no '## [${TAG}]' section."
-            echo "::error::A release must not ship with empty notes."
+            echo "::error::CHANGELOG.md 中没有 '## [${TAG}]' 章节。"
+            echo "::error::发布不得带空说明发出。"
             exit 1
           fi
 
-  # ── 3. Human approval ─────────────────────────────────────────────────────
+  # ── 3. 人工审批 ──────────────────────────────────────────────────────────
   approve:
-    name: Approve release
+    name: 审批发布
     needs: [gate, version-check]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     environment: release
     steps:
-      - name: Approved
+      - name: 已批准
         run: echo "Release ${GITHUB_REF_NAME} approved — publishing images."
 
-  # ── 4. Build and push the versioned images ────────────────────────────────
+  # ── 4. 构建并推送带版本号的镜像 ──────────────────────────────────────────
   publish:
-    name: Publish images
+    name: 发布镜像
     needs: approve
     permissions:
       contents: read
@@ -113,9 +107,9 @@ jobs:
       version: ${{ github.ref_name }}
     secrets: inherit
 
-  # ── 5. The GitHub release itself ──────────────────────────────────────────
+  # ── 5. GitHub release 本身 ───────────────────────────────────────────────
   release:
-    name: Create GitHub release
+    name: 创建 GitHub release
     needs: publish
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -124,11 +118,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Pull just this version's section out of CHANGELOG.md: everything
-      # between this version's heading and the next one. Curated notes beat
-      # --generate-notes here; the repo's voice is a differentiator and an
-      # auto-generated commit dump would throw it away.
-      - name: Extract release notes from CHANGELOG.md
+      # 只从 CHANGELOG.md 中抽出本版本的章节：本版本标题到下一个标题之间的全部内容。
+      # 精心撰写的说明胜过 --generate-notes：本仓库的笔调是它的差异点，
+      # 而自动生成的提交倾倒会把它丢掉。
+      - name: 从 CHANGELOG.md 提取发布说明
         id: notes
         run: |
           TAG="${GITHUB_REF_NAME#v}"
@@ -139,14 +132,14 @@ jobs:
           ' CHANGELOG.md > release-notes.md
 
           if [[ ! -s release-notes.md ]]; then
-            echo "::error::extracted release notes are empty for ${TAG}"
+            echo "::error::为 ${TAG} 提取到的发布说明为空"
             exit 1
           fi
 
           echo "--- notes ---"
           cat release-notes.md
 
-      - name: Create release
+      - name: 创建 release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

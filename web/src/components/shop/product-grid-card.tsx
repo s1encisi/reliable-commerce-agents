@@ -21,7 +21,11 @@ export interface ShopProduct {
   in_stock?: boolean;
 }
 
-/** Storefront product tile — image, name, price, rating; links to detail. */
+/**
+ * 店铺商品卡片——图片、名称、价格、评分，整卡链接到商品详情页。
+ *
+ * 折扣百分比由原价与现价实时计算，仅在原价高于现价时才显示。
+ */
 export function ProductGridCard({ product }: { product: ShopProduct }) {
   const reduce = useReducedMotion();
   const discount =
@@ -77,7 +81,7 @@ export function ProductGridCard({ product }: { product: ShopProduct }) {
           </div>
           {product.in_stock === false && (
             <p className={cn("mt-1 text-xs font-medium text-destructive")}>
-              Out of stock
+              缺货
             </p>
           )}
         </div>

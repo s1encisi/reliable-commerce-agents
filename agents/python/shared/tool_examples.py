@@ -1,7 +1,4 @@
-"""Tool usage examples for agent system prompts.
-
-Shows the LLM how to call each tool and what responses look like.
-"""
+"""系统提示词使用的工具调用示例，展示输入与响应形态。"""
 
 ORDER_TOOL_EXAMPLES = (
     "\n## Tool Usage Guide\n\n### get_user_orders(status?, limit?)\nLists the cur"

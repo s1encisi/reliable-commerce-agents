@@ -1,18 +1,14 @@
-"""LLM-as-judge scorer for relevance/completeness — replaces the old
-keyword-alias table (``AgentEvaluator._score_completeness``), which counted
-a bare ``"$"`` character as satisfying an expected ``price`` field
-regardless of whether an actual price appeared.
+"""用于相关性 / 完整性的 LLM 作为评判者（LLM-as-judge）评分器——替代了旧的
+关键词别名表（``AgentEvaluator._score_completeness``）——后者会把一个孤零零的
+``"$"`` 字符算作满足预期的 ``price`` 字段，而不管其中是否真的出现了价格。
 
-Not for groundedness — ``db_groundedness.py``'s deterministic DB check is
-strictly better whenever there's real data to check a claim against. This
-is for the part that isn't mechanically checkable: does the response
-actually answer the question and cover what was expected, in a way a
-keyword table can't capture (a response can convey a price without the
-literal word "price").
+不用于事实核验（grounding）——只要存在可供核验论断的真实数据，
+``db_groundedness.py`` 的确定性数据库检查就严格更优。这个评分器针对的是
+无法机械检查的那部分：响应是否真正回答了问题并覆盖了预期内容，且这种覆盖
+是关键词表无法捕捉的（一个响应可以在不出现字面词 "price" 的情况下传达价格）。
 
-Verdicts are cached on ``(case_id, sha256(response_text))`` so re-running a
-suite after an unrelated code change doesn't re-spend judge tokens on
-unchanged responses.
+评判结论按 ``(case_id, sha256(response_text))`` 缓存，这样在一次无关的代码
+变更之后重跑套件时，就不会为未变化的响应再次消耗评判 token。
 """
 
 from __future__ import annotations
@@ -44,8 +40,8 @@ class JudgeVerdict(BaseModel):
     failure_mode: str | None = None
 
 
-# Process-lifetime cache — evals run as a single short-lived CLI invocation,
-# so this doesn't need persistence across runs (see baselines for that).
+# 进程生命周期内的缓存——评测以单次短时 CLI 调用的方式运行，
+# 因此它不需要跨运行持久化（持久化由基线负责）。
 _cache: dict[str, JudgeVerdict] = {}
 
 
