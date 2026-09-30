@@ -4,7 +4,7 @@ Next.js 16（App Router）+ React 19 + Tailwind CSS 4 + shadcn/ui。这里承载
 智能体对话，以及面向多智能体后端的登录后账户控制台。
 
 > **注意：** 这是 Next.js **16.x** —— API 与旧文档存在差异。改动框架相关代码前，
-> 请先阅读 `node_modules/next/dist/docs/` 下对应的指南。参见 [`AGENTS.md`](./AGENTS.md)。
+> 请先阅读 `node_modules/next/dist/docs/` 下对应的指南。参见 `AGENTS.md`。
 
 ## 常用命令
 
