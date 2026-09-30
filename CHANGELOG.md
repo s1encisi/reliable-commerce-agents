@@ -46,7 +46,7 @@ Azure 前置工作。两个应用代码层面的阻塞项，任何一个都会�
   `shared.factory.parse_agent_registry`，它对格式错误的 JSON、空白 URL 或无 scheme 的 URL
   都会抛错。scheme 与 host 会被检查，端口不会 —— 托管端点没有端口，要求端口恰好会拒绝这个
   校验器为之服务的部署。作为
-  [`docs/reported-vs-actual.md`](docs/reported-vs-actual.md) 的第 9 行加入。
+  `docs/reported-vs-actual.md` 的第 9 行加入。
 
 - **三个既有测试缺陷**，每一个都对照过为绕过代理而构建的对照前端，因此都不是本次工作造成的。
   `chat-generative-ui` 与 `chat-shopping` 断言只渲染一张卡片，而应用对每个结果都会渲染一张；
@@ -105,7 +105,7 @@ Azure 前置工作。两个应用代码层面的阻塞项，任何一个都会�
   因为不带条件的基准只是轶事。
 - **五份架构决策记录**（[`docs/adr/`](docs/adr/)）—— A2A 优先于直连、不做 text-to-SQL、
   YAML 提示词组合、MAF 原生执行、双栈一致性对齐。每一份都写明什么情况下它是错的。
-- **[`docs/reported-vs-actual.md`](docs/reported-vs-actual.md)** —— 八个案例，每次都显示上报的
+- **`docs/reported-vs-actual.md`** —— 八个案例，每次都显示上报的
   问题比实际问题更小，而且每一个都是靠运行而非阅读发现的。它曾是仓库里最可信的产物，
   却一直藏在 `.claude/` 里无人可见。
 
@@ -181,7 +181,7 @@ Azure 前置工作。两个应用代码层面的阻塞项，任何一个都会�
   `mcp-inventory` 与 `frontend` 从未被 CI 构建过。
 - **README 从 740 行缩减为 247 行。** 资深读者想看的内容 —— 事实核验、幂等性、人工参与、
   限流、追踪 —— 原本位于第 624 行开始的章节。没有任何内容被无去处地删除：
-  [`docs/roadmap.md`](docs/roadmap.md) 与
+  `docs/roadmap.md` 与
   [`docs/demo-guide.md`](docs/demo-guide.md) 是新增的。
 - **教程索引不再把已完成的章节描述为草稿。** 有三十四行写着「Draft」，而那些章节早已完成并在 CI
   中受门禁保护；那套词汇描述的是博客文章。该表格现在由磁盘上的实际内容生成，这也暴露了周边文字里

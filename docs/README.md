@@ -6,13 +6,13 @@
 
 | 阅读顺序 | 文档 |
 |---|---|
-| 1 | [学习指南](zh-CN/learning-guide.md) |
+| 1 | 学习指南 |
 | 2 | [环境与运行](zh-CN/quick-start.md) |
 | 3 | [架构导读](zh-CN/architecture.md) |
 | 4 | [售后代码导航](zh-CN/after-sales-code-map.md) |
 | 5 | [安全与可靠性](zh-CN/security-and-reliability.md) |
 | 6 | [测试与评估](zh-CN/evaluation.md) |
-| 7 | [售后可靠性技术方案](zh-CN/after-sales-reliability-plan.md) |
+| 7 | 售后可靠性技术方案 |
 
 ## 面试准备
 
@@ -20,7 +20,7 @@
 
 | 文档 | 说明 |
 |---|---|
-| [面试学习笔记索引](interview-notes/README.md) | 10 篇，含学习路径、面试能力项对照、关键数字速查 |
-| [面试问答话术](interview-qa.md) | 自我介绍、HR 常问、边界声明（与上述笔记的技术追问部分互补） |
+| 面试学习笔记索引 | 10 篇，含学习路径、面试能力项对照、关键数字速查 |
+| 面试问答话术 | 自我介绍、HR 常问、边界声明（与上述笔记的技术追问部分互补） |
 
 既有英文专题文件继续保留。它们描述的是上游参考系统，部分历史叙述可能与当前代码不同；发生冲突时先核对源码、测试和执行证据。

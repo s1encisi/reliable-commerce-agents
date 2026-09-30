@@ -17,7 +17,7 @@ cd web && pnpm install                        # 前端（用 pnpm，不用 npm/y
 
 ## 约定
 
-约定集中在 [`CLAUDE.md`](./CLAUDE.md)（权威指南）中。要点如下：
+架构见 [项目文档](docs/architecture.md)。开发约定如下：
 
 - **Python**：处处使用类型标注、`async`、`asyncpg`（不用 ORM）、`httpx`（不用
   `requests`）、Pydantic Settings、请求状态用 ContextVars、MAF `@tool`
@@ -25,7 +25,7 @@ cd web && pnpm install                        # 前端（用 pnpm，不用 npm/y
 - **前端**：Next.js 16 App Router、Tailwind 4 + shadcn/ui、OKLCH **主题
   token**（绝不硬编码 slate/white —— 那会破坏暗色模式）、运行时校验用 Zod。
   改动框架代码前先读 `node_modules/next/dist/docs/`。
-- 工作产物（记忆、规则、计划）存放在仓库内的 `.claude/` 下。
+- 内部工作产物保存在仓库外，不纳入提交。
 
 ## 测试（硬性要求）
 

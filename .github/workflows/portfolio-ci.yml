@@ -3,7 +3,7 @@ name: 求职作品验证
 on:
   workflow_dispatch:
   push:
-    branches: [feat/after-sales-reliability]
+    branches: [main, feat/after-sales-reliability]
 
 permissions:
   contents: read

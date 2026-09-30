@@ -81,5 +81,5 @@ uv run python -m evals.benchmark_modes --reps 2 --delay 8
 ## 相关内容
 
 - [编排模式](concepts/06-orchestration-patterns.md) —— 每种模式*是什么*
-- [报告与实际](reported-vs-actual.md) —— 上述两个缺陷是如何被发现的
+- 报告与实际 —— 上述两个缺陷是如何被发现的
 - [第 21 章 —— 综合演练](../tutorials/21-capstone-tour/) —— 每种模式在代码中的位置

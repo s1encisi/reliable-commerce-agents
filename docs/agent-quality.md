@@ -2,7 +2,7 @@
 
 可靠电商多智能体平台的评测方法论、数据集结构、评分模型、红队测试套件与 CI 门禁。
 
-各智能体的安全状况见 [`docs/agent-audit-matrix.md`](agent-audit-matrix.md)，本套件所验证的护栏架构见 [`docs/security-guide.md`](security-guide.md)。
+各智能体的安全状况见 `docs/agent-audit-matrix.md`，本套件所验证的护栏架构见 [`docs/security-guide.md`](security-guide.md)。
 
 ---
 
@@ -218,6 +218,6 @@ python -c "import json; r=json.load(open('eval-pd.json')); exit(0 if r['overall_
 
 ## 相关文档
 
-- [`docs/agent-audit-matrix.md`](agent-audit-matrix.md) —— 各智能体的安全状态
+- `docs/agent-audit-matrix.md` —— 各智能体的安全状态
 - [`docs/security-guide.md`](security-guide.md) —— 护栏架构与认证
 - [`docs/maf-best-practices.md`](maf-best-practices.md) —— 所有智能体共用的 MAF 模式

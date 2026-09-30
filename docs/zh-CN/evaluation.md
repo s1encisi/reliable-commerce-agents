@@ -1,6 +1,6 @@
 # 测试与评估：让分数对应真实结果
 
-[上游评估框架](../../agents/python/evals/README.md) · [售后技术方案](after-sales-reliability-plan.md)
+[上游评估框架](../../agents/python/evals/README.md) · 售后技术方案
 
 ## 四种证据分别证明什么
 

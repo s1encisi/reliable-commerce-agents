@@ -68,7 +68,6 @@ SECTIONS: tuple[Section, ...] = (
             "docs/demo-guide.md",
             "docs/deployment.md",
             "docs/troubleshooting.md",
-            "docs/roadmap.md",
         ),
     ),
     Section(
@@ -120,9 +119,7 @@ SECTIONS: tuple[Section, ...] = (
         "查询能力覆盖、智能体控制矩阵、术语表与绘图约定。",
         (
             "docs/parity-matrix.md",
-            "docs/agent-audit-matrix.md",
             "docs/orchestration-benchmark.md",
-            "docs/reported-vs-actual.md",
             "docs/adr/README.md",
             "docs/adr/0001-a2a-over-direct-calls.md",
             "docs/adr/0002-no-text-to-sql.md",

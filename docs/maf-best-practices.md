@@ -172,6 +172,6 @@ flowchart LR
 ## 相关文档
 
 - [`docs/security-guide.md`](security-guide.md) —— 护栏中间件栈、认证、SQL 管控、威胁模型
-- [`docs/agent-audit-matrix.md`](agent-audit-matrix.md) —— 各智能体的安全状况与待完成的加固项
+- `docs/agent-audit-matrix.md` —— 各智能体的安全状况与待完成的加固项
 - [`docs/agent-quality.md`](agent-quality.md) —— 评测方法论、红队套件、CI 门禁
 - [`docs/architecture.md`](architecture.md) —— 完整系统架构与智能体通信模式

@@ -2,7 +2,7 @@
 
 本文件按能力逐项说明可靠电商多智能体平台当前的实现覆盖情况。矩阵中的每一行都直接对照代码核实过，而不是沿用更早的描述。
 
-各智能体安全维度的专门拆解（注入防御、角色强制、评测/红队覆盖）见 [`docs/agent-audit-matrix.md`](agent-audit-matrix.md) —— 本文件覆盖更广的功能面，两者在护栏部分有重叠，互相交叉引用而不重复描述。
+各智能体安全维度的专门拆解（注入防御、角色强制、评测/红队覆盖）见 `docs/agent-audit-matrix.md` —— 本文件覆盖更广的功能面，两者在护栏部分有重叠，互相交叉引用而不重复描述。
 
 **状态图例**
 
@@ -60,6 +60,6 @@
 
 ## 相关文档
 
-- [`docs/agent-audit-matrix.md`](agent-audit-matrix.md) —— 各智能体的安全审计矩阵
+- `docs/agent-audit-matrix.md` —— 各智能体的安全审计矩阵
 - [`docs/agent-quality.md`](agent-quality.md) —— 评测方法论、数据集与 CI 门禁
 - [`docs/architecture.md`](architecture.md) —— 系统总览与请求链路

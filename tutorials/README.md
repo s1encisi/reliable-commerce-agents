@@ -1,6 +1,6 @@
 # 微软智能体框架（MAF）v1 完整教程系列
 
-[项目首页](../README.md) · [中文文档导航](../docs/zh-CN/README.md) · [中文学习指南](../docs/zh-CN/learning-guide.md) · [快速上手](../docs/zh-CN/quick-start.md)
+[项目首页](../README.md) · [中文文档导航](../docs/zh-CN/README.md) · 中文学习指南 · [快速上手](../docs/zh-CN/quick-start.md)
 
 逐章讲解**微软智能体框架（Microsoft Agent Framework，MAF）**，**每一章都配有可运行的 Python 示例**。
 整个系列从单个智能体出发，逐步构建到本仓库中完整的多智能体作品项目。

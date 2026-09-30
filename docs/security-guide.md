@@ -2,7 +2,7 @@
 
 面向可靠电商多智能体平台的纵深防御安全架构。本指南涵盖威胁模型、护栏（guardrail）技术栈、身份认证与身份传递、数据访问控制，以及加固路线图。
 
-各智能体的状态快照参见 [`docs/agent-audit-matrix.md`](agent-audit-matrix.md)。
+各智能体的状态快照参见 `docs/agent-audit-matrix.md`。
 
 ---
 
@@ -121,7 +121,7 @@ if denied:
 
 无论 `roles` 参数如何，`admin` 始终被允许（超级用户）。身份信息从 `current_user_role` ContextVar 读取，该变量由 `AgentAuthMiddleware` 设置，绝不通过函数参数传递。
 
-`shared/tools/seller_tools.py` 中的全部四个工具（`get_seller_products`、`update_product_price`、`get_seller_analytics`、`get_payout_summary`）都带有 `@requires_role("seller", "admin")`。剩余待办事项参见[审计矩阵](agent-audit-matrix.md)。
+`shared/tools/seller_tools.py` 中的全部四个工具（`get_seller_products`、`update_product_price`、`get_seller_analytics`、`get_payout_summary`）都带有 `@requires_role("seller", "admin")`。剩余待办事项参见审计矩阵。
 
 ### 配置开关
 
@@ -283,7 +283,7 @@ else:
 | 评估注入阻断 | 在预发布环境测出误报率后再设置 `GUARDRAILS_BLOCK_ON_INJECTION=true` |
 | 全链路启用 HTTPS | 在 AKS Ingress 处终止 TLS；Pod 之间不使用明文 HTTP |
 | 网络策略 | 将专业智能体端口（8081–8085）限制为仅编排器 Pod 可访问 |
-| 完成角色强制 | 为[审计矩阵](agent-audit-matrix.md)中的待办项补充 `@requires_role` |
+| 完成角色强制 | 为审计矩阵中的待办项补充 `@requires_role` |
 | 启用自建 OAuth 服务器 | `AUTH_MODE=oauth`——用户登录由编排器代理 ROPC，A2A 与 MCP 使用客户端凭据服务令牌，RS256 签名通过 JWKS（每个 `kid` 仅一个活跃密钥，尚不支持自动轮换——见「已知问题」）；同时退役 `JWT_SECRET` 与 `AGENT_SHARED_SECRET`（会被直接拒绝，而非仅弃用）。从密钥存储中设置 `AUTH_SIGNING_KEY_ENCRYPTION_KEY` 与各服务的 `OAUTH_CLIENT_SECRET`；切勿使用开发默认值 `OAUTH_SEED_KEY`。剩余 OAuth 工作记录在 [`.claude/plans/remaining-work.md`](https://github.com/s1encisi/reliable-commerce-agents/blob/26f47c494dd6b371312593e82f066713f6f56e9c/.claude/plans/remaining-work.md) |
 | 保护 MCP 服务器 | `MCP_AUTH_ENABLED=true`（需要同时设置 `MCP_ENABLED=true`）——两个 Python MCP 服务器都会基于授权服务器的 JWKS 校验其 RS256 Bearer 令牌（受众 + 作用域，每个服务器一个专属资源作用域），暴露 `.well-known/oauth-protected-resource`，并对未认证或作用域错误的调用返回 `401` + `WWW-Authenticate` |
 
@@ -297,7 +297,7 @@ else:
 
 ## 相关文档
 
-- [`docs/agent-audit-matrix.md`](agent-audit-matrix.md) —— 各智能体的安全状态与待办项
+- `docs/agent-audit-matrix.md` —— 各智能体的安全状态与待办项
 - [`docs/agent-quality.md`](agent-quality.md) —— 评测方法与红队套件
 - [`docs/maf-best-practices.md`](maf-best-practices.md) —— 所有智能体通用的 MAF 惯用法
 - [`docs/architecture.md`](architecture.md) —— 完整的系统架构

@@ -1,6 +1,6 @@
 # 售后代码导航与基线证据
 
-[技术方案](after-sales-reliability-plan.md) · [架构导读](architecture.md)
+技术方案 · [架构导读](architecture.md)
 
 基线：26f47c494dd6b371312593e82f066713f6f56e9c。以下为静态代码事实和待验证问题，不是已执行的漏洞复现或性能实验。
 
