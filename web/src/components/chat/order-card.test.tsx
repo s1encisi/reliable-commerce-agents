@@ -3,6 +3,12 @@ import { render, screen } from "@testing-library/react";
 import { ChatOrderCard } from "./order-card";
 
 describe("ChatOrderCard", () => {
+  it("returned 仅显示已申请退货，不声称实际退回已完成", () => {
+    render(<ChatOrderCard data={{ id: "order-1", status: "returned" }} />);
+    expect(screen.getByText("已申请退货", { exact: true })).toBeInTheDocument();
+    expect(screen.queryByText("已退货", { exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "退货" })).not.toBeInTheDocument();
+  });
   it("对象形式的 shipping_address 能正常渲染而不会崩溃（第 8.2 阶段）", () => {
     // 数据库的原生形态是 JSONB——chat-schemas.ts 的 OrderDataSchema 接受
     // 这种联合类型，但组件此前把 shipping_address 声明为仅字符串并直接

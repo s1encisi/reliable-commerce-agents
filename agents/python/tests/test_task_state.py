@@ -6,6 +6,7 @@ import pytest
 import pytest_asyncio
 
 from shared.context import current_user_email
+from shared.task_acceptance import StepAcceptance, evidence_ids
 from shared.task_state import (
     TaskPlan,
     claim_planning,
@@ -14,7 +15,6 @@ from shared.task_state import (
     finish_step,
     load_task,
     save_plan,
-    successful_receipt,
 )
 
 
@@ -32,6 +32,10 @@ async def owner(clean_db, monkeypatch):
 
 
 async def test_task_claims_and_restarts_keep_completed_steps(owner):
+    product = await owner.fetchval(
+        "INSERT INTO products(name,description,category,price) "
+        "VALUES('Headphones','test','Electronics',100) RETURNING id"
+    )
     task = await create_task("比较两款耳机", ["不超过500元"])
     first, second = await asyncio.gather(claim_planning(task["id"], 0), claim_planning(task["id"], 0))
     claimed = first or second
@@ -40,8 +44,19 @@ async def test_task_claims_and_restarts_keep_completed_steps(owner):
         goal=task["goal"],
         constraints=task["constraints"],
         steps=[
-            {"id": "find", "service": "product-discovery", "instruction": "查商品"},
-            {"id": "stock", "service": "inventory-fulfillment", "instruction": "查库存", "depends_on": ["find"]},
+            {
+                "id": "find",
+                "service": "product-discovery",
+                "instruction": "查商品",
+                "acceptance": {"kind": "product_selection"},
+            },
+            {
+                "id": "stock",
+                "service": "inventory-fulfillment",
+                "instruction": "查库存",
+                "depends_on": ["find"],
+                "acceptance": {"kind": "inventory_check", "from_steps": ["find"]},
+            },
         ],
     )
     assert await save_plan(task["id"], claimed["revision"], plan)
@@ -53,7 +68,17 @@ async def test_task_claims_and_restarts_keep_completed_steps(owner):
         task["id"],
         running["revision"],
         step,
-        {"response": "找到商品", "steps": [{"status": "success", "result_confirmed": True}]},
+        {
+            "response": "找到商品",
+            "steps": [
+                {
+                    "tool_name": "search_products",
+                    "status": "success",
+                    "result_confirmed": True,
+                    "provenance": {"source": "tool:search_products", "row_ids": [str(product)]},
+                }
+            ],
+        },
     )
     resumed = await load_task(task["id"])
     assert "find" in resumed["results"]
@@ -75,5 +100,5 @@ def test_plan_rejects_cycles_and_unregistered_services():
             constraints=[],
             steps=[{"id": "x", "service": "product-discovery", "instruction": "run", "depends_on": ["x"]}],
         )
-    assert not successful_receipt({"response": "我已经完成了", "steps": []}, "successful_tool_result")
-    assert not successful_receipt({"grounding": {"verified": 1, "unverified": 1}}, "verified_claim")
+    assert not evidence_ids({"response": "我已经完成了", "steps": []}, StepAcceptance(kind="product_selection"))
+    assert not evidence_ids({"grounding": {"verified": 1, "unverified": 1}}, StepAcceptance(kind="product_selection"))

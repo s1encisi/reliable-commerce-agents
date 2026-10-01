@@ -1,0 +1,1564 @@
+{
+  "scope": "本机真实HTTP固定计划与真实数据库；无LLM、无生产用户，不能外推生产容量或模型质量",
+  "created_at": "2026-10-01T03:38:18.918571+00:00",
+  "python": "3.12.13",
+  "base_url": "http://127.0.0.1:8180",
+  "samples_per_concurrency": 12,
+  "latency_note": "duration从取得并发槽开始；客户端排队单独记录；p95为小样本描述性统计",
+  "head": "d8af1bf3b26f185f9fc57017d5f1e1d20e1389b9",
+  "working_tree_dirty": true,
+  "source_sha256": {
+    "scripts/benchmark_tasks.py": "2e2989eeed197c0210eb89810ddabbe295aee4bd06aaa4dba65c0990579bb254",
+    "agents/python/shared/task_state.py": "34280eecede980e2aa5b157778ab5322ac15b72c135ca1d10292a209d1f0a218",
+    "agents/python/shared/task_acceptance.py": "af76f3efbbef8c5d7910958172dbb5562877bea34b6be084d9c6bc5d803ea814",
+    "agents/python/orchestrator/routes/tasks.py": "f23f1f345cd8b75c52b7d9b0a996336500173cfbdb2c4660ead22bdaa5b056de",
+    "agents/python/shared/task_observability.py": "ce8416ada154c55e0b48f58743976d30b403335675a7a3641f2cd497a93eacad"
+  },
+  "groups": [
+    {
+      "concurrency": 1,
+      "trials": [
+        {
+          "index": 0,
+          "queue_ms": 0.0050520000058895675,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 6.121950999840919,
+              "http_status": 200,
+              "server_timing": "task;dur=4.250",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 13.820333000012397,
+              "http_status": 200,
+              "server_timing": "task;dur=12.187",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 42.97888099995362,
+              "http_status": 200,
+              "server_timing": "task;dur=41.172",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 15.568753999787077,
+              "http_status": 200,
+              "server_timing": "task;dur=13.775",
+              "trace_id": null
+            }
+          ],
+          "task_id": "7919d622-94bc-4b19-b404-a158a821f174",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "f363f5b6-bed7-4bd4-95c5-867f4f986f08",
+            "5b2395b6-9bdf-4c82-bcfa-520be604b270"
+          ],
+          "duration_ms": 78.7778219998927
+        },
+        {
+          "index": 1,
+          "queue_ms": 78.38004800009912,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 4.104449999886128,
+              "http_status": 200,
+              "server_timing": "task;dur=2.617",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 8.429731999967771,
+              "http_status": 200,
+              "server_timing": "task;dur=6.950",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 12.289176999956908,
+              "http_status": 200,
+              "server_timing": "task;dur=10.672",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 14.014711999834617,
+              "http_status": 200,
+              "server_timing": "task;dur=12.356",
+              "trace_id": null
+            }
+          ],
+          "task_id": "56bc8745-0cf3-447e-9693-f1e5e879178a",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "96ed0e3b-32a2-48c7-9802-c9e51c173924",
+            "6f0a6ba6-2bf6-429e-a684-523e92cfb3ab"
+          ],
+          "duration_ms": 39.12052600003335
+        },
+        {
+          "index": 2,
+          "queue_ms": 117.51553299995976,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 3.986454999903799,
+              "http_status": 200,
+              "server_timing": "task;dur=2.622",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 9.180400000104783,
+              "http_status": 200,
+              "server_timing": "task;dur=7.521",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 11.276959000042552,
+              "http_status": 200,
+              "server_timing": "task;dur=9.846",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 13.0335040000773,
+              "http_status": 200,
+              "server_timing": "task;dur=11.583",
+              "trace_id": null
+            }
+          ],
+          "task_id": "79bfb4dc-5cad-49a8-b7c2-d36e04d84e9e",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "5e78e325-a17e-413d-825d-dfc574da6f76",
+            "dc2940ad-021a-463d-960b-75f2bd7a8e5f"
+          ],
+          "duration_ms": 37.73629300007997
+        },
+        {
+          "index": 3,
+          "queue_ms": 155.26638899996215,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 4.109205000077054,
+              "http_status": 200,
+              "server_timing": "task;dur=2.733",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 9.17911099986668,
+              "http_status": 200,
+              "server_timing": "task;dur=7.300",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 14.34065900002679,
+              "http_status": 200,
+              "server_timing": "task;dur=12.411",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 14.936477999981435,
+              "http_status": 200,
+              "server_timing": "task;dur=13.149",
+              "trace_id": null
+            }
+          ],
+          "task_id": "d10df149-154f-44d2-809d-584bb9dba082",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "34173439-d7f7-4d28-95a2-e1453da69369",
+            "f417c367-d629-49a3-a4ad-3d551a007476"
+          ],
+          "duration_ms": 42.88674400004311
+        },
+        {
+          "index": 4,
+          "queue_ms": 198.17403700017167,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 4.632702000208155,
+              "http_status": 200,
+              "server_timing": "task;dur=3.132",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 9.321974000158662,
+              "http_status": 200,
+              "server_timing": "task;dur=7.704",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 11.819178999985525,
+              "http_status": 200,
+              "server_timing": "task;dur=10.236",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 13.477643999976863,
+              "http_status": 200,
+              "server_timing": "task;dur=11.737",
+              "trace_id": null
+            }
+          ],
+          "task_id": "b3282679-1a2b-4a42-871c-e018962ca3d9",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "1326624b-a855-4db3-a882-322ca830fd31",
+            "cae3aacc-862e-4bc4-ae19-aac8bb9e61ea"
+          ],
+          "duration_ms": 39.490756999839505
+        },
+        {
+          "index": 5,
+          "queue_ms": 237.68857099980778,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 4.588712999975542,
+              "http_status": 200,
+              "server_timing": "task;dur=2.948",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 15.433323000024757,
+              "http_status": 200,
+              "server_timing": "task;dur=13.712",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 13.426720999859754,
+              "http_status": 200,
+              "server_timing": "task;dur=11.594",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 14.706233999959295,
+              "http_status": 200,
+              "server_timing": "task;dur=12.964",
+              "trace_id": null
+            }
+          ],
+          "task_id": "dc8182dd-8c25-4577-9cba-bb97bce311e3",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "fb0b626c-2c46-4a4e-b657-b64ff3a3af0c",
+            "03053c86-2139-47c9-be30-305604e63969"
+          ],
+          "duration_ms": 48.383452000052785
+        },
+        {
+          "index": 6,
+          "queue_ms": 286.0931249999794,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 4.439114999968297,
+              "http_status": 200,
+              "server_timing": "task;dur=2.899",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 10.553635999940525,
+              "http_status": 200,
+              "server_timing": "task;dur=8.462",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 13.710561000152666,
+              "http_status": 200,
+              "server_timing": "task;dur=11.802",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 14.7782599999573,
+              "http_status": 200,
+              "server_timing": "task;dur=12.996",
+              "trace_id": null
+            }
+          ],
+          "task_id": "214d62ac-035c-4032-8a56-18363958c1ad",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "581ba99b-d85b-4853-aff1-e0a61dee2363",
+            "d65b9d03-f79f-4c2b-a4e3-5cb180c5ebd1"
+          ],
+          "duration_ms": 43.717660000083924
+        },
+        {
+          "index": 7,
+          "queue_ms": 329.85348500005784,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 4.4995490000019345,
+              "http_status": 200,
+              "server_timing": "task;dur=2.761",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 10.105731000066953,
+              "http_status": 200,
+              "server_timing": "task;dur=8.440",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 14.407136000045284,
+              "http_status": 200,
+              "server_timing": "task;dur=12.713",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 13.487055000041437,
+              "http_status": 200,
+              "server_timing": "task;dur=11.890",
+              "trace_id": null
+            }
+          ],
+          "task_id": "2e1c5fb4-cade-41a6-9db2-d7e194dd1b29",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "48cbe17f-181d-4c3a-a571-54fab24dd64b",
+            "9f050602-63da-49d2-86d6-c9203022e5a4"
+          ],
+          "duration_ms": 42.74110799997288
+        },
+        {
+          "index": 8,
+          "queue_ms": 372.61708300002283,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 4.070468999998411,
+              "http_status": 200,
+              "server_timing": "task;dur=2.498",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 9.294728999975632,
+              "http_status": 200,
+              "server_timing": "task;dur=7.596",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 14.7564629999124,
+              "http_status": 200,
+              "server_timing": "task;dur=12.720",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 14.834630999985166,
+              "http_status": 200,
+              "server_timing": "task;dur=13.244",
+              "trace_id": null
+            }
+          ],
+          "task_id": "bacaeed1-4cea-4621-89f0-759d2f3a4401",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "ee69a17f-6bff-418b-b414-c5a55b61fce8",
+            "9198c930-33a8-4404-8152-328a915fc611"
+          ],
+          "duration_ms": 43.19297500001085
+        },
+        {
+          "index": 9,
+          "queue_ms": 415.8317540000098,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 4.243546999987302,
+              "http_status": 200,
+              "server_timing": "task;dur=2.617",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 8.42814699990413,
+              "http_status": 200,
+              "server_timing": "task;dur=6.830",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 11.945100000048114,
+              "http_status": 200,
+              "server_timing": "task;dur=10.298",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 13.966959000072166,
+              "http_status": 200,
+              "server_timing": "task;dur=12.239",
+              "trace_id": null
+            }
+          ],
+          "task_id": "0f51eae9-6536-4308-b8df-cf6e1debb955",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "cc39b987-6b3b-4482-baf3-45aebfa3afc5",
+            "b8477301-3362-4762-915c-3201b0f788f8"
+          ],
+          "duration_ms": 38.82410199980768
+        },
+        {
+          "index": 10,
+          "queue_ms": 454.6790389999842,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 4.6148680000897,
+              "http_status": 200,
+              "server_timing": "task;dur=2.966",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 9.21864099996128,
+              "http_status": 200,
+              "server_timing": "task;dur=7.330",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 12.578664999864486,
+              "http_status": 200,
+              "server_timing": "task;dur=11.006",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 13.87630900012482,
+              "http_status": 200,
+              "server_timing": "task;dur=12.420",
+              "trace_id": null
+            }
+          ],
+          "task_id": "26ac40af-9915-4ac7-983b-6c3bd40e7046",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "8ca012cf-0d3d-41d4-83d2-dc0299deba11",
+            "9b8b6a18-f665-457f-895d-f3088050a330"
+          ],
+          "duration_ms": 40.53438100004314
+        },
+        {
+          "index": 11,
+          "queue_ms": 495.2367010000671,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 3.881538000086948,
+              "http_status": 200,
+              "server_timing": "task;dur=2.512",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 8.730415000172798,
+              "http_status": 200,
+              "server_timing": "task;dur=7.298",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 11.521171000140384,
+              "http_status": 200,
+              "server_timing": "task;dur=10.058",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 12.756994000028499,
+              "http_status": 200,
+              "server_timing": "task;dur=11.215",
+              "trace_id": null
+            }
+          ],
+          "task_id": "44d0769a-8488-4b0e-b88a-ad1a04758176",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "b8670b79-4a7e-4b39-9077-c86f9256806f",
+            "f447e6f1-1933-4d2e-8cf4-dab9c19dd326"
+          ],
+          "duration_ms": 37.17851800001881
+        }
+      ],
+      "requests": 12,
+      "succeeded": 12,
+      "wall_seconds": 0.5329978610000126,
+      "observed_tasks_per_second": 22.51416164688833,
+      "p50_ms": 40.53438100004314,
+      "p95_ms_descriptive": 78.7778219998927
+    },
+    {
+      "concurrency": 3,
+      "trials": [
+        {
+          "index": 0,
+          "queue_ms": 0.004062000016347156,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 6.132948000185934,
+              "http_status": 200,
+              "server_timing": "task;dur=3.936",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 11.134989999845857,
+              "http_status": 200,
+              "server_timing": "task;dur=9.641",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 13.79338599986113,
+              "http_status": 200,
+              "server_timing": "task;dur=11.926",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 37.52744899998106,
+              "http_status": 200,
+              "server_timing": "task;dur=35.774",
+              "trace_id": null
+            }
+          ],
+          "task_id": "148da58d-bc34-4140-8333-db7fece19684",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "54e26c3c-10c5-431d-9f3a-67ee579e61b4",
+            "566136d1-2229-4a70-bff0-bf814be94d58"
+          ],
+          "duration_ms": 68.87251300008757
+        },
+        {
+          "index": 1,
+          "queue_ms": 0.0022790000002714805,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 8.161642999994001,
+              "http_status": 200,
+              "server_timing": "task;dur=5.109",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 15.420641999980944,
+              "http_status": 200,
+              "server_timing": "task;dur=13.460",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 34.04299000021638,
+              "http_status": 200,
+              "server_timing": "task;dur=31.827",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 16.444054999965374,
+              "http_status": 200,
+              "server_timing": "task;dur=14.442",
+              "trace_id": null
+            }
+          ],
+          "task_id": "53762b44-7889-4ddb-94cf-b5b1ff7ece2a",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "510728c6-a0e9-4d83-8272-fd4fc218c830",
+            "20118151-347f-4ac3-ac0a-86a917e22b29"
+          ],
+          "duration_ms": 74.28005600013421
+        },
+        {
+          "index": 2,
+          "queue_ms": 0.002278000010846881,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 9.191198000053191,
+              "http_status": 200,
+              "server_timing": "task;dur=5.093",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 14.972836999959327,
+              "http_status": 200,
+              "server_timing": "task;dur=12.709",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 28.852613000026395,
+              "http_status": 200,
+              "server_timing": "task;dur=26.459",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 16.16853599989554,
+              "http_status": 200,
+              "server_timing": "task;dur=14.294",
+              "trace_id": null
+            }
+          ],
+          "task_id": "4b42b36c-207d-4006-bd72-813e29f1809f",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "cfab543a-449e-4044-ad75-c0744e68c27c",
+            "389121d9-5c02-4ff3-b231-ba6839320471"
+          ],
+          "duration_ms": 69.39937800007101
+        },
+        {
+          "index": 3,
+          "queue_ms": 68.2230970001001,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 4.693631000009191,
+              "http_status": 200,
+              "server_timing": "task;dur=2.992",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 12.087565000001632,
+              "http_status": 200,
+              "server_timing": "task;dur=9.954",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 15.899655000112034,
+              "http_status": 200,
+              "server_timing": "task;dur=14.252",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 44.36301500004447,
+              "http_status": 200,
+              "server_timing": "task;dur=42.414",
+              "trace_id": null
+            }
+          ],
+          "task_id": "7429bafa-7dd6-4eed-bfc9-675e082d9e64",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "e7397913-4ab5-443d-a816-8907ba4cb7b9",
+            "5c2ac70d-8595-444a-a7f2-dacfe9a24fa4"
+          ],
+          "duration_ms": 77.26281400005064
+        },
+        {
+          "index": 4,
+          "queue_ms": 69.31754500010356,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 5.520782000075997,
+              "http_status": 200,
+              "server_timing": "task;dur=2.978",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 11.271311999962563,
+              "http_status": 200,
+              "server_timing": "task;dur=8.861",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 15.832582000030015,
+              "http_status": 200,
+              "server_timing": "task;dur=13.890",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 42.1372649998375,
+              "http_status": 200,
+              "server_timing": "task;dur=40.020",
+              "trace_id": null
+            }
+          ],
+          "task_id": "72f02d35-2517-4eaf-a00e-07159b8a08c8",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "f79a1bae-70da-4ab9-bc58-216174ac28b5",
+            "165f3aec-b225-4b67-9d96-505160de1e54"
+          ],
+          "duration_ms": 75.00496499983456
+        },
+        {
+          "index": 5,
+          "queue_ms": 74.02316299999256,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 4.5322430000851455,
+              "http_status": 200,
+              "server_timing": "task;dur=2.406",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 11.255956000013612,
+              "http_status": 200,
+              "server_timing": "task;dur=9.648",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 15.437780999945971,
+              "http_status": 200,
+              "server_timing": "task;dur=13.811",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 51.04987300001085,
+              "http_status": 200,
+              "server_timing": "task;dur=49.379",
+              "trace_id": null
+            }
+          ],
+          "task_id": "7341a0dd-4bc1-4bb8-9fdb-43bd66eed787",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "c9258da5-68a2-4b88-ba26-6dc341f2a279",
+            "dc10c124-d469-4697-8cf5-bd1a4309716a"
+          ],
+          "duration_ms": 82.50361899990821
+        },
+        {
+          "index": 6,
+          "queue_ms": 144.34450399994603,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 4.344403000004604,
+              "http_status": 200,
+              "server_timing": "task;dur=2.770",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 15.916099999913058,
+              "http_status": 200,
+              "server_timing": "task;dur=13.921",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 29.201742999930502,
+              "http_status": 200,
+              "server_timing": "task;dur=27.376",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 19.16773900006774,
+              "http_status": 200,
+              "server_timing": "task;dur=16.965",
+              "trace_id": null
+            }
+          ],
+          "task_id": "42b12a53-fe87-4be2-b713-533d9e542c96",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "16dda0b2-11ba-4c8d-8654-403e06b4ec1c",
+            "5419eff4-ffec-4d92-8794-8af60bdc4f78"
+          ],
+          "duration_ms": 68.89866799997435
+        },
+        {
+          "index": 7,
+          "queue_ms": 145.49502599993502,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 4.804491999948368,
+              "http_status": 200,
+              "server_timing": "task;dur=2.836",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 10.107910999977321,
+              "http_status": 200,
+              "server_timing": "task;dur=8.457",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 17.92339600001469,
+              "http_status": 200,
+              "server_timing": "task;dur=15.603",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 16.60494800012202,
+              "http_status": 200,
+              "server_timing": "task;dur=14.620",
+              "trace_id": null
+            }
+          ],
+          "task_id": "5c77f7ff-40a1-4c51-b843-9866db9f0f40",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "4df17f9d-bb9e-4fbc-95a7-8114ca4d2009",
+            "344d3af6-1e79-4e85-a5a8-60990c926773"
+          ],
+          "duration_ms": 49.69664999998713
+        },
+        {
+          "index": 8,
+          "queue_ms": 156.54550599992945,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 4.737519000173052,
+              "http_status": 200,
+              "server_timing": "task;dur=2.835",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 11.907948000043689,
+              "http_status": 200,
+              "server_timing": "task;dur=9.398",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 13.584740999931455,
+              "http_status": 200,
+              "server_timing": "task;dur=12.013",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 18.184748000066975,
+              "http_status": 200,
+              "server_timing": "task;dur=16.488",
+              "trace_id": null
+            }
+          ],
+          "task_id": "e959e1ac-f642-4324-9d49-6bf01e80cce0",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "735704f0-06f8-4781-9d77-6c3a7d393dc4",
+            "73880e7d-f357-47ca-baa8-273d26bad9db"
+          ],
+          "duration_ms": 48.63856199995098
+        },
+        {
+          "index": 9,
+          "queue_ms": 195.36643799983722,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 5.2780560001792765,
+              "http_status": 200,
+              "server_timing": "task;dur=2.980",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 11.523152999870945,
+              "http_status": 200,
+              "server_timing": "task;dur=10.050",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 17.47420499987129,
+              "http_status": 200,
+              "server_timing": "task;dur=15.235",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 18.227349000198956,
+              "http_status": 200,
+              "server_timing": "task;dur=16.399",
+              "trace_id": null
+            }
+          ],
+          "task_id": "1cd1324a-5ec3-486e-965d-79c8d66575e2",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "2dec9da5-dc1d-41e7-ac9d-f5349150de52",
+            "4e8bb64d-152e-458a-a708-4aea4faf8296"
+          ],
+          "duration_ms": 52.74301200006448
+        },
+        {
+          "index": 10,
+          "queue_ms": 205.2044769998247,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 4.291993000151706,
+              "http_status": 200,
+              "server_timing": "task;dur=2.680",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 11.266556000009587,
+              "http_status": 200,
+              "server_timing": "task;dur=9.738",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 15.73529399979634,
+              "http_status": 200,
+              "server_timing": "task;dur=13.941",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 16.64616199991542,
+              "http_status": 200,
+              "server_timing": "task;dur=14.889",
+              "trace_id": null
+            }
+          ],
+          "task_id": "1764147c-096a-4cb6-9c4f-31bc8e0d8639",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "93edbb7d-a6a0-4de7-b1dd-a696837dbc91",
+            "2b9939bf-fbfa-4929-a3a1-daf35f77c6c3"
+          ],
+          "duration_ms": 48.17322100007004
+        },
+        {
+          "index": 11,
+          "queue_ms": 213.40990999988207,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 4.626260999884835,
+              "http_status": 200,
+              "server_timing": "task;dur=2.631",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 10.395318999826486,
+              "http_status": 200,
+              "server_timing": "task;dur=8.536",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 16.629814999987502,
+              "http_status": 200,
+              "server_timing": "task;dur=14.832",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 13.589892000027248,
+              "http_status": 200,
+              "server_timing": "task;dur=11.978",
+              "trace_id": null
+            }
+          ],
+          "task_id": "f27e9fd3-af48-44c1-9e2c-ea156c0412c6",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "e25a1434-6849-46bf-8a9e-a0e8062b9abe",
+            "56462411-aa54-4873-92c7-99627b6c2da8"
+          ],
+          "duration_ms": 45.46489200015458
+        }
+      ],
+      "requests": 12,
+      "succeeded": 12,
+      "wall_seconds": 0.2596925420000389,
+      "observed_tasks_per_second": 46.20848911401623,
+      "p50_ms": 68.87251300008757,
+      "p95_ms_descriptive": 82.50361899990821
+    },
+    {
+      "concurrency": 5,
+      "trials": [
+        {
+          "index": 0,
+          "queue_ms": 0.003367999852343928,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 9.559051999985968,
+              "http_status": 200,
+              "server_timing": "task;dur=6.211",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 14.26982200018756,
+              "http_status": 200,
+              "server_timing": "task;dur=11.111",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 42.91517699994074,
+              "http_status": 200,
+              "server_timing": "task;dur=41.197",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 60.38957999999184,
+              "http_status": 200,
+              "server_timing": "task;dur=57.836",
+              "trace_id": null
+            }
+          ],
+          "task_id": "80b4e7ed-1c23-4d36-bfc5-0d3fbe6abe1c",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "6bcbc4b7-249b-4774-907c-797ad64d0112",
+            "ff9eca20-8992-43c3-81f7-e5161a15067e"
+          ],
+          "duration_ms": 127.33009200019296
+        },
+        {
+          "index": 1,
+          "queue_ms": 0.0033689998417685274,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 7.6096150000921625,
+              "http_status": 200,
+              "server_timing": "task;dur=4.114",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 14.730704999919908,
+              "http_status": 200,
+              "server_timing": "task;dur=12.168",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 42.90170399985982,
+              "http_status": 200,
+              "server_timing": "task;dur=41.111",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 48.243363999972644,
+              "http_status": 200,
+              "server_timing": "task;dur=46.461",
+              "trace_id": null
+            }
+          ],
+          "task_id": "57fcb341-5fbe-45c9-b462-aa6332b3451b",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "1e686897-b03b-4db1-a5ca-3dc804e0b0f4",
+            "9d12fa2c-0a18-45d8-a822-8f55ac2a1223"
+          ],
+          "duration_ms": 113.73593999996956
+        },
+        {
+          "index": 2,
+          "queue_ms": 0.0024769999527052278,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 9.998535000022457,
+              "http_status": 200,
+              "server_timing": "task;dur=3.365",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 16.735622999931365,
+              "http_status": 200,
+              "server_timing": "task;dur=12.712",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 45.3645319998941,
+              "http_status": 200,
+              "server_timing": "task;dur=41.889",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 50.250362000042514,
+              "http_status": 200,
+              "server_timing": "task;dur=48.318",
+              "trace_id": null
+            }
+          ],
+          "task_id": "374b3d8f-af2c-4c07-ab5d-695a84269cc7",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "b13c15d4-03ac-4092-a669-3c897c59f50f",
+            "07866a68-95fa-4c44-b209-e8b2add51ed1"
+          ],
+          "duration_ms": 122.55383499996242
+        },
+        {
+          "index": 3,
+          "queue_ms": 0.0020810000478377333,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 10.960622999846237,
+              "http_status": 200,
+              "server_timing": "task;dur=3.862",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 16.331905000015468,
+              "http_status": 200,
+              "server_timing": "task;dur=12.453",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 108.05475999995906,
+              "http_status": 200,
+              "server_timing": "task;dur=105.023",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 22.236492000047292,
+              "http_status": 200,
+              "server_timing": "task;dur=20.304",
+              "trace_id": null
+            }
+          ],
+          "task_id": "c271afa7-17e2-4370-9a37-3a6cd21a669c",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "02984965-f502-4f1a-b2e5-f7df061df7c9",
+            "59088a51-1662-4033-b71a-6c4feac67e5b"
+          ],
+          "duration_ms": 157.82085899991216
+        },
+        {
+          "index": 4,
+          "queue_ms": 0.0020810000478377333,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 8.13063400005376,
+              "http_status": 200,
+              "server_timing": "task;dur=3.873",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 17.093272000010984,
+              "http_status": 200,
+              "server_timing": "task;dur=14.486",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 45.005296999988786,
+              "http_status": 200,
+              "server_timing": "task;dur=42.336",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 48.08534399990094,
+              "http_status": 200,
+              "server_timing": "task;dur=45.967",
+              "trace_id": null
+            }
+          ],
+          "task_id": "2b36e217-15d3-4bfb-b6ef-c7798439a30f",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "8da90974-774a-42eb-bbe3-c339b56487f3",
+            "79f56ef2-8445-43fa-9684-38b9f011a120"
+          ],
+          "duration_ms": 118.5410260000026
+        },
+        {
+          "index": 5,
+          "queue_ms": 112.68320199997106,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 6.711229999837087,
+              "http_status": 200,
+              "server_timing": "task;dur=4.746",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 20.44507400000839,
+              "http_status": 200,
+              "server_timing": "task;dur=17.116",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 34.63583699999617,
+              "http_status": 200,
+              "server_timing": "task;dur=31.452",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 23.815302000002703,
+              "http_status": 200,
+              "server_timing": "task;dur=20.879",
+              "trace_id": null
+            }
+          ],
+          "task_id": "b6b8e378-c805-484d-a53b-5bec30ddd770",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "e249c17d-837c-4ff7-a0fc-ac22fe70cbdb",
+            "271f655d-d38f-420c-bcce-00a0df4a34b0"
+          ],
+          "duration_ms": 85.89465299996846
+        },
+        {
+          "index": 6,
+          "queue_ms": 118.33773100011058,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 6.656939000095008,
+              "http_status": 200,
+              "server_timing": "task;dur=4.745",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 14.052557000013621,
+              "http_status": 200,
+              "server_timing": "task;dur=11.667",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 20.262087999981304,
+              "http_status": 200,
+              "server_timing": "task;dur=17.279",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 21.298875999946176,
+              "http_status": 200,
+              "server_timing": "task;dur=18.280",
+              "trace_id": null
+            }
+          ],
+          "task_id": "5fe1687e-6722-49dd-bd0b-f49c54dccdf9",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "ff96a6dc-1e16-483c-89b9-1184c4424b0b",
+            "2a8c7d44-2dec-45ec-946a-54f640dd7439"
+          ],
+          "duration_ms": 62.50813399992694
+        },
+        {
+          "index": 7,
+          "queue_ms": 121.70964300003106,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 5.069112999990466,
+              "http_status": 200,
+              "server_timing": "task;dur=3.240",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 11.360081000020728,
+              "http_status": 200,
+              "server_timing": "task;dur=9.004",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 19.959026999913476,
+              "http_status": 200,
+              "server_timing": "task;dur=17.257",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 21.49721699993279,
+              "http_status": 200,
+              "server_timing": "task;dur=18.514",
+              "trace_id": null
+            }
+          ],
+          "task_id": "48f5adc7-9847-4024-affe-b31b86fa1c54",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "a5942e7c-68de-4f6e-8add-03fb5259c8a9",
+            "2e0a9394-c948-430f-ac08-dfaf32ab201e"
+          ],
+          "duration_ms": 58.10022700006812
+        },
+        {
+          "index": 8,
+          "queue_ms": 126.12280200005443,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 5.069608999974662,
+              "http_status": 200,
+              "server_timing": "task;dur=3.000",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 14.061275999893041,
+              "http_status": 200,
+              "server_timing": "task;dur=12.451",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 43.99674599994796,
+              "http_status": 200,
+              "server_timing": "task;dur=41.711",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 22.448308000093675,
+              "http_status": 200,
+              "server_timing": "task;dur=20.541",
+              "trace_id": null
+            }
+          ],
+          "task_id": "4d22d9a2-627a-4bfc-befa-54d647e56ebe",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "21a13f8e-8497-4ab3-9dbc-bf3e072d16b8",
+            "397bac17-0459-42cf-a166-f095191889d2"
+          ],
+          "duration_ms": 85.79290600005152
+        },
+        {
+          "index": 9,
+          "queue_ms": 157.17312700007824,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 6.872915000030844,
+              "http_status": 200,
+              "server_timing": "task;dur=4.165",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 11.929843999951117,
+              "http_status": 200,
+              "server_timing": "task;dur=9.366",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 24.995149000005767,
+              "http_status": 200,
+              "server_timing": "task;dur=22.421",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 27.662562000159596,
+              "http_status": 200,
+              "server_timing": "task;dur=26.120",
+              "trace_id": null
+            }
+          ],
+          "task_id": "f39d76c1-40f6-4014-9b77-17106472718b",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "9f51ec49-c795-4d53-a574-7b05be353c1b",
+            "a2943bdd-849e-4400-89cf-56006bef5ae9"
+          ],
+          "duration_ms": 71.68258899991997
+        },
+        {
+          "index": 10,
+          "queue_ms": 179.829386999927,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 4.92040599988286,
+              "http_status": 200,
+              "server_timing": "task;dur=2.970",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 12.204173000100127,
+              "http_status": 200,
+              "server_timing": "task;dur=10.135",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 16.812305000030392,
+              "http_status": 200,
+              "server_timing": "task;dur=14.423",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 22.04250900012994,
+              "http_status": 200,
+              "server_timing": "task;dur=20.526",
+              "trace_id": null
+            }
+          ],
+          "task_id": "f422689f-6345-45f7-891e-e28cb4123586",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "766d4b36-7283-464d-9acf-98a117fc94e1",
+            "10339353-8f18-4664-8aba-6ad9b476af8e"
+          ],
+          "duration_ms": 56.258082999875114
+        },
+        {
+          "index": 11,
+          "queue_ms": 180.9648500000094,
+          "phases": [
+            {
+              "phase": "create",
+              "duration_ms": 7.005274999983158,
+              "http_status": 200,
+              "server_timing": "task;dur=5.048",
+              "trace_id": null
+            },
+            {
+              "phase": "plan",
+              "duration_ms": 15.946020000001226,
+              "http_status": 200,
+              "server_timing": "task;dur=13.807",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 25.412143000039578,
+              "http_status": 200,
+              "server_timing": "task;dur=23.654",
+              "trace_id": null
+            },
+            {
+              "phase": "next",
+              "duration_ms": 13.365890000159197,
+              "http_status": 200,
+              "server_timing": "task;dur=11.801",
+              "trace_id": null
+            }
+          ],
+          "task_id": "027f521a-7a6d-4391-bb9a-780e70178c00",
+          "status": "completed",
+          "success": true,
+          "receipt_ids": [
+            "a1717407-3a7c-4f85-b423-ed8916243689",
+            "84f6d0ae-34d6-4f87-a13b-3f4c7261014c"
+          ],
+          "duration_ms": 61.97037199990518
+        }
+      ],
+      "requests": 12,
+      "succeeded": 12,
+      "wall_seconds": 0.2443957400000727,
+      "observed_tasks_per_second": 49.10069218062652,
+      "p50_ms": 85.79290600005152,
+      "p95_ms_descriptive": 157.82085899991216
+    }
+  ]
+}

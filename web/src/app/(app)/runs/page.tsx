@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useAuth } from "@/lib/auth-context";
+import { errorMessage } from "@/lib/business-copy";
 import { api, type RunEntry } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -33,15 +35,17 @@ export default function RunsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
+  const [refreshVersion, setRefreshVersion] = useState(0);
   // 以 run id 为键。对每个可见行都提前拉取，而不是展开时才懒加载 ——
   // 懒加载意味着下方的「待审批」徽章在行被打开过一次之前都无法显示，
   // 而它本来的用途正是让列表可被快速扫视。每次请求都是一次带索引的
   // 单点查询；本页是低频的管理界面，不是热点路径。
-  const [checkpoints, setCheckpoints] = useState<Record<string, CheckpointData>>({});
+  const [checkpoints, setCheckpoints] = useState<Record<string, CheckpointData | null>>({});
   const limit = 20;
 
   useEffect(() => {
     setLoading(true);
+    setError(null);
     api
       .getRuns({ limit, offset: page * limit })
       .then((r) => {
@@ -53,7 +57,7 @@ export default function RunsPage() {
           setCheckpoints((prev) => {
             const next = { ...prev };
             results.forEach((res, i) => {
-              if (res.status === "fulfilled") next[r.entries[i].id] = res.value;
+              next[r.entries[i].id] = res.status === "fulfilled" ? res.value : null;
             });
             return next;
           });
@@ -63,13 +67,13 @@ export default function RunsPage() {
         setError("运行记录加载失败");
         setLoading(false);
       });
-  }, [page]);
+  }, [page, refreshVersion]);
 
   function refreshCheckpoints(runId: string) {
     api
       .getRunCheckpoints(runId)
       .then((data) => setCheckpoints((prev) => ({ ...prev, [runId]: data })))
-      .catch(() => {});
+      .catch(() => setCheckpoints((prev) => ({ ...prev, [runId]: null })));
   }
 
   return (
@@ -81,6 +85,7 @@ export default function RunsPage() {
             近期「编排器 → 专业智能体 → 工具」执行链路
           </p>
         </div>
+        <Button variant="outline" disabled={loading} onClick={() => setRefreshVersion((v) => v + 1)}>刷新状态</Button>
         {total > 0 && (
           <Badge variant="outline" className="text-xs">
             共 {total} 条
@@ -162,9 +167,10 @@ function RunRow({
   onResumed,
 }: {
   entry: RunEntry;
-  checkpointData: CheckpointData | undefined;
+  checkpointData: CheckpointData | null | undefined;
   onResumed: () => void;
 }) {
+  const { isAdmin } = useAuth();
   const [open, setOpen] = useState(false);
   const hasSteps = entry.steps.length > 0;
 
@@ -181,13 +187,14 @@ function RunRow({
   );
 
   async function handleResume(approved: boolean) {
+    if (!isAdmin) return;
     setResuming(approved ? "approve" : "reject");
     setResumeError(null);
     try {
       await api.resumeRun(entry.id, approved);
       onResumed();
     } catch (err) {
-      setResumeError(err instanceof Error ? err.message : "恢复执行失败。");
+      setResumeError(errorMessage(err, "恢复执行失败，请刷新运行状态。"));
     } finally {
       setResuming(null);
     }
@@ -280,13 +287,15 @@ function RunRow({
             <p className="px-4 py-3 text-xs text-muted-foreground">正在加载检查点…</p>
           )}
 
+          {checkpointData === null && <p role="alert" className="px-4 py-3 text-sm text-destructive">检查点读取失败，请刷新状态。</p>}
+
           {hitl && (
             <div className="space-y-2 border-t px-4 py-3 text-xs">
               <p className="font-medium text-foreground">
                 退货审批 —— {HITL_STATUS_LABELS[hitl.status] ?? hitl.status}
                 {hitl.payload?.order_id ? `（订单 ${hitl.payload.order_id}）` : ""}
               </p>
-              {pendingApproval ? (
+              {pendingApproval && !isAdmin ? (<p className="text-muted-foreground">等待管理员审批。您可以点击刷新状态查询处理结果。</p>) : pendingApproval ? (
                 <>
                   <div className="flex gap-2">
                     <Button
@@ -317,7 +326,7 @@ function RunRow({
             </div>
           )}
 
-          {!hasSteps && checkpointData !== undefined && !hitl && (
+          {!hasSteps && checkpointData != null && !hitl && (
             <p className="px-4 py-3 text-xs text-muted-foreground">该运行记录没有更多详情。</p>
           )}
         </div>

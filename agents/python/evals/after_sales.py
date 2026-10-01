@@ -12,6 +12,7 @@ import importlib
 import importlib.util
 import json
 import os
+import platform
 import statistics
 import subprocess
 import sys
@@ -19,6 +20,7 @@ import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
 from uuid import NAMESPACE_URL, uuid5
@@ -80,6 +82,7 @@ def configure(variant: str) -> Any:
     from shared.tools.return_tools import initiate_return
 
     settings.HITL_ENABLED = False
+    settings.FULFILLMENT_SIMULATION_ENABLED = False
     settings.RETURN_HITL_THRESHOLD = 500
     if variant != "B0":
         from shared.after_sales import service
@@ -390,10 +393,60 @@ async def load_checks() -> list[dict[str, Any]]:
         await pool.close()
 
 
+def provenance() -> dict[str, Any]:
+    """Record the evaluated checkout, not merely the HEAD commit."""
+
+    def git(*args: str) -> str:
+        return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
+
+    dependencies = {}
+    for name in ["agent-framework-core", "agent-framework-openai", "asyncpg", "testcontainers", "pydantic"]:
+        try:
+            dependencies[name] = version(name)
+        except PackageNotFoundError:
+            dependencies[name] = None
+    return {
+        "generated_at_utc": datetime.now(UTC).isoformat(),
+        "repository": {
+            "branch": git("branch", "--show-current"),
+            "head_commit": git("rev-parse", "HEAD"),
+            "worktree_dirty": bool(git("status", "--porcelain")),
+            "evaluated_source": "working_tree_files_identified_by_implementation_sha256",
+            "head_commit_is_evaluated_source": False,
+        },
+        "runtime": {
+            "python": platform.python_version(),
+            "platform": platform.platform(),
+            "dependencies": dependencies,
+        },
+        "invocation": [sys.executable, "-m", "evals.after_sales", *sys.argv[1:]],
+        "experiment_settings": {
+            "APP_ENV_FILE": "/dev/null",
+            "LLM_PROVIDER": "replay",
+            "RECORD": False,
+            "cloud_model_keys_cleared": True,
+            "HITL_ENABLED": False,
+            "RETURN_HITL_THRESHOLD": 500,
+            "FULFILLMENT_SIMULATION_ENABLED": False,
+            "approval_role_matrix_measured": False,
+            "external_fulfillment_measured": False,
+        },
+    }
+
+
+def save_child_logs(directory: Path | None, name: str, result: subprocess.CompletedProcess) -> None:
+    if directory is None:
+        return
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / f"{name}.stdout.json").write_text(result.stdout)
+    (directory / f"{name}.stderr.log").write_text(result.stderr)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, default=ROOT / ".local/after-sales-results.json")
     parser.add_argument("--repetitions", type=int, default=3)
+    parser.add_argument("--log-dir", type=Path, help="Preserve raw subprocess output without modifying reports")
     parser.add_argument("--child", choices=VARIANTS)
     parser.add_argument("--load-child", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
@@ -412,6 +465,12 @@ def main() -> None:
             ROOT / "agents/python/shared/tools/return_tools.py",
             ROOT / "agents/python/shared/hitl.py",
             ROOT / "agents/python/shared/idempotency.py",
+            ROOT / "agents/python/shared/config.py",
+            ROOT / "agents/python/shared/context.py",
+            ROOT / "agents/python/shared/db.py",
+            ROOT / "agents/python/shared/tool_inputs.py",
+            *BASELINES.glob("*.py"),
+            BASELINES / "manifest.json",
             ROOT / "agents/python/uv.lock",
             ROOT / "docker/postgres/init.sql",
         }
@@ -442,18 +501,27 @@ def main() -> None:
             env = {
                 **os.environ,
                 "AFTER_SALES_EVAL_DSN": dsn,
+                "APP_ENV_FILE": "/dev/null",
+                "ENVIRONMENT": "test",
+                "LLM_PROVIDER": "replay",
+                "RECORD": "false",
                 "OPENAI_API_KEY": "",
                 "AZURE_OPENAI_KEY": "",
                 "AZURE_OPENAI_API_KEY": "",
+                "DEEPSEEK_API_KEY": "",
+                "MOONSHOT_API_KEY": "",
+                "TYPESAFE_API_KEY": "",
             }
             result = subprocess.run(
                 [sys.executable, "-m", "evals.after_sales", "--child", variant, "--repetitions", str(args.repetitions)],
                 env=env,
                 capture_output=True,
                 text=True,
-                check=True,
+                check=False,
                 timeout=240,
             )
+            save_child_logs(args.log_dir, variant, result)
+            result.check_returncode()
             variants.append(json.loads(result.stdout))
             print(f"{variant}: {variants[-1]['passed']}/{variants[-1]['trials']} criteria passed", flush=True)
         load_result = subprocess.run(
@@ -461,12 +529,19 @@ def main() -> None:
             env=env,
             capture_output=True,
             text=True,
-            check=True,
+            check=False,
             timeout=120,
         )
+        save_child_logs(args.log_dir, "local-service-load", load_result)
+        load_result.check_returncode()
         if frozen_hashes != {str(p.relative_to(ROOT)): source_digest(p) for p in source}:
             raise RuntimeError("Implementation changed during evaluation; discard this run")
         report = {
+            **provenance(),
+            "case_count": len(CASES),
+            "repetitions": args.repetitions,
+            "variant_count": len(VARIANTS),
+            "total_trials": sum(item["trials"] for item in variants),
             "scope": "Return tool/service microbenchmark; no LLM, no production traffic",
             "fixed_clock": NOW.isoformat(),
             "source_hash_format": "SHA-256 of UTF-8 source with LF-normalized newlines",

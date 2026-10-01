@@ -1,0 +1,1458 @@
+{
+  "scope": "Retrieval engineering evaluation with real isolated PostgreSQL; no LLM or paid embedding",
+  "started_at": "2026-10-01T04:25:03.203304+00:00",
+  "completed_at": "2026-10-01T04:25:06.347705+00:00",
+  "dataset": {
+    "version": "commerce-retrieval-zh-20261001-v1",
+    "provenance": "由助手编写的合成商品和查询；相关性标签未经独立人工审核，人工审核待用户。本集合用于工程验收，不是线上用户分布。",
+    "human_review_status": "pending_user_review"
+  },
+  "embedding": {
+    "implementation": "shared.replay_embeddings.embed_text",
+    "scope": "使用项目ReplayEmbeddingsClient的确定性词元哈希；无训练语义能力、无外部模型调用，不据此宣称真实模型检索收益。",
+    "dimensions": 1536
+  },
+  "comparison": {
+    "baseline": "lexical_only_ablation is current search_products with identical filters",
+    "not_a_historical_before_after": true,
+    "variants": [
+      "lexical_only_ablation",
+      "hybrid_replay",
+      "embedding_unavailable"
+    ]
+  },
+  "protocol": {
+    "repetitions": 3,
+    "warmups_per_case_variant": 1,
+    "case_order": "dataset order; variants in fixed order",
+    "repetitions_are_independent_samples": false,
+    "empty_relevance_metrics": "Recall and nDCG are null; score no_result_correct instead",
+    "precision_denominator": "precision_at_k uses requested k; precision_returned uses actual result count",
+    "latency_scope": "Sequential local synthetic calls including offline embedding; not production capacity or SLA",
+    "source_hash_format": "SHA-256 of UTF-8 source with LF-normalized newlines"
+  },
+  "environment": {
+    "python": "3.12.13",
+    "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.35",
+    "database": {
+      "postgres": "PostgreSQL 16.15 (Debian 16.15-1.pgdg12+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit",
+      "pgvector": "0.8.6"
+    },
+    "container_image": "pgvector/pgvector:pg16",
+    "packages": {
+      "asyncpg": "0.31.0",
+      "testcontainers": "4.15.0",
+      "pgvector": "0.5.0"
+    }
+  },
+  "git": {
+    "head": "d8af1bf3b26f185f9fc57017d5f1e1d20e1389b9",
+    "branch": "feat/portfolio-upgrades",
+    "working_tree_has_changes": true
+  },
+  "implementation_sha256": {
+    "agents/python/evals/retrieval.py": "496d74da83242a262ff2640e11fadf0363b6129eab5b3ff66533d76da0049843",
+    "agents/python/evals/retrieval_data/zh.json": "349f9897a7d725a491c2ef76d44182794a428f0c7a0909dc49fd395c588fe8b3",
+    "agents/python/product_discovery/tools.py": "47d386d79fae00ea466a58f986dd338359131e9c034f8d04a5a77820eae1f9be",
+    "agents/python/shared/search.py": "8ba4f5db977fc81e3982e62aadc9bfd348d989863053b5c160ca9f298a890588",
+    "agents/python/shared/replay_embeddings.py": "2b05a3bbb8e027bddb0820e150a7a16ce6100e0a926170488fd603f173794ca2",
+    "agents/python/uv.lock": "e982ee0be9a2b3474c1e4a5c28e0f2f0fc06d3d2ba2a44afafc226aca416cc24",
+    "docker/postgres/init.sql": "459b054e23df865827ab4b8562e65576a78b31aca41baca999909cf160dd5e38"
+  },
+  "variants": {
+    "lexical_only_ablation": {
+      "summary": {
+        "case_count": 12,
+        "relevant_case_count": 9,
+        "mean_recall_at_k": 0.8888888888888888,
+        "mean_ndcg_at_k": 0.8888888888888888,
+        "mean_precision_at_k": 0.4444444444444444,
+        "expected_empty_cases": 3,
+        "correct_empty_cases": 3,
+        "constraint_violation_count": 0,
+        "mode_contract_error_count": 0,
+        "latency_ms_median": 0.8894165,
+        "latency_ms_p95_nearest_rank": 1.339718
+      },
+      "cases": [
+        {
+          "id": "zh_headphones",
+          "query": "耳机",
+          "tags": [
+            "中文",
+            "品类别名"
+          ],
+          "filters": {
+            "category": "电子产品"
+          },
+          "k": 3,
+          "expected_relevance": {
+            "567ea08c-512f-5871-aacb-2e963b40a486": 2,
+            "7f5f8e85-37f8-57d3-88c2-17afa882c58d": 2,
+            "55fef910-f8cc-53ed-bcda-c7f3bb3b9999": 1
+          },
+          "returned_ids": [
+            "567ea08c-512f-5871-aacb-2e963b40a486",
+            "7f5f8e85-37f8-57d3-88c2-17afa882c58d",
+            "55fef910-f8cc-53ed-bcda-c7f3bb3b9999"
+          ],
+          "returned_keys": [
+            "sony_xm5",
+            "bose_qc",
+            "sony_ch520"
+          ],
+          "metrics": {
+            "recall_at_k": 1.0,
+            "precision_at_k": 1.0,
+            "precision_returned": 1.0,
+            "ndcg_at_k": 1.0,
+            "no_result_correct": null
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            1.339718,
+            1.281318,
+            1.374875
+          ],
+          "latency_ms_median": 1.339718,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "zh_budget",
+          "query": "耳机",
+          "tags": [
+            "中文",
+            "预算"
+          ],
+          "filters": {
+            "category": "Electronics",
+            "max_price": 150
+          },
+          "k": 3,
+          "expected_relevance": {
+            "55fef910-f8cc-53ed-bcda-c7f3bb3b9999": 2
+          },
+          "returned_ids": [
+            "55fef910-f8cc-53ed-bcda-c7f3bb3b9999"
+          ],
+          "returned_keys": [
+            "sony_ch520"
+          ],
+          "metrics": {
+            "recall_at_k": 1.0,
+            "precision_at_k": 0.3333333333333333,
+            "precision_returned": 1.0,
+            "ndcg_at_k": 1.0,
+            "no_result_correct": null
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            1.104084,
+            0.807725,
+            0.853147
+          ],
+          "latency_ms_median": 0.853147,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "exact_model",
+          "query": "WH-1000XM5",
+          "tags": [
+            "精确型号"
+          ],
+          "filters": {
+            "category": "Electronics"
+          },
+          "k": 3,
+          "expected_relevance": {
+            "567ea08c-512f-5871-aacb-2e963b40a486": 3
+          },
+          "returned_ids": [
+            "567ea08c-512f-5871-aacb-2e963b40a486",
+            "55fef910-f8cc-53ed-bcda-c7f3bb3b9999"
+          ],
+          "returned_keys": [
+            "sony_xm5",
+            "sony_ch520"
+          ],
+          "metrics": {
+            "recall_at_k": 1.0,
+            "precision_at_k": 0.3333333333333333,
+            "precision_returned": 0.5,
+            "ndcg_at_k": 1.0,
+            "no_result_correct": null
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            1.104762,
+            0.780607,
+            0.77741
+          ],
+          "latency_ms_median": 0.780607,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "stemmed_terms",
+          "query": "noise cancellation headphones",
+          "tags": [
+            "词干",
+            "同义表达"
+          ],
+          "filters": {
+            "min_rating": 4.5
+          },
+          "k": 3,
+          "expected_relevance": {
+            "567ea08c-512f-5871-aacb-2e963b40a486": 2,
+            "7f5f8e85-37f8-57d3-88c2-17afa882c58d": 2
+          },
+          "returned_ids": [
+            "567ea08c-512f-5871-aacb-2e963b40a486",
+            "7f5f8e85-37f8-57d3-88c2-17afa882c58d"
+          ],
+          "returned_keys": [
+            "sony_xm5",
+            "bose_qc"
+          ],
+          "metrics": {
+            "recall_at_k": 1.0,
+            "precision_at_k": 0.6666666666666666,
+            "precision_returned": 1.0,
+            "ndcg_at_k": 1.0,
+            "no_result_correct": null
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            1.091106,
+            0.809564,
+            0.867094
+          ],
+          "latency_ms_median": 0.867094,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "synonym_uncovered",
+          "query": "headset for subway commute",
+          "tags": [
+            "未覆盖同义词",
+            "能力边界"
+          ],
+          "filters": {
+            "category": "Electronics",
+            "min_rating": 4.5
+          },
+          "k": 3,
+          "expected_relevance": {
+            "567ea08c-512f-5871-aacb-2e963b40a486": 2,
+            "7f5f8e85-37f8-57d3-88c2-17afa882c58d": 2
+          },
+          "returned_ids": [],
+          "returned_keys": [],
+          "metrics": {
+            "recall_at_k": 0.0,
+            "precision_at_k": 0.0,
+            "precision_returned": 0.0,
+            "ndcg_at_k": 0.0,
+            "no_result_correct": null
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            1.020213,
+            0.767241,
+            0.85276
+          ],
+          "latency_ms_median": 0.85276,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "zh_power_bank",
+          "query": "充电宝",
+          "tags": [
+            "中文",
+            "品类别名",
+            "预算"
+          ],
+          "filters": {
+            "max_price": 50
+          },
+          "k": 3,
+          "expected_relevance": {
+            "7a377143-3261-5622-867b-5e353c83eab5": 2,
+            "72f47d05-f9d0-5b06-9c00-bd0215d34255": 1
+          },
+          "returned_ids": [
+            "7a377143-3261-5622-867b-5e353c83eab5",
+            "72f47d05-f9d0-5b06-9c00-bd0215d34255"
+          ],
+          "returned_keys": [
+            "anker_20k",
+            "xiaomi_10k"
+          ],
+          "metrics": {
+            "recall_at_k": 1.0,
+            "precision_at_k": 0.6666666666666666,
+            "precision_returned": 1.0,
+            "ndcg_at_k": 1.0,
+            "no_result_correct": null
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            0.903509,
+            0.825448,
+            0.864381
+          ],
+          "latency_ms_median": 0.864381,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "zh_keyboard_rating",
+          "query": "键盘",
+          "tags": [
+            "中文",
+            "评分"
+          ],
+          "filters": {
+            "min_rating": 4.7
+          },
+          "k": 3,
+          "expected_relevance": {
+            "a7cd1ef3-687a-5b13-b8cf-23d295a3c51e": 2
+          },
+          "returned_ids": [
+            "a7cd1ef3-687a-5b13-b8cf-23d295a3c51e"
+          ],
+          "returned_keys": [
+            "mx_keys"
+          ],
+          "metrics": {
+            "recall_at_k": 1.0,
+            "precision_at_k": 0.3333333333333333,
+            "precision_returned": 1.0,
+            "ndcg_at_k": 1.0,
+            "no_result_correct": null
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            0.887431,
+            0.900797,
+            0.834746
+          ],
+          "latency_ms_median": 0.887431,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "zh_category_filter",
+          "query": "空气炸锅",
+          "tags": [
+            "中文",
+            "分类"
+          ],
+          "filters": {
+            "category": "家居"
+          },
+          "k": 3,
+          "expected_relevance": {
+            "6beb8712-2557-5bf1-b985-26bac11d7dee": 2
+          },
+          "returned_ids": [
+            "6beb8712-2557-5bf1-b985-26bac11d7dee"
+          ],
+          "returned_keys": [
+            "philips_air"
+          ],
+          "metrics": {
+            "recall_at_k": 1.0,
+            "precision_at_k": 0.3333333333333333,
+            "precision_returned": 1.0,
+            "ndcg_at_k": 1.0,
+            "no_result_correct": null
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            1.10389,
+            1.029703,
+            0.886076
+          ],
+          "latency_ms_median": 1.029703,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "price_interval",
+          "query": "headphones",
+          "tags": [
+            "价格区间"
+          ],
+          "filters": {
+            "min_price": 200,
+            "max_price": 280
+          },
+          "k": 3,
+          "expected_relevance": {
+            "7f5f8e85-37f8-57d3-88c2-17afa882c58d": 2
+          },
+          "returned_ids": [
+            "7f5f8e85-37f8-57d3-88c2-17afa882c58d"
+          ],
+          "returned_keys": [
+            "bose_qc"
+          ],
+          "metrics": {
+            "recall_at_k": 1.0,
+            "precision_at_k": 0.3333333333333333,
+            "precision_returned": 1.0,
+            "ndcg_at_k": 1.0,
+            "no_result_correct": null
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            0.885592,
+            0.9468,
+            0.794941
+          ],
+          "latency_ms_median": 0.885592,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "impossible_budget",
+          "query": "耳机",
+          "tags": [
+            "无结果",
+            "预算"
+          ],
+          "filters": {
+            "category": "Electronics",
+            "max_price": 1
+          },
+          "k": 3,
+          "expected_relevance": {},
+          "returned_ids": [],
+          "returned_keys": [],
+          "metrics": {
+            "recall_at_k": null,
+            "ndcg_at_k": null,
+            "precision_at_k": 0.0,
+            "precision_returned": 0.0,
+            "no_result_correct": true
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            0.925494,
+            0.89857,
+            0.806369
+          ],
+          "latency_ms_median": 0.89857,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "unknown_product",
+          "query": "quantum teleportation device",
+          "tags": [
+            "无结果",
+            "未知品类",
+            "能力边界"
+          ],
+          "filters": {},
+          "k": 3,
+          "expected_relevance": {},
+          "returned_ids": [],
+          "returned_keys": [],
+          "metrics": {
+            "recall_at_k": null,
+            "ndcg_at_k": null,
+            "precision_at_k": 0.0,
+            "precision_returned": 0.0,
+            "no_result_correct": true
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            0.891402,
+            0.750003,
+            0.74148
+          ],
+          "latency_ms_median": 0.750003,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "inactive_excluded",
+          "query": "Discontinued Headphones",
+          "tags": [
+            "下架商品",
+            "有效性"
+          ],
+          "filters": {
+            "max_price": 15
+          },
+          "k": 3,
+          "expected_relevance": {},
+          "returned_ids": [],
+          "returned_keys": [],
+          "metrics": {
+            "recall_at_k": null,
+            "ndcg_at_k": null,
+            "precision_at_k": 0.0,
+            "precision_returned": 0.0,
+            "no_result_correct": true
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            1.088201,
+            0.913194,
+            0.976049
+          ],
+          "latency_ms_median": 0.976049,
+          "ranking_stable_across_repetitions": true
+        }
+      ]
+    },
+    "hybrid_replay": {
+      "summary": {
+        "case_count": 12,
+        "relevant_case_count": 9,
+        "mean_recall_at_k": 0.9444444444444444,
+        "mean_ndcg_at_k": 0.9175573617077649,
+        "mean_precision_at_k": 0.48148148148148145,
+        "expected_empty_cases": 3,
+        "correct_empty_cases": 2,
+        "constraint_violation_count": 0,
+        "mode_contract_error_count": 0,
+        "latency_ms_median": 2.156305,
+        "latency_ms_p95_nearest_rank": 2.534744
+      },
+      "cases": [
+        {
+          "id": "zh_headphones",
+          "query": "耳机",
+          "tags": [
+            "中文",
+            "品类别名"
+          ],
+          "filters": {
+            "category": "电子产品"
+          },
+          "k": 3,
+          "expected_relevance": {
+            "567ea08c-512f-5871-aacb-2e963b40a486": 2,
+            "7f5f8e85-37f8-57d3-88c2-17afa882c58d": 2,
+            "55fef910-f8cc-53ed-bcda-c7f3bb3b9999": 1
+          },
+          "returned_ids": [
+            "567ea08c-512f-5871-aacb-2e963b40a486",
+            "55fef910-f8cc-53ed-bcda-c7f3bb3b9999",
+            "7f5f8e85-37f8-57d3-88c2-17afa882c58d"
+          ],
+          "returned_keys": [
+            "sony_xm5",
+            "sony_ch520",
+            "bose_qc"
+          ],
+          "metrics": {
+            "recall_at_k": 1.0,
+            "precision_at_k": 1.0,
+            "precision_returned": 1.0,
+            "ndcg_at_k": 0.9514426589871553,
+            "no_result_correct": null
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            2.534744,
+            2.461623,
+            2.804276
+          ],
+          "latency_ms_median": 2.534744,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "zh_budget",
+          "query": "耳机",
+          "tags": [
+            "中文",
+            "预算"
+          ],
+          "filters": {
+            "category": "Electronics",
+            "max_price": 150
+          },
+          "k": 3,
+          "expected_relevance": {
+            "55fef910-f8cc-53ed-bcda-c7f3bb3b9999": 2
+          },
+          "returned_ids": [
+            "55fef910-f8cc-53ed-bcda-c7f3bb3b9999",
+            "a7cd1ef3-687a-5b13-b8cf-23d295a3c51e",
+            "e30aa062-c664-5dcc-9637-22765e266bf9"
+          ],
+          "returned_keys": [
+            "sony_ch520",
+            "mx_keys",
+            "keychron_k2"
+          ],
+          "metrics": {
+            "recall_at_k": 1.0,
+            "precision_at_k": 0.3333333333333333,
+            "precision_returned": 0.3333333333333333,
+            "ndcg_at_k": 1.0,
+            "no_result_correct": null
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            2.10851,
+            2.254462,
+            2.103667
+          ],
+          "latency_ms_median": 2.10851,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "exact_model",
+          "query": "WH-1000XM5",
+          "tags": [
+            "精确型号"
+          ],
+          "filters": {
+            "category": "Electronics"
+          },
+          "k": 3,
+          "expected_relevance": {
+            "567ea08c-512f-5871-aacb-2e963b40a486": 3
+          },
+          "returned_ids": [
+            "567ea08c-512f-5871-aacb-2e963b40a486",
+            "55fef910-f8cc-53ed-bcda-c7f3bb3b9999",
+            "a7cd1ef3-687a-5b13-b8cf-23d295a3c51e"
+          ],
+          "returned_keys": [
+            "sony_xm5",
+            "sony_ch520",
+            "mx_keys"
+          ],
+          "metrics": {
+            "recall_at_k": 1.0,
+            "precision_at_k": 0.3333333333333333,
+            "precision_returned": 0.3333333333333333,
+            "ndcg_at_k": 1.0,
+            "no_result_correct": null
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            2.290877,
+            2.265503,
+            1.920525
+          ],
+          "latency_ms_median": 2.265503,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "stemmed_terms",
+          "query": "noise cancellation headphones",
+          "tags": [
+            "词干",
+            "同义表达"
+          ],
+          "filters": {
+            "min_rating": 4.5
+          },
+          "k": 3,
+          "expected_relevance": {
+            "567ea08c-512f-5871-aacb-2e963b40a486": 2,
+            "7f5f8e85-37f8-57d3-88c2-17afa882c58d": 2
+          },
+          "returned_ids": [
+            "567ea08c-512f-5871-aacb-2e963b40a486",
+            "7f5f8e85-37f8-57d3-88c2-17afa882c58d",
+            "7a377143-3261-5622-867b-5e353c83eab5"
+          ],
+          "returned_keys": [
+            "sony_xm5",
+            "bose_qc",
+            "anker_20k"
+          ],
+          "metrics": {
+            "recall_at_k": 1.0,
+            "precision_at_k": 0.6666666666666666,
+            "precision_returned": 0.6666666666666666,
+            "ndcg_at_k": 1.0,
+            "no_result_correct": null
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            2.25485,
+            2.024929,
+            2.143666
+          ],
+          "latency_ms_median": 2.143666,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "synonym_uncovered",
+          "query": "headset for subway commute",
+          "tags": [
+            "未覆盖同义词",
+            "能力边界"
+          ],
+          "filters": {
+            "category": "Electronics",
+            "min_rating": 4.5
+          },
+          "k": 3,
+          "expected_relevance": {
+            "567ea08c-512f-5871-aacb-2e963b40a486": 2,
+            "7f5f8e85-37f8-57d3-88c2-17afa882c58d": 2
+          },
+          "returned_ids": [
+            "e30aa062-c664-5dcc-9637-22765e266bf9",
+            "a7cd1ef3-687a-5b13-b8cf-23d295a3c51e",
+            "567ea08c-512f-5871-aacb-2e963b40a486"
+          ],
+          "returned_keys": [
+            "keychron_k2",
+            "mx_keys",
+            "sony_xm5"
+          ],
+          "metrics": {
+            "recall_at_k": 0.5,
+            "precision_at_k": 0.3333333333333333,
+            "precision_returned": 0.3333333333333333,
+            "ndcg_at_k": 0.3065735963827292,
+            "no_result_correct": null
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            2.176305,
+            2.255334,
+            2.18783
+          ],
+          "latency_ms_median": 2.18783,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "zh_power_bank",
+          "query": "充电宝",
+          "tags": [
+            "中文",
+            "品类别名",
+            "预算"
+          ],
+          "filters": {
+            "max_price": 50
+          },
+          "k": 3,
+          "expected_relevance": {
+            "7a377143-3261-5622-867b-5e353c83eab5": 2,
+            "72f47d05-f9d0-5b06-9c00-bd0215d34255": 1
+          },
+          "returned_ids": [
+            "7a377143-3261-5622-867b-5e353c83eab5",
+            "72f47d05-f9d0-5b06-9c00-bd0215d34255",
+            "8cf0cc09-cd2a-5db3-bd44-a6ccd80f6a0e"
+          ],
+          "returned_keys": [
+            "anker_20k",
+            "xiaomi_10k",
+            "book"
+          ],
+          "metrics": {
+            "recall_at_k": 1.0,
+            "precision_at_k": 0.6666666666666666,
+            "precision_returned": 0.6666666666666666,
+            "ndcg_at_k": 1.0,
+            "no_result_correct": null
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            2.063087,
+            2.093595,
+            2.309763
+          ],
+          "latency_ms_median": 2.093595,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "zh_keyboard_rating",
+          "query": "键盘",
+          "tags": [
+            "中文",
+            "评分"
+          ],
+          "filters": {
+            "min_rating": 4.7
+          },
+          "k": 3,
+          "expected_relevance": {
+            "a7cd1ef3-687a-5b13-b8cf-23d295a3c51e": 2
+          },
+          "returned_ids": [
+            "a7cd1ef3-687a-5b13-b8cf-23d295a3c51e"
+          ],
+          "returned_keys": [
+            "mx_keys"
+          ],
+          "metrics": {
+            "recall_at_k": 1.0,
+            "precision_at_k": 0.3333333333333333,
+            "precision_returned": 1.0,
+            "ndcg_at_k": 1.0,
+            "no_result_correct": null
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            2.471501,
+            1.753557,
+            1.957521
+          ],
+          "latency_ms_median": 1.957521,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "zh_category_filter",
+          "query": "空气炸锅",
+          "tags": [
+            "中文",
+            "分类"
+          ],
+          "filters": {
+            "category": "家居"
+          },
+          "k": 3,
+          "expected_relevance": {
+            "6beb8712-2557-5bf1-b985-26bac11d7dee": 2
+          },
+          "returned_ids": [
+            "6beb8712-2557-5bf1-b985-26bac11d7dee"
+          ],
+          "returned_keys": [
+            "philips_air"
+          ],
+          "metrics": {
+            "recall_at_k": 1.0,
+            "precision_at_k": 0.3333333333333333,
+            "precision_returned": 1.0,
+            "ndcg_at_k": 1.0,
+            "no_result_correct": null
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            1.721596,
+            1.914907,
+            1.893117
+          ],
+          "latency_ms_median": 1.893117,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "price_interval",
+          "query": "headphones",
+          "tags": [
+            "价格区间"
+          ],
+          "filters": {
+            "min_price": 200,
+            "max_price": 280
+          },
+          "k": 3,
+          "expected_relevance": {
+            "7f5f8e85-37f8-57d3-88c2-17afa882c58d": 2
+          },
+          "returned_ids": [
+            "7f5f8e85-37f8-57d3-88c2-17afa882c58d"
+          ],
+          "returned_keys": [
+            "bose_qc"
+          ],
+          "metrics": {
+            "recall_at_k": 1.0,
+            "precision_at_k": 0.3333333333333333,
+            "precision_returned": 1.0,
+            "ndcg_at_k": 1.0,
+            "no_result_correct": null
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            2.285841,
+            2.107251,
+            2.397024
+          ],
+          "latency_ms_median": 2.285841,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "impossible_budget",
+          "query": "耳机",
+          "tags": [
+            "无结果",
+            "预算"
+          ],
+          "filters": {
+            "category": "Electronics",
+            "max_price": 1
+          },
+          "k": 3,
+          "expected_relevance": {},
+          "returned_ids": [],
+          "returned_keys": [],
+          "metrics": {
+            "recall_at_k": null,
+            "ndcg_at_k": null,
+            "precision_at_k": 0.0,
+            "precision_returned": 0.0,
+            "no_result_correct": true
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            2.168944,
+            1.862997,
+            1.810407
+          ],
+          "latency_ms_median": 1.862997,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "unknown_product",
+          "query": "quantum teleportation device",
+          "tags": [
+            "无结果",
+            "未知品类",
+            "能力边界"
+          ],
+          "filters": {},
+          "k": 3,
+          "expected_relevance": {},
+          "returned_ids": [
+            "96fb072b-4c8e-5ceb-9323-ea4484161d68",
+            "7f5f8e85-37f8-57d3-88c2-17afa882c58d",
+            "55fef910-f8cc-53ed-bcda-c7f3bb3b9999"
+          ],
+          "returned_keys": [
+            "fitbit",
+            "bose_qc",
+            "sony_ch520"
+          ],
+          "metrics": {
+            "recall_at_k": null,
+            "ndcg_at_k": null,
+            "precision_at_k": 0.0,
+            "precision_returned": 0.0,
+            "no_result_correct": false
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            2.341626,
+            2.2533,
+            2.266762
+          ],
+          "latency_ms_median": 2.266762,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "inactive_excluded",
+          "query": "Discontinued Headphones",
+          "tags": [
+            "下架商品",
+            "有效性"
+          ],
+          "filters": {
+            "max_price": 15
+          },
+          "k": 3,
+          "expected_relevance": {},
+          "returned_ids": [],
+          "returned_keys": [],
+          "metrics": {
+            "recall_at_k": null,
+            "ndcg_at_k": null,
+            "precision_at_k": 0.0,
+            "precision_returned": 0.0,
+            "no_result_correct": true
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            2.107541,
+            1.747551,
+            1.755009
+          ],
+          "latency_ms_median": 1.755009,
+          "ranking_stable_across_repetitions": true
+        }
+      ]
+    },
+    "embedding_unavailable": {
+      "summary": {
+        "case_count": 12,
+        "relevant_case_count": 9,
+        "mean_recall_at_k": 0.8888888888888888,
+        "mean_ndcg_at_k": 0.8888888888888888,
+        "mean_precision_at_k": 0.4444444444444444,
+        "expected_empty_cases": 3,
+        "correct_empty_cases": 3,
+        "constraint_violation_count": 0,
+        "mode_contract_error_count": 0,
+        "latency_ms_median": 0.8377479999999999,
+        "latency_ms_p95_nearest_rank": 0.973241
+      },
+      "cases": [
+        {
+          "id": "zh_headphones",
+          "query": "耳机",
+          "tags": [
+            "中文",
+            "品类别名"
+          ],
+          "filters": {
+            "category": "电子产品"
+          },
+          "k": 3,
+          "expected_relevance": {
+            "567ea08c-512f-5871-aacb-2e963b40a486": 2,
+            "7f5f8e85-37f8-57d3-88c2-17afa882c58d": 2,
+            "55fef910-f8cc-53ed-bcda-c7f3bb3b9999": 1
+          },
+          "returned_ids": [
+            "567ea08c-512f-5871-aacb-2e963b40a486",
+            "7f5f8e85-37f8-57d3-88c2-17afa882c58d",
+            "55fef910-f8cc-53ed-bcda-c7f3bb3b9999"
+          ],
+          "returned_keys": [
+            "sony_xm5",
+            "bose_qc",
+            "sony_ch520"
+          ],
+          "metrics": {
+            "recall_at_k": 1.0,
+            "precision_at_k": 1.0,
+            "precision_returned": 1.0,
+            "ndcg_at_k": 1.0,
+            "no_result_correct": null
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            0.859926,
+            0.839007,
+            0.887432
+          ],
+          "latency_ms_median": 0.859926,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "zh_budget",
+          "query": "耳机",
+          "tags": [
+            "中文",
+            "预算"
+          ],
+          "filters": {
+            "category": "Electronics",
+            "max_price": 150
+          },
+          "k": 3,
+          "expected_relevance": {
+            "55fef910-f8cc-53ed-bcda-c7f3bb3b9999": 2
+          },
+          "returned_ids": [
+            "55fef910-f8cc-53ed-bcda-c7f3bb3b9999"
+          ],
+          "returned_keys": [
+            "sony_ch520"
+          ],
+          "metrics": {
+            "recall_at_k": 1.0,
+            "precision_at_k": 0.3333333333333333,
+            "precision_returned": 1.0,
+            "ndcg_at_k": 1.0,
+            "no_result_correct": null
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            0.973241,
+            0.844624,
+            0.869708
+          ],
+          "latency_ms_median": 0.869708,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "exact_model",
+          "query": "WH-1000XM5",
+          "tags": [
+            "精确型号"
+          ],
+          "filters": {
+            "category": "Electronics"
+          },
+          "k": 3,
+          "expected_relevance": {
+            "567ea08c-512f-5871-aacb-2e963b40a486": 3
+          },
+          "returned_ids": [
+            "567ea08c-512f-5871-aacb-2e963b40a486",
+            "55fef910-f8cc-53ed-bcda-c7f3bb3b9999"
+          ],
+          "returned_keys": [
+            "sony_xm5",
+            "sony_ch520"
+          ],
+          "metrics": {
+            "recall_at_k": 1.0,
+            "precision_at_k": 0.3333333333333333,
+            "precision_returned": 0.5,
+            "ndcg_at_k": 1.0,
+            "no_result_correct": null
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            0.906899,
+            0.81063,
+            0.801817
+          ],
+          "latency_ms_median": 0.81063,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "stemmed_terms",
+          "query": "noise cancellation headphones",
+          "tags": [
+            "词干",
+            "同义表达"
+          ],
+          "filters": {
+            "min_rating": 4.5
+          },
+          "k": 3,
+          "expected_relevance": {
+            "567ea08c-512f-5871-aacb-2e963b40a486": 2,
+            "7f5f8e85-37f8-57d3-88c2-17afa882c58d": 2
+          },
+          "returned_ids": [
+            "567ea08c-512f-5871-aacb-2e963b40a486",
+            "7f5f8e85-37f8-57d3-88c2-17afa882c58d"
+          ],
+          "returned_keys": [
+            "sony_xm5",
+            "bose_qc"
+          ],
+          "metrics": {
+            "recall_at_k": 1.0,
+            "precision_at_k": 0.6666666666666666,
+            "precision_returned": 1.0,
+            "ndcg_at_k": 1.0,
+            "no_result_correct": null
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            0.848886,
+            0.838232,
+            0.807144
+          ],
+          "latency_ms_median": 0.838232,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "synonym_uncovered",
+          "query": "headset for subway commute",
+          "tags": [
+            "未覆盖同义词",
+            "能力边界"
+          ],
+          "filters": {
+            "category": "Electronics",
+            "min_rating": 4.5
+          },
+          "k": 3,
+          "expected_relevance": {
+            "567ea08c-512f-5871-aacb-2e963b40a486": 2,
+            "7f5f8e85-37f8-57d3-88c2-17afa882c58d": 2
+          },
+          "returned_ids": [],
+          "returned_keys": [],
+          "metrics": {
+            "recall_at_k": 0.0,
+            "precision_at_k": 0.0,
+            "precision_returned": 0.0,
+            "ndcg_at_k": 0.0,
+            "no_result_correct": null
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            0.910191,
+            0.834552,
+            0.833389
+          ],
+          "latency_ms_median": 0.834552,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "zh_power_bank",
+          "query": "充电宝",
+          "tags": [
+            "中文",
+            "品类别名",
+            "预算"
+          ],
+          "filters": {
+            "max_price": 50
+          },
+          "k": 3,
+          "expected_relevance": {
+            "7a377143-3261-5622-867b-5e353c83eab5": 2,
+            "72f47d05-f9d0-5b06-9c00-bd0215d34255": 1
+          },
+          "returned_ids": [
+            "7a377143-3261-5622-867b-5e353c83eab5",
+            "72f47d05-f9d0-5b06-9c00-bd0215d34255"
+          ],
+          "returned_keys": [
+            "anker_20k",
+            "xiaomi_10k"
+          ],
+          "metrics": {
+            "recall_at_k": 1.0,
+            "precision_at_k": 0.6666666666666666,
+            "precision_returned": 1.0,
+            "ndcg_at_k": 1.0,
+            "no_result_correct": null
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            0.790582,
+            0.837458,
+            0.767919
+          ],
+          "latency_ms_median": 0.790582,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "zh_keyboard_rating",
+          "query": "键盘",
+          "tags": [
+            "中文",
+            "评分"
+          ],
+          "filters": {
+            "min_rating": 4.7
+          },
+          "k": 3,
+          "expected_relevance": {
+            "a7cd1ef3-687a-5b13-b8cf-23d295a3c51e": 2
+          },
+          "returned_ids": [
+            "a7cd1ef3-687a-5b13-b8cf-23d295a3c51e"
+          ],
+          "returned_keys": [
+            "mx_keys"
+          ],
+          "metrics": {
+            "recall_at_k": 1.0,
+            "precision_at_k": 0.3333333333333333,
+            "precision_returned": 1.0,
+            "ndcg_at_k": 1.0,
+            "no_result_correct": null
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            0.828644,
+            0.97847,
+            0.930239
+          ],
+          "latency_ms_median": 0.930239,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "zh_category_filter",
+          "query": "空气炸锅",
+          "tags": [
+            "中文",
+            "分类"
+          ],
+          "filters": {
+            "category": "家居"
+          },
+          "k": 3,
+          "expected_relevance": {
+            "6beb8712-2557-5bf1-b985-26bac11d7dee": 2
+          },
+          "returned_ids": [
+            "6beb8712-2557-5bf1-b985-26bac11d7dee"
+          ],
+          "returned_keys": [
+            "philips_air"
+          ],
+          "metrics": {
+            "recall_at_k": 1.0,
+            "precision_at_k": 0.3333333333333333,
+            "precision_returned": 1.0,
+            "ndcg_at_k": 1.0,
+            "no_result_correct": null
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            0.759784,
+            0.89334,
+            0.82138
+          ],
+          "latency_ms_median": 0.82138,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "price_interval",
+          "query": "headphones",
+          "tags": [
+            "价格区间"
+          ],
+          "filters": {
+            "min_price": 200,
+            "max_price": 280
+          },
+          "k": 3,
+          "expected_relevance": {
+            "7f5f8e85-37f8-57d3-88c2-17afa882c58d": 2
+          },
+          "returned_ids": [
+            "7f5f8e85-37f8-57d3-88c2-17afa882c58d"
+          ],
+          "returned_keys": [
+            "bose_qc"
+          ],
+          "metrics": {
+            "recall_at_k": 1.0,
+            "precision_at_k": 0.3333333333333333,
+            "precision_returned": 1.0,
+            "ndcg_at_k": 1.0,
+            "no_result_correct": null
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            0.838038,
+            0.747387,
+            0.870967
+          ],
+          "latency_ms_median": 0.838038,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "impossible_budget",
+          "query": "耳机",
+          "tags": [
+            "无结果",
+            "预算"
+          ],
+          "filters": {
+            "category": "Electronics",
+            "max_price": 1
+          },
+          "k": 3,
+          "expected_relevance": {},
+          "returned_ids": [],
+          "returned_keys": [],
+          "metrics": {
+            "recall_at_k": null,
+            "ndcg_at_k": null,
+            "precision_at_k": 0.0,
+            "precision_returned": 0.0,
+            "no_result_correct": true
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            0.774118,
+            0.809952,
+            0.799976
+          ],
+          "latency_ms_median": 0.799976,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "unknown_product",
+          "query": "quantum teleportation device",
+          "tags": [
+            "无结果",
+            "未知品类",
+            "能力边界"
+          ],
+          "filters": {},
+          "k": 3,
+          "expected_relevance": {},
+          "returned_ids": [],
+          "returned_keys": [],
+          "metrics": {
+            "recall_at_k": null,
+            "ndcg_at_k": null,
+            "precision_at_k": 0.0,
+            "precision_returned": 0.0,
+            "no_result_correct": true
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            0.893146,
+            0.791938,
+            0.880459
+          ],
+          "latency_ms_median": 0.880459,
+          "ranking_stable_across_repetitions": true
+        },
+        {
+          "id": "inactive_excluded",
+          "query": "Discontinued Headphones",
+          "tags": [
+            "下架商品",
+            "有效性"
+          ],
+          "filters": {
+            "max_price": 15
+          },
+          "k": 3,
+          "expected_relevance": {},
+          "returned_ids": [],
+          "returned_keys": [],
+          "metrics": {
+            "recall_at_k": null,
+            "ndcg_at_k": null,
+            "precision_at_k": 0.0,
+            "precision_returned": 0.0,
+            "no_result_correct": true
+          },
+          "constraint_violations": [],
+          "mode_contract_errors": [],
+          "latency_ms": [
+            0.751164,
+            0.861573,
+            0.776636
+          ],
+          "latency_ms_median": 0.776636,
+          "ranking_stable_across_repetitions": true
+        }
+      ]
+    }
+  }
+}

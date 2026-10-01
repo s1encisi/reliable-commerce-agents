@@ -1,0 +1,24 @@
+# 构建仅包含运行源码，不发送本机环境、凭据、测试日志或虚拟环境。
+.venv/
+.uv/
+.ruff_cache/
+.pytest_cache/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.egg-info/
+**/*.egg-info/
+.env
+.env.*
+*.pem
+*.key
+.local/
+.claude/
+.codex/
+.agents/
+.git/
+tests/
+evals/
+htmlcov/
+.coverage
+*.log

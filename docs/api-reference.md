@@ -1,49 +1,74 @@
 # API 参考
 
-可靠电商多智能体平台通过编排器（orchestrator）服务（FastAPI，端口 8080）对外暴露 20 个 REST 端点。所有端点均以 `/api/` 为前缀。
+编排器通过 FastAPI 暴露聊天、售后、任务、会话上下文和管理 API。本文列出当前核心合同与常用接口；完整方法、请求模型和响应结构由运行服务的 OpenAPI 提供。
 
 ## 路由总览
 
+本页聚焦主使用路径。已根据当前路由源码生成 OpenAPI 核对方法与路径；完整契约以运行中编排器的 `/openapi.json` 和 `/docs` 为准。隔离开发演示的 API 是 `http://localhost:8180`；普通开发默认 8080，容器展示通过前端同源 `/api/*` 访问。
+
 ```mermaid
-graph LR
-    subgraph Public["公开端点"]
-        style Public fill:#10b981,stroke:#059669,color:#fff
-        A1[POST /auth/signup]
-        A2[POST /auth/login]
-        A3[POST /auth/refresh]
-    end
-
-    subgraph Authenticated["需认证端点"]
-        style Authenticated fill:#0ea5e9,stroke:#0284c7,color:#fff
-        C1[POST /chat]
-        CV1[GET /conversations]
-        CV2[GET /conversations/:id]
-        CV3[DELETE /conversations/:id]
-        P1[GET /products]
-        P2[GET /products/:id]
-        O1[GET /orders]
-        O2[GET /orders/:id]
-        PR1[GET /profile]
-        M1[GET /marketplace/agents]
-        M2[POST /marketplace/request]
-        M3[GET /marketplace/my-agents]
-    end
-
-    subgraph Admin["仅管理员"]
-        style Admin fill:#f59e0b,stroke:#d97706,color:#fff
-        AD1[GET /admin/requests]
-        AD2[POST /admin/requests/:id/approve]
-        AD3[POST /admin/requests/:id/deny]
-        AD4[GET /admin/usage]
-        AD5[GET /admin/audit]
-    end
-
-    Client([客户端]) --> Public
-    Client --> Authenticated
-    Client --> Admin
-
-    style Client fill:#6366f1,stroke:#4f46e5,color:#fff
+flowchart LR
+    Browser[浏览器或 API 客户端] --> Public[公开认证与模式目录]
+    Browser --> Optional[可匿名的商品与购物聊天]
+    Browser --> User[已认证用户]
+    User --> Returns[本人订单申请与操作回执]
+    User --> Tasks[本人只读任务：规划、执行、验收、恢复]
+    User --> Context[本人会话目标与约束修订]
+    User --> Admin{管理员角色}
+    Admin --> ToolApproval[工具审批：批准或拒绝]
+    Admin --> WorkflowApproval[工作流审批：resume]
+    ToolApproval --> Business[按原申请人身份复核并执行]
+    WorkflowApproval --> Business
+    Business --> Receipt[数据库业务回执]
 ```
+
+需要审批的退货不能由申请人自行批准；客户只能发起及查询。管理员作出决定后，执行仍使用原申请人的可信身份和订单归属。角色限制以服务端为准，隐藏按钮不能代替权限检查。
+
+## 售后、审批与运行接口
+
+| 方法与路径 | 权限 | 关键契约 |
+| --- | --- | --- |
+| `POST /api/orders/{order_id}/return` | 已认证用户，本人订单 | `{reason, refund_method}`；可用 UUID `Idempotency-Key` 固定请求意图。待审批返回 409 与 `AWAITING_APPROVAL`、操作/审批标识，不表示已创建退货 |
+| `GET /api/returns/operations/{operation_id}` | 原申请人 | 查询持久结果；其他用户或不存在的操作返回 404 |
+| `GET /api/admin/hitl/requests` | 管理员 | 列出审批队列，可按 status 过滤 |
+| `POST /api/admin/hitl/requests/{request_id}/approve` | 管理员 | 可带 `{note}`；返回审批决定及 `execution_result`，批准不保证业务复核成功 |
+| `POST /api/admin/hitl/requests/{request_id}/deny` | 管理员 | 可带 `{note}`；拒绝并保存决定 |
+| `POST /api/orchestration/{run_id}/resume` | 管理员 | `{approved: true/false}`；恢复已保存检查点。中断重试须保留首次决定和审批人 |
+| `GET /api/runs` | 已认证用户，按归属过滤 | 查看运行记录 |
+| `GET /api/runs/{run_id}/checkpoints` | 归属用户或管理员 | 查看检查点和审批摘要；查看权限不等于审批权限 |
+| `GET /api/returns/{return_id}/fulfillment` | 原申请人 | 读取可选本地履约模拟状态；`PENDING` 与供应商已受理不同，其他用户返回 404 |
+
+`SUCCEEDED` 代表此退货申请的本地业务结果，不代表退款到账。`UNKNOWN` 应查询同一操作标识；不能因网络错误直接换新标识重复申请。详见[售后架构](after-sales-architecture.md)与[履约模拟](fulfillment-simulation.md)。
+
+## 聊天与模式接口
+
+| 方法与路径 | 权限 | 行为 |
+| --- | --- | --- |
+| `POST /api/chat` | 可匿名访问公开购物能力；个人业务仍校验身份 | 阻塞响应，支持 mode |
+| `POST /api/chat/stream` | 同上 | SSE 事件流；业务结果由最终回执判断 |
+| `GET /api/orchestration/modes` | 公开 | 六种注册模式及能力描述 |
+| `GET /api/orchestration/modes/{name}/graph` | 公开 | 固定图返回 Mermaid；动态工具路由可能返回 null |
+| `POST /api/orchestration/compare` | 已认证用户 | `{message, modes}`，最多比较五个选定模式；这不是“总共只有五种模式” |
+
+六种模式为 `tool`、`decision-router`、`handoff`、`workflow:pre-purchase`、`workflow:return-replace`、`group-chat`。决策路由策略默认 off。请求真实模型模式可能产生调用，离线演示不能保证任意自由文本都有回放夹具。
+
+## 任务、约束与能力接口
+
+| 方法与路径 | 权限 | 行为 |
+| --- | --- | --- |
+| `POST /api/tasks` | 已认证用户 | 创建 `{goal, constraints, requirements}` |
+| `GET /api/tasks/{task_id}` | 本人任务 | 读取状态、计划和证据 |
+| `PATCH /api/tasks/{task_id}` | 本人任务 | 携带 revision 修订目标和条件，使旧计划/结果失效 |
+| `POST /api/tasks/{task_id}/plan` | 本人任务 | 携带 revision 显式规划 |
+| `POST /api/tasks/{task_id}/next` | 本人任务 | 携带 revision 执行下一步 |
+| `POST /api/tasks/{task_id}/recover` | 本人任务 | 携带 revision 恢复中断的规划或只读执行 |
+| `POST /api/tasks/{task_id}/confirm` | 本人任务 | `{revision, confirmed:true}`，确认待核实的自然语言目标 |
+| `POST /api/memories/{memory_id}/confirm` | 记忆归属用户 | 显式确认记忆来源 |
+| `GET /api/conversations/{conversation_id}/context` | 本人会话 | 当前目标、约束、来源及 revision |
+| `PATCH /api/conversations/{conversation_id}/context` | 本人会话 | 携带 revision，以及实际修改的 goal 或 constraints；新约束列表取代旧列表 |
+| `GET /api/runtime/capabilities` | 已认证用户 | 非敏感能力标志、离线固定示例与开关；不返回密钥或连接串 |
+
+409 表示版本或状态已变化，应重新读取并由用户确认，不自动覆盖。任务步骤的结构化验收不等于自由文本目标已被证明，`needs_review` 需要本人检查后确认。详见[任务工作台](task-workspace.md)。
 
 ## 认证
 
@@ -53,7 +78,7 @@ graph LR
 Authorization: Bearer <access_token>
 ```
 
-令牌是使用 `JWT_SECRET` 签名的 JWT（PyJWT + bcrypt）。访问令牌包含 `sub`（邮箱）、`role`、`user_id` 和 `type: "access"`；刷新令牌包含 `sub` 和 `type: "refresh"`。
+默认本地认证模式使用 `JWT_SECRET` 签名的 JWT（PyJWT + bcrypt）；配置 OAuth 模式时使用对应的 RS256 校验路径。下列登录示例展示本地模式。访问令牌包含 `sub`（邮箱）、`role`、`user_id` 和 `type: "access"`；刷新令牌包含 `sub` 和 `type: "refresh"`。
 
 管理员端点还会额外校验 `role == "admin"`，校验失败时返回 `403`。
 
@@ -67,7 +92,7 @@ Authorization: Bearer <access_token>
 
 | 字段 | 取值 |
 |-------|-------|
-| 认证  | 公开 |
+| 认证 | 可匿名访问公开购物能力；个人数据与业务工具仍校验身份 |
 
 **请求体**
 
@@ -107,7 +132,7 @@ Authorization: Bearer <access_token>
 
 | 字段 | 取值 |
 |-------|-------|
-| 认证  | 公开 |
+| 认证 | 可匿名访问公开购物能力；个人数据与业务工具仍校验身份 |
 
 **请求体**
 
@@ -147,7 +172,7 @@ Authorization: Bearer <access_token>
 
 | 字段 | 取值 |
 |-------|-------|
-| 认证  | 公开（请求体中需携带有效的刷新令牌） |
+| 认证 | 可匿名访问公开购物能力；个人数据与业务工具仍校验身份 |
 
 **请求体**
 
@@ -179,7 +204,7 @@ Authorization: Bearer <access_token>
 
 | 字段 | 取值 |
 |-------|-------|
-| 认证  | 需要 JWT |
+| 认证 | 可匿名访问公开购物能力；个人数据与业务工具仍校验身份 |
 
 **请求体**
 
@@ -313,7 +338,7 @@ Authorization: Bearer <access_token>
 
 | 字段 | 取值 |
 |-------|-------|
-| 认证  | 需要 JWT |
+| 认证 | 可匿名访问公开购物能力；个人数据与业务工具仍校验身份 |
 
 **查询参数**
 
@@ -360,7 +385,7 @@ Authorization: Bearer <access_token>
 
 | 字段 | 取值 |
 |-------|-------|
-| 认证  | 需要 JWT |
+| 认证 | 可匿名访问公开购物能力；个人数据与业务工具仍校验身份 |
 
 **响应** `200`
 
@@ -883,7 +908,7 @@ Authorization: Bearer <access_token>
 
 ## 错误响应格式
 
-所有错误响应都遵循 FastAPI 的标准格式：
+认证与常规异常通常包含 FastAPI 的 detail 字段；参数验证的 detail 可能是数组。售后业务响应还包含 outcome、error_code、operation_id 等结构化字段，不能仅凭 HTTP 状态码判断业务完成。常见形式：
 
 ```json
 {
@@ -896,7 +921,7 @@ Authorization: Bearer <access_token>
 | `401`       | JWT 缺失、已过期或无效 |
 | `403`       | 权限不足（例如非管理员访问管理员路由） |
 | `404`       | 资源不存在或不属于当前认证用户 |
-| `409`       | 冲突（邮箱重复、访问申请重复、申请已处理） |
+| `409`       | 待审批、版本/参数冲突或状态已变化；读取当前状态后再决定下一步 |
 
 ---
 
@@ -907,3 +932,11 @@ Authorization: Bearer <access_token>
 - [`docs/deployment.md`](deployment.md) — 如何启动整个技术栈，使这些端点可被访问
 - [`docs/frontend.md`](frontend.md) — Next.js 客户端如何调用这些端点
 - [项目 README](../README.md)
+
+## 任务与可修订上下文
+
+任务创建、结构化验收、显式执行/恢复、目标修订及人工确认见[任务工作台接口](task-workspace.md)。
+
+`GET /api/conversations/{id}/context` 读取本人会话当前目标、约束、来源和版本；`PATCH`携带`revision`及实际变更的`goal`/`constraints`。约束列表是明确提交的新列表，移除旧项表示撤销。版本冲突返回409，客户端需重新读取并审阅，不自动重发。目标编辑采用新epoch，专业智能体不得把模型生成的A2A消息当成人类新要求写回。
+
+`GET /api/runtime/capabilities` 需要认证，仅返回非敏感运行能力，例如是否为不录制的离线演示、固定任务示例是否可用；不返回密钥、数据库连接地址或登录状态。

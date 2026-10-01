@@ -28,7 +28,7 @@ from pydantic import BaseModel
 from shared.context import current_user_email, current_user_role
 from shared.db import get_pool
 
-from .legacy import require_auth
+from .legacy import require_admin, require_auth
 
 logger = logging.getLogger(__name__)
 
@@ -166,7 +166,7 @@ class ResumeRequest(BaseModel):
 
 
 @router.post("/{run_id}/resume")
-async def resume_run(run_id: str, body: ResumeRequest, user: dict[str, Any] = Depends(require_auth)) -> dict[str, Any]:
+async def resume_run(run_id: str, body: ResumeRequest, user: dict[str, Any] = Depends(require_admin)) -> dict[str, Any]:
     from shared.after_sales.locks import workflow_resume_lock
 
     async with workflow_resume_lock(run_id) as acquired:
@@ -175,37 +175,20 @@ async def resume_run(run_id: str, body: ResumeRequest, user: dict[str, Any] = De
         return await _resume_run_locked(run_id, body, user)
 
 
-async def _resume_run_locked(
-    run_id: str, body: ResumeRequest, user: dict[str, Any] = Depends(require_auth)
-) -> dict[str, Any]:
-    """从已提交的检查点状态恢复一个因工作流内人工参与而暂停的工作流。
+async def _resume_run_locked(run_id: str, body: ResumeRequest, user: dict[str, Any]) -> dict[str, Any]:
+    """管理员决定待审批退货；恢复执行仍按原申请人的可信身份校验业务归属。
 
-    为 ``run_id`` 查找最近一条*待处理*的 ``hitl_requests`` 行（除非是管理员，
-    否则限定为调用者 —— 与 ``GET /api/runs/{id}/checkpoints`` 使用的是同一套
-    归属校验），经由 ``ReturnReplaceMode.resume()`` 恢复（目前这是唯一有东西
-    可恢复的模式），并把该请求标记为已解决。没有 ``request_id``/``checkpoint_id``
-    的请求早于 Phase 1.5 的检查点接线，无法以这种方式恢复 —— 会以 409 暴露
-    出来，而不是被静默地当作「未找到」。
+    pending 请求先原子认领。processing 请求只能按已记录决定恢复，
+    并保留首次审批人；缺少检查点的历史记录会明确返回 409。
     """
     pool = get_pool()
-    email = current_user_email.get()
-    role = current_user_role.get()
-
-    if role == "admin":
-        hitl = await pool.fetchrow(
-            """SELECT * FROM hitl_requests
-               WHERE workflow_run_id = $1 AND status IN ('pending', 'processing')
-               ORDER BY created_at DESC LIMIT 1""",
-            run_id,
-        )
-    else:
-        hitl = await pool.fetchrow(
-            """SELECT * FROM hitl_requests
-               WHERE workflow_run_id = $1 AND status IN ('pending', 'processing') AND user_email = $2
-               ORDER BY created_at DESC LIMIT 1""",
-            run_id,
-            email,
-        )
+    reviewer_email = user["sub"]
+    hitl = await pool.fetchrow(
+        """SELECT * FROM hitl_requests
+           WHERE workflow_run_id = $1 AND status IN ('pending', 'processing')
+           ORDER BY created_at DESC LIMIT 1""",
+        run_id,
+    )
     if not hitl:
         raise HTTPException(status_code=404, detail="No pending approval found for this run")
     if hitl["kind"] != "return_approval":
@@ -217,12 +200,13 @@ async def _resume_run_locked(
         recorded = json.loads(hitl["response"]) if isinstance(hitl["response"], str) else hitl["response"]
         if not recorded or recorded.get("approved") != body.approved:
             raise HTTPException(409, "Recovery must preserve the recorded approval decision")
+        reviewer_email = recorded.get("reviewed_by", reviewer_email)
     else:
         claimed = await pool.fetchval(
             """UPDATE hitl_requests SET status = 'processing', response = $2::jsonb
                WHERE id = $1 AND status = 'pending' RETURNING id""",
             hitl["id"],
-            json.dumps({"approved": body.approved}),
+            json.dumps({"approved": body.approved, "reviewed_by": reviewer_email}),
         )
         if claimed is None:
             raise HTTPException(status_code=404, detail="No pending approval found for this run")
@@ -252,6 +236,7 @@ async def _resume_run_locked(
         json.dumps(
             {
                 "approved": body.approved,
+                "reviewed_by": reviewer_email,
                 "outcome": final_payload.get("outcome"),
                 "operation_id": final_payload.get("operation_id"),
             }
@@ -266,11 +251,17 @@ async def _resume_run_locked(
             new_checkpoint_id,
         )
 
+    response_text = final_payload.get("text", "")
+    if final_payload.get("outcome") == "SUCCEEDED":
+        response_text = "退货申请已创建，可查询申请回执；这不表示退款已到账。"
+    elif not body.approved and final_payload.get("outcome") == "REJECTED":
+        response_text = "退货申请已拒绝，未创建退货或退款。"
+
     return {
         "run_id": run_id,
         "approved": body.approved,
         "outcome": final_payload.get("outcome"),
         "operation_id": final_payload.get("operation_id"),
-        "text": final_payload.get("text", ""),
+        "text": response_text,
         "agents_involved": final_payload.get("agents_involved", []),
     }

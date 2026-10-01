@@ -254,6 +254,11 @@ async def _apply_operation(
         request.order_id,
         f"Return initiated: {request.reason}",
     )
+    fulfillment = None
+    if settings.FULFILLMENT_SIMULATION_ENABLED:
+        from shared.after_sales.fulfillment import enqueue
+
+        fulfillment = await enqueue(conn, return_id=return_id, order_id=request.order_id, user_id=snapshot.user_id)
     await _fault_boundary("after_business_write", conn, operation_id)
     return await operations.save_result(
         conn,
@@ -270,6 +275,7 @@ async def _apply_operation(
             "refund_amount": float(snapshot.total),
             "return_label_url": label,
             "message": "Return request created. No refund has been issued.",
+            **({"fulfillment": fulfillment} if fulfillment is not None else {}),
         },
     )
 

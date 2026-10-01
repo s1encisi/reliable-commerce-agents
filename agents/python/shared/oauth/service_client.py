@@ -107,6 +107,11 @@ async def build_a2a_headers() -> dict[str, str]:
         "x-user-role": current_user_role.get(""),
         "x-session-id": current_session_id.get(""),
     }
+    from shared.context_pipeline import current_context_binding
+
+    binding = current_context_binding.get()
+    if binding and binding[0] == headers["x-session-id"]:
+        headers["x-context-epoch"] = str(binding[1])
     if settings.AUTH_MODE == "oauth":
         token = await acquire_service_token(scope="agent:invoke", audience=settings.AUTH_AGENT_AUDIENCE)
         headers["authorization"] = f"Bearer {token}"

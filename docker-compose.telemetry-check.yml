@@ -1,0 +1,41 @@
+# Optional local verification only. No additional host ports; default showcase remains OTEL=false.
+x-local-telemetry: &local-telemetry
+  OTEL_ENABLED: "true"
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://telemetry-check:4317
+  GENAI_CAPTURE_CONTENT: "false"
+  OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: "false"
+  OTEL_PYTHON_FASTAPI_EXCLUDED_URLS: /health
+  OTEL_INSTRUMENTATION_HTTP_CAPTURE_HEADERS_SERVER_REQUEST: ""
+  OTEL_INSTRUMENTATION_HTTP_CAPTURE_HEADERS_SERVER_RESPONSE: ""
+  LANGFUSE_ENABLED: "false"
+services:
+  telemetry-check:
+    image: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.123.0
+    pull_policy: never
+    user: "10001:10001"
+    command: ["--config=/etc/otelcol-contrib/local-verification.yml"]
+    volumes:
+      - type: bind
+        source: ${LOCAL_TELEMETRY_EXPORT_DIR:?Run scripts/verify_local_telemetry.py}
+        target: /var/lib/otel-verification
+        bind: { create_host_path: false }
+      - type: bind
+        source: ./docker/observability/local-verification.yml
+        target: /etc/otelcol-contrib/local-verification.yml
+        read_only: true
+        bind: { create_host_path: false }
+    restart: "no"
+  orchestrator:
+    environment: *local-telemetry
+    volumes:
+      - ./scripts:/app/scripts:ro
+  product-discovery:
+    environment: *local-telemetry
+  order-management:
+    environment: *local-telemetry
+  pricing-promotions:
+    environment: *local-telemetry
+  review-sentiment:
+    environment: *local-telemetry
+  inventory-fulfillment:
+    environment: *local-telemetry

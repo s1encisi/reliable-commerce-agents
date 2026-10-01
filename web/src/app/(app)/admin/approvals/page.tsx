@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { businessMessage, refundMethodLabel } from "@/lib/business-copy";
 import { api } from "@/lib/api";
 import { toast } from "@/lib/toast";
 import { Badge } from "@/components/ui/badge";
@@ -136,7 +137,7 @@ export default function AdminApprovalsPage() {
       const result = await api.approveHitlRequest(req.id);
       const execResult = result?.execution_result as Record<string, unknown> | undefined;
       const success = execResult?.success;
-      const msg = String(execResult?.message ?? "操作已批准并执行。");
+      const msg = req.tool_name === "initiate_return" ? businessMessage(execResult ?? {}) : String(execResult?.message ?? "操作已批准并执行。");
       if (success) {
         toast.success(`已批准：${TOOL_LABELS[req.tool_name] ?? req.tool_name}`, {
           description: msg,
@@ -302,6 +303,14 @@ export default function AdminApprovalsPage() {
                         {inputSummary(req.tool_name, req.tool_input)}
                       </p>
 
+                      {req.tool_name === "initiate_return" && (
+                        <dl className="mt-2 grid gap-1 text-sm">
+                          <div><dt className="inline text-muted-foreground">退货原因：</dt><dd className="inline break-words">{String(req.tool_input.reason ?? "未提供，请核实")}</dd></div>
+                          <div><dt className="inline text-muted-foreground">退款方式：</dt><dd className="inline">{refundMethodLabel(String(req.tool_input.refund_method ?? ""))}</dd></div>
+                          <div><dt className="inline text-muted-foreground">审批依据：</dt><dd className="inline">执行时重新核验订单归属、签收证据和签收后 30 天期限；批准不代表退款已到账。</dd></div>
+                        </dl>
+                      )}
+
                       {/* 元信息 */}
                       <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1">
@@ -333,8 +342,8 @@ export default function AdminApprovalsPage() {
 
                       {/* 执行结果 */}
                       {req.execution_result && (
-                        <div className="mt-2 rounded-md bg-emerald-50 px-3 py-1.5 text-xs text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
-                          {String(req.execution_result.message ?? JSON.stringify(req.execution_result))}
+                        <div className="mt-2 rounded-md bg-muted px-3 py-1.5 text-xs text-foreground">
+                          {req.tool_name === "initiate_return" ? businessMessage(req.execution_result) : String(req.execution_result.message ?? "已收到执行结果，请查看输入参数与记录。")}
                         </div>
                       )}
                     </div>

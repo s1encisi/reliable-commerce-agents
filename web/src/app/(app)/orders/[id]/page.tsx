@@ -47,6 +47,7 @@ import {
 } from "lucide-react";
 import { productImageUrl } from "@/lib/images";
 import { getReturnIntent, currentReturnIntent, clearReturnIntent } from "@/lib/return-intent";
+import { orderHistoryNote, categoryLabel, businessMessage, errorMessage, outcomeLabel, refundMethodLabel, returnStatusLabel } from "@/lib/business-copy";
 import type { ReturnOperation } from "@/lib/return-operation";
 
 // ---------------------------------------------------------------------------
@@ -183,7 +184,7 @@ const STATUS_CONFIG: Record<
     color: "border-orange-200 bg-orange-50 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300 dark:border-orange-500/30",
     dotColor: "bg-orange-500",
     icon: RotateCcw,
-    label: "已退货",
+    label: "已申请退货",
   },
   cancelled: {
     color: "border-red-200 bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-300 dark:border-red-500/30",
@@ -257,7 +258,7 @@ function StatusTimeline({ history }: { history: StatusHistoryEntry[] }) {
                 </span>
               </div>
               {entry.notes && (
-                <p className="mt-0.5 text-sm text-muted-foreground">{entry.notes}</p>
+                <p className="mt-0.5 text-sm text-muted-foreground">{orderHistoryNote(entry.status, entry.notes)}</p>
               )}
               {entry.location && (
                 <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
@@ -284,7 +285,7 @@ function DetailSkeleton() {
         <div className="h-6 w-64 rounded bg-muted" />
         <div className="h-4 w-40 rounded bg-muted" />
       </div>
-      <div className="grid gap-8 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
           <div className="h-48 rounded-xl bg-muted" />
         </div>
@@ -324,6 +325,7 @@ export default function OrderDetailPage() {
   const [refundMethod, setRefundMethod] = useState<"original_payment" | "store_credit">("original_payment");
   const [returning, setReturning] = useState(false);
   const [returnFeedback, setReturnFeedback] = useState("");
+  const [returnOperationId, setReturnOperationId] = useState<string | null>(null);
   const [returnOutcome, setReturnOutcome] = useState<string | undefined>();
 
   const orderId = params.id as string;
@@ -365,7 +367,7 @@ export default function OrderDetailPage() {
 
   const showReturnResult = async (result: ReturnOperation) => {
     setReturnOutcome(result.outcome);
-    setReturnFeedback(result.message ?? result.status ?? "已收到请求状态。");
+    setReturnFeedback(businessMessage(result));
     if (result.success !== false && result.return_id && (result.outcome === "SUCCEEDED" || result.status === "requested")) {
       toastReturnInitiated(result.return_id);
       setReturnOpen(false);
@@ -379,9 +381,11 @@ export default function OrderDetailPage() {
       setReturning(true);
       setReturnFeedback("");
       const id = await getReturnIntent(user.email, orderId, returnReason, refundMethod);
+      setReturnOperationId(id);
       await showReturnResult(await api.initiateReturn(orderId, returnReason, refundMethod, id));
     } catch (err) {
-      setReturnFeedback(err instanceof Error ? err.message : "结果未确认。请在重试前查看请求状态。");
+      setReturnFeedback(errorMessage(err, "结果未确认。请在重试前查看请求状态。"));
+      setReturnOutcome("UNKNOWN");
       if (err instanceof ApiError) setReturnOutcome(String(err.data.outcome ?? "UNKNOWN"));
     } finally {
       setReturning(false);
@@ -396,9 +400,32 @@ export default function OrderDetailPage() {
       setReturning(true);
       await showReturnResult(await api.returnOperation(id));
     } catch (err) {
-      setReturnFeedback(err instanceof Error ? err.message : "无法确认状态，请重试。");
+      setReturnFeedback(errorMessage(err, "无法确认状态，请重试。"));
     } finally { setReturning(false); }
   };
+
+  // 只读恢复保存的申请，不因刷新页面再次提交业务操作。
+  const owner = user?.email;
+  useEffect(() => {
+    if (!owner) return;
+    const id = currentReturnIntent(owner, orderId);
+    setReturnOperationId(id);
+    setReturnOutcome(undefined);
+    setReturnFeedback("");
+    if (!id) return;
+    let cancelled = false;
+    setReturnOperationId(id);
+    api.returnOperation(id).then((result) => {
+      if (cancelled) return;
+      setReturnOutcome(result.outcome);
+      setReturnFeedback(businessMessage(result));
+    }).catch((err) => {
+      if (cancelled) return;
+      setReturnOutcome("UNKNOWN");
+      setReturnFeedback(errorMessage(err, "已恢复操作标识，当前无法确认状态，请重新查询。"));
+    });
+    return () => { cancelled = true; };
+  }, [owner, orderId]);
 
   if (authLoading || !user) return null;
 
@@ -547,6 +574,7 @@ export default function OrderDetailPage() {
                         {returnOutcome === "REJECTED" && (
                           <Button variant="ghost" disabled={returning} onClick={() => {
                             if (user) clearReturnIntent(user.email, orderId);
+                            setReturnOperationId(null);
                             setReturnOutcome(undefined);
                             setReturnFeedback("新建申请将重新校验当前订单与退货政策。");
                           }}>发起新申请</Button>
@@ -560,6 +588,17 @@ export default function OrderDetailPage() {
           )}
         </div>
       </div>
+
+      {returnOperationId && !returnOpen && (
+        <section aria-label="退货申请状态" className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-4 sm:px-6 lg:px-8">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline">{outcomeLabel(returnOutcome)}</Badge>
+            <Button variant="outline" size="sm" disabled={returning} onClick={checkReturnStatus}>查看请求状态</Button>
+          </div>
+          <p role="status" className="text-sm text-muted-foreground">{returnFeedback || "正在恢复申请状态…"}</p>
+          <p className="break-all text-xs text-muted-foreground">操作标识：{returnOperationId}</p>
+        </section>
+      )}
 
       {/* 下单成功提示条 */}
       {justPlaced && !loading && !error && order && (
@@ -591,7 +630,7 @@ export default function OrderDetailPage() {
       {/* 内容区 */}
       {!loading && !error && order && (
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <div className="grid gap-8 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
             {/* 左列：时间线与商品 */}
             <div className="space-y-8 lg:col-span-2">
               {/* 状态时间线 */}
@@ -654,7 +693,7 @@ export default function OrderDetailPage() {
                               variant="outline"
                               className="text-[10px] font-normal"
                             >
-                              {item.category}
+                              {categoryLabel(item.category)}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right">
@@ -801,18 +840,18 @@ export default function OrderDetailPage() {
                           variant="outline"
                           className="border-orange-200 bg-orange-50 text-orange-700"
                         >
-                          {(order["return"] as ReturnInfo).status}
+                          {returnStatusLabel((order["return"] as ReturnInfo).status)}
                         </Badge>
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">退款方式</span>
                         <span className="text-muted-foreground">
-                          {(order["return"] as ReturnInfo).refund_method}
+                          {refundMethodLabel((order["return"] as ReturnInfo).refund_method)}
                         </span>
                       </div>
                       {(order["return"] as ReturnInfo).refund_amount != null && (
                         <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">退款金额</span>
+                          <span className="text-muted-foreground">申请退款金额</span>
                           <span className="font-medium text-emerald-600">
                             {formatPrice((order["return"] as ReturnInfo).refund_amount!)}
                           </span>

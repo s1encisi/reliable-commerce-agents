@@ -1,0 +1,6227 @@
+{
+  "generated_at_utc": "2026-10-01T03:39:50.357021+00:00",
+  "repository": {
+    "branch": "feat/portfolio-upgrades",
+    "head_commit": "d8af1bf3b26f185f9fc57017d5f1e1d20e1389b9",
+    "worktree_dirty": true,
+    "evaluated_source": "working_tree_files_identified_by_implementation_sha256",
+    "head_commit_is_evaluated_source": false
+  },
+  "runtime": {
+    "python": "3.12.13",
+    "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.35",
+    "dependencies": {
+      "agent-framework-core": "1.14.0",
+      "agent-framework-openai": "1.13.0",
+      "asyncpg": "0.31.0",
+      "testcontainers": "4.15.0",
+      "pydantic": "2.13.4"
+    }
+  },
+  "invocation": [
+    "/home/aria/Code/reliable-commerce-agents/agents/python/.venv/bin/python3",
+    "-m",
+    "evals.after_sales",
+    "--output",
+    "docs/evaluation/after-sales-20261001.json",
+    "--log-dir",
+    "/mnt/c/Users/12141/Documents/Codex/2026-09-30/wsl-localhost-ubuntu-22-04-home-2/work/after-sales-20261001-raw"
+  ],
+  "experiment_settings": {
+    "APP_ENV_FILE": "/dev/null",
+    "LLM_PROVIDER": "replay",
+    "RECORD": false,
+    "cloud_model_keys_cleared": true,
+    "HITL_ENABLED": false,
+    "RETURN_HITL_THRESHOLD": 500,
+    "FULFILLMENT_SIMULATION_ENABLED": false,
+    "approval_role_matrix_measured": false,
+    "external_fulfillment_measured": false
+  },
+  "case_count": 22,
+  "repetitions": 3,
+  "variant_count": 6,
+  "total_trials": 396,
+  "scope": "Return tool/service microbenchmark; no LLM, no production traffic",
+  "fixed_clock": "2026-09-16T12:00:00+00:00",
+  "source_hash_format": "SHA-256 of UTF-8 source with LF-normalized newlines",
+  "repetitions_are_independent_samples": false,
+  "latency_note": "Local synthetic trials; p95 is exploratory, not capacity or an SLA",
+  "baseline_manifest": {
+    "b1_service.py": "88d01474bc811e89a50a45440571c4b23fdc0b6b33458da1de7dc8020bd9fb45",
+    "b0_return_tools.py": "249fd4a694e4bd932773719a6fd4f70a54dd5a5a1ed3a69f14ea806c366e7d92",
+    "b1_policy.py": "5e6328a6fd9983555abf940c791488bcb8c1e38027c3bb899c0484b4b3ab39c1",
+    "b1_approval.py": "1ca514d8e05d9187d72050e4ae508161a24ad0a13183d0c5229a5669ba1fe121",
+    "b1_return_tools.py": "e17f9e501afbce85b820f17c052f202bacad387e3f0dcc6908e02571325ea2fd",
+    "b1_contracts.py": "2fd2b65c9bcea35d260c666011abc0a02de27718dd5e2f6b6d2b5f669d1b30d9"
+  },
+  "implementation_sha256": {
+    "agents/python/evals/after_sales.py": "f0c2baa55921ee753463534e6a1e1d2b30aa74510247e0e663319bfbcf799584",
+    "agents/python/evals/after_sales_baselines/b0_return_tools.py": "249fd4a694e4bd932773719a6fd4f70a54dd5a5a1ed3a69f14ea806c366e7d92",
+    "agents/python/evals/after_sales_baselines/b1_approval.py": "1ca514d8e05d9187d72050e4ae508161a24ad0a13183d0c5229a5669ba1fe121",
+    "agents/python/evals/after_sales_baselines/b1_contracts.py": "2fd2b65c9bcea35d260c666011abc0a02de27718dd5e2f6b6d2b5f669d1b30d9",
+    "agents/python/evals/after_sales_baselines/b1_policy.py": "5e6328a6fd9983555abf940c791488bcb8c1e38027c3bb899c0484b4b3ab39c1",
+    "agents/python/evals/after_sales_baselines/b1_return_tools.py": "e17f9e501afbce85b820f17c052f202bacad387e3f0dcc6908e02571325ea2fd",
+    "agents/python/evals/after_sales_baselines/b1_service.py": "88d01474bc811e89a50a45440571c4b23fdc0b6b33458da1de7dc8020bd9fb45",
+    "agents/python/evals/after_sales_baselines/manifest.json": "31ea2c6edf564a9b5ea06019d8a43235132d620dec58c055a51272fb68618ae4",
+    "agents/python/shared/after_sales/__init__.py": "78160424c5fb054b9232ff7a563a216ad156aa78d6c59a39155fab87029cc7f8",
+    "agents/python/shared/after_sales/approval.py": "d965db555ed6a6627326d857b5bf98cf6ec4a7248ac2047236954df45e30a055",
+    "agents/python/shared/after_sales/contracts.py": "e4df44e7de418d86da46edbbce2815b264027e65750d72458705a5c135c49cfb",
+    "agents/python/shared/after_sales/fulfillment.py": "4e76f86d678c4dbeb95006677a85feabe55928f9dc1b2aa61383e32bf1c03f1b",
+    "agents/python/shared/after_sales/http.py": "d1a882538627cc1869644f3aa3cdd128548008adf7c305a6efbd93356dff6fcd",
+    "agents/python/shared/after_sales/locks.py": "566968b8fceedcdcbcc557c8f226dbc5c940df811d2797c455dd61ed4ad6aef5",
+    "agents/python/shared/after_sales/operations.py": "febe7abc4d45b6f7be558948e399417aa9da20481ff67c63e772f60789ef5b1f",
+    "agents/python/shared/after_sales/policy.py": "5a2c1a695eb9d89fdf27cbececdd259472746b7951d4ae2d023cbd1642dcde27",
+    "agents/python/shared/after_sales/recovery.py": "a3e122c7f2ace38ba5a333e241b92e71c6bcedfb8f7d4639557d6706ae173dd5",
+    "agents/python/shared/after_sales/service.py": "2223d77e61159bba6d3fba926e7bec0dc6e4c1707275156ee209f1464240f743",
+    "agents/python/shared/after_sales/simulator.py": "c95836934525f6af5ccb091e636b77c052f7e8b8d7f298e2e8ac5c43dafb37fc",
+    "agents/python/shared/config.py": "efe765bc337c29d9b3c1289b1622bb7e2c74b4e8d6dbcaf8bc24730c1e9a1340",
+    "agents/python/shared/context.py": "61df654d5c3a7567257f64da11f8580bb9392ec62fda9b4c02c2ef44caaf108a",
+    "agents/python/shared/db.py": "dfec618b31e39b6821b1e8c8f47b0aa7ad0ee94ce1fe545c4eb66591f18ab220",
+    "agents/python/shared/hitl.py": "5e4d8af8e95d03273a37859441aa76f8cebda57e8a05272e92e1d5510319221e",
+    "agents/python/shared/idempotency.py": "578f2ba5e14a51f814ea18457e4c31b6e9e40595b9e3e282a3f51fa0a8bf25c9",
+    "agents/python/shared/tool_inputs.py": "5c1468b5d888e8ecf800eb4a47936a44f6de0fb3ee6ec60ea24497df86916b21",
+    "agents/python/shared/tools/return_tools.py": "2df391cf6a138b1d98cc257c1891194f0c68ca43f0875d9e7e2a85a543481782",
+    "agents/python/uv.lock": "e982ee0be9a2b3474c1e4a5c28e0f2f0fc06d3d2ba2a44afafc226aca416cc24",
+    "docker/postgres/init.sql": "459b054e23df865827ab4b8562e65576a78b31aca41baca999909cf160dd5e38"
+  },
+  "variants": [
+    {
+      "variant": "B0",
+      "trials": 66,
+      "passed": 36,
+      "illegal_writes": 15,
+      "duplicate_effects": 0,
+      "p50_ms": 7.9079999999999995,
+      "p95_ms_exploratory": 14.042,
+      "cases": [
+        {
+          "case_id": "normal",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 10.845
+        },
+        {
+          "case_id": "store_credit",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 7.872
+        },
+        {
+          "case_id": "within_window",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 7.942
+        },
+        {
+          "case_id": "exact_boundary",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.004
+        },
+        {
+          "case_id": "expired_one_second",
+          "repetition": 0,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 7.948
+        },
+        {
+          "case_id": "expired_old",
+          "repetition": 0,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 7.597
+        },
+        {
+          "case_id": "missing_delivery",
+          "repetition": 0,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 7.758
+        },
+        {
+          "case_id": "future_delivery",
+          "repetition": 0,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.102
+        },
+        {
+          "case_id": "conflicting_delivery",
+          "repetition": 0,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 7.787
+        },
+        {
+          "case_id": "not_delivered",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 5.452
+        },
+        {
+          "case_id": "foreign_order",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 4.782
+        },
+        {
+          "case_id": "bad_uuid",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 3.471
+        },
+        {
+          "case_id": "empty_reason",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 3.315
+        },
+        {
+          "case_id": "long_reason",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 3.438
+        },
+        {
+          "case_id": "bad_refund_method",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 3.767
+        },
+        {
+          "case_id": "same_retry",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.83
+        },
+        {
+          "case_id": "parallel_same",
+          "repetition": 0,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED",
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 60.746
+        },
+        {
+          "case_id": "parallel_distinct",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 14.042
+        },
+        {
+          "case_id": "payload_conflict",
+          "repetition": 0,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 14.48
+        },
+        {
+          "case_id": "lost_reply",
+          "repetition": 0,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "after business commit",
+          "fault_observed": 1,
+          "duration_ms": 8.177
+        },
+        {
+          "case_id": "temporary_db",
+          "repetition": 0,
+          "passed": false,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "EXCEPTION"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 1,
+          "duration_ms": 0.163
+        },
+        {
+          "case_id": "persistent_db",
+          "repetition": 0,
+          "passed": false,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "EXCEPTION"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 1,
+          "duration_ms": 0.099
+        },
+        {
+          "case_id": "normal",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.155
+        },
+        {
+          "case_id": "store_credit",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 10.629
+        },
+        {
+          "case_id": "within_window",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.496
+        },
+        {
+          "case_id": "exact_boundary",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 7.486
+        },
+        {
+          "case_id": "expired_one_second",
+          "repetition": 1,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.061
+        },
+        {
+          "case_id": "expired_old",
+          "repetition": 1,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 7.929
+        },
+        {
+          "case_id": "missing_delivery",
+          "repetition": 1,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.526
+        },
+        {
+          "case_id": "future_delivery",
+          "repetition": 1,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.762
+        },
+        {
+          "case_id": "conflicting_delivery",
+          "repetition": 1,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.539
+        },
+        {
+          "case_id": "not_delivered",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 5.97
+        },
+        {
+          "case_id": "foreign_order",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 4.562
+        },
+        {
+          "case_id": "bad_uuid",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 3.089
+        },
+        {
+          "case_id": "empty_reason",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 3.345
+        },
+        {
+          "case_id": "long_reason",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 3.832
+        },
+        {
+          "case_id": "bad_refund_method",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 22.08
+        },
+        {
+          "case_id": "same_retry",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 10.678
+        },
+        {
+          "case_id": "parallel_same",
+          "repetition": 1,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.502
+        },
+        {
+          "case_id": "parallel_distinct",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 11.295
+        },
+        {
+          "case_id": "payload_conflict",
+          "repetition": 1,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 16.671
+        },
+        {
+          "case_id": "lost_reply",
+          "repetition": 1,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "after business commit",
+          "fault_observed": 1,
+          "duration_ms": 9.506
+        },
+        {
+          "case_id": "temporary_db",
+          "repetition": 1,
+          "passed": false,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "EXCEPTION"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 1,
+          "duration_ms": 0.111
+        },
+        {
+          "case_id": "persistent_db",
+          "repetition": 1,
+          "passed": false,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "EXCEPTION"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 1,
+          "duration_ms": 0.135
+        },
+        {
+          "case_id": "normal",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.113
+        },
+        {
+          "case_id": "store_credit",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.074
+        },
+        {
+          "case_id": "within_window",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.972
+        },
+        {
+          "case_id": "exact_boundary",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.325
+        },
+        {
+          "case_id": "expired_one_second",
+          "repetition": 2,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 7.839
+        },
+        {
+          "case_id": "expired_old",
+          "repetition": 2,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 7.948
+        },
+        {
+          "case_id": "missing_delivery",
+          "repetition": 2,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.012
+        },
+        {
+          "case_id": "future_delivery",
+          "repetition": 2,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 7.887
+        },
+        {
+          "case_id": "conflicting_delivery",
+          "repetition": 2,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 7.821
+        },
+        {
+          "case_id": "not_delivered",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 6.135
+        },
+        {
+          "case_id": "foreign_order",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 5.92
+        },
+        {
+          "case_id": "bad_uuid",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 3.461
+        },
+        {
+          "case_id": "empty_reason",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 3.455
+        },
+        {
+          "case_id": "long_reason",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 3.062
+        },
+        {
+          "case_id": "bad_refund_method",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 3.139
+        },
+        {
+          "case_id": "same_retry",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.743
+        },
+        {
+          "case_id": "parallel_same",
+          "repetition": 2,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 7.483
+        },
+        {
+          "case_id": "parallel_distinct",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 10.612
+        },
+        {
+          "case_id": "payload_conflict",
+          "repetition": 2,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 11.617
+        },
+        {
+          "case_id": "lost_reply",
+          "repetition": 2,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "after business commit",
+          "fault_observed": 1,
+          "duration_ms": 6.733
+        },
+        {
+          "case_id": "temporary_db",
+          "repetition": 2,
+          "passed": false,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "EXCEPTION"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 1,
+          "duration_ms": 0.102
+        },
+        {
+          "case_id": "persistent_db",
+          "repetition": 2,
+          "passed": false,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "EXCEPTION"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 1,
+          "duration_ms": 0.135
+        }
+      ]
+    },
+    {
+      "variant": "B1",
+      "trials": 66,
+      "passed": 51,
+      "illegal_writes": 0,
+      "duplicate_effects": 0,
+      "p50_ms": 6.6045,
+      "p95_ms_exploratory": 16.654,
+      "cases": [
+        {
+          "case_id": "normal",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 11.456
+        },
+        {
+          "case_id": "store_credit",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.795
+        },
+        {
+          "case_id": "within_window",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 7.642
+        },
+        {
+          "case_id": "exact_boundary",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.03
+        },
+        {
+          "case_id": "expired_one_second",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 6.795
+        },
+        {
+          "case_id": "expired_old",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 6.48
+        },
+        {
+          "case_id": "missing_delivery",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 6.093
+        },
+        {
+          "case_id": "future_delivery",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 6.095
+        },
+        {
+          "case_id": "conflicting_delivery",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 5.99
+        },
+        {
+          "case_id": "not_delivered",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 6.443
+        },
+        {
+          "case_id": "foreign_order",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 4.556
+        },
+        {
+          "case_id": "bad_uuid",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 3.174
+        },
+        {
+          "case_id": "empty_reason",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 3.189
+        },
+        {
+          "case_id": "long_reason",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 3.211
+        },
+        {
+          "case_id": "bad_refund_method",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 3.463
+        },
+        {
+          "case_id": "same_retry",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.935
+        },
+        {
+          "case_id": "parallel_same",
+          "repetition": 0,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 51.967
+        },
+        {
+          "case_id": "parallel_distinct",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 17.424
+        },
+        {
+          "case_id": "payload_conflict",
+          "repetition": 0,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 16.654
+        },
+        {
+          "case_id": "lost_reply",
+          "repetition": 0,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "after business commit",
+          "fault_observed": 1,
+          "duration_ms": 8.245
+        },
+        {
+          "case_id": "temporary_db",
+          "repetition": 0,
+          "passed": false,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "EXCEPTION"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 1,
+          "duration_ms": 0.106
+        },
+        {
+          "case_id": "persistent_db",
+          "repetition": 0,
+          "passed": false,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "EXCEPTION"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 1,
+          "duration_ms": 0.107
+        },
+        {
+          "case_id": "normal",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.259
+        },
+        {
+          "case_id": "store_credit",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 7.748
+        },
+        {
+          "case_id": "within_window",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.503
+        },
+        {
+          "case_id": "exact_boundary",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.681
+        },
+        {
+          "case_id": "expired_one_second",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 6.046
+        },
+        {
+          "case_id": "expired_old",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 6.533
+        },
+        {
+          "case_id": "missing_delivery",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 6.229
+        },
+        {
+          "case_id": "future_delivery",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 6.676
+        },
+        {
+          "case_id": "conflicting_delivery",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 6.364
+        },
+        {
+          "case_id": "not_delivered",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 6.301
+        },
+        {
+          "case_id": "foreign_order",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 4.627
+        },
+        {
+          "case_id": "bad_uuid",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 3.225
+        },
+        {
+          "case_id": "empty_reason",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 3.456
+        },
+        {
+          "case_id": "long_reason",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 3.258
+        },
+        {
+          "case_id": "bad_refund_method",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 3.356
+        },
+        {
+          "case_id": "same_retry",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 10.223
+        },
+        {
+          "case_id": "parallel_same",
+          "repetition": 1,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.049
+        },
+        {
+          "case_id": "parallel_distinct",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 13.149
+        },
+        {
+          "case_id": "payload_conflict",
+          "repetition": 1,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 14.522
+        },
+        {
+          "case_id": "lost_reply",
+          "repetition": 1,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "after business commit",
+          "fault_observed": 1,
+          "duration_ms": 8.234
+        },
+        {
+          "case_id": "temporary_db",
+          "repetition": 1,
+          "passed": false,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "EXCEPTION"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 1,
+          "duration_ms": 0.117
+        },
+        {
+          "case_id": "persistent_db",
+          "repetition": 1,
+          "passed": false,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "EXCEPTION"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 1,
+          "duration_ms": 0.161
+        },
+        {
+          "case_id": "normal",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.269
+        },
+        {
+          "case_id": "store_credit",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.637
+        },
+        {
+          "case_id": "within_window",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.072
+        },
+        {
+          "case_id": "exact_boundary",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.649
+        },
+        {
+          "case_id": "expired_one_second",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 7.076
+        },
+        {
+          "case_id": "expired_old",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 7.608
+        },
+        {
+          "case_id": "missing_delivery",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 6.443
+        },
+        {
+          "case_id": "future_delivery",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 19.525
+        },
+        {
+          "case_id": "conflicting_delivery",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 6.885
+        },
+        {
+          "case_id": "not_delivered",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 6.461
+        },
+        {
+          "case_id": "foreign_order",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 4.942
+        },
+        {
+          "case_id": "bad_uuid",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 3.505
+        },
+        {
+          "case_id": "empty_reason",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 3.289
+        },
+        {
+          "case_id": "long_reason",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 3.283
+        },
+        {
+          "case_id": "bad_refund_method",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 3.164
+        },
+        {
+          "case_id": "same_retry",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.031
+        },
+        {
+          "case_id": "parallel_same",
+          "repetition": 2,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.09
+        },
+        {
+          "case_id": "parallel_distinct",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 13.933
+        },
+        {
+          "case_id": "payload_conflict",
+          "repetition": 2,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 19.194
+        },
+        {
+          "case_id": "lost_reply",
+          "repetition": 2,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "after business commit",
+          "fault_observed": 1,
+          "duration_ms": 9.03
+        },
+        {
+          "case_id": "temporary_db",
+          "repetition": 2,
+          "passed": false,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "EXCEPTION"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 1,
+          "duration_ms": 0.116
+        },
+        {
+          "case_id": "persistent_db",
+          "repetition": 2,
+          "passed": false,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "EXCEPTION"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 1,
+          "duration_ms": 0.105
+        }
+      ]
+    },
+    {
+      "variant": "B2",
+      "trials": 66,
+      "passed": 66,
+      "illegal_writes": 0,
+      "duplicate_effects": 0,
+      "p50_ms": 9.5555,
+      "p95_ms_exploratory": 150.535,
+      "cases": [
+        {
+          "case_id": "normal",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 13.997
+        },
+        {
+          "case_id": "store_credit",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.537
+        },
+        {
+          "case_id": "within_window",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.897
+        },
+        {
+          "case_id": "exact_boundary",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.574
+        },
+        {
+          "case_id": "expired_one_second",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.142
+        },
+        {
+          "case_id": "expired_old",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.737
+        },
+        {
+          "case_id": "missing_delivery",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.681
+        },
+        {
+          "case_id": "future_delivery",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.176
+        },
+        {
+          "case_id": "conflicting_delivery",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.823
+        },
+        {
+          "case_id": "not_delivered",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.464
+        },
+        {
+          "case_id": "foreign_order",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 1.943
+        },
+        {
+          "case_id": "bad_uuid",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.073
+        },
+        {
+          "case_id": "empty_reason",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.089
+        },
+        {
+          "case_id": "long_reason",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.048
+        },
+        {
+          "case_id": "bad_refund_method",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.057
+        },
+        {
+          "case_id": "same_retry",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 14.029
+        },
+        {
+          "case_id": "parallel_same",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "SUCCEEDED",
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 60.773
+        },
+        {
+          "case_id": "parallel_distinct",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 23.714
+        },
+        {
+          "case_id": "payload_conflict",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 15.902
+        },
+        {
+          "case_id": "lost_reply",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "after business commit",
+          "fault_observed": 1,
+          "duration_ms": 13.23
+        },
+        {
+          "case_id": "temporary_db",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 2,
+          "duration_ms": 163.345
+        },
+        {
+          "case_id": "persistent_db",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "RETRYABLE_FAILURE"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 3,
+          "duration_ms": 150.594
+        },
+        {
+          "case_id": "normal",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 11.087
+        },
+        {
+          "case_id": "store_credit",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.672
+        },
+        {
+          "case_id": "within_window",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.771
+        },
+        {
+          "case_id": "exact_boundary",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 10.537
+        },
+        {
+          "case_id": "expired_one_second",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.376
+        },
+        {
+          "case_id": "expired_old",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.088
+        },
+        {
+          "case_id": "missing_delivery",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.105
+        },
+        {
+          "case_id": "future_delivery",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.366
+        },
+        {
+          "case_id": "conflicting_delivery",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.674
+        },
+        {
+          "case_id": "not_delivered",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.014
+        },
+        {
+          "case_id": "foreign_order",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 1.797
+        },
+        {
+          "case_id": "bad_uuid",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.052
+        },
+        {
+          "case_id": "empty_reason",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.049
+        },
+        {
+          "case_id": "long_reason",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.049
+        },
+        {
+          "case_id": "bad_refund_method",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.058
+        },
+        {
+          "case_id": "same_retry",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 15.948
+        },
+        {
+          "case_id": "parallel_same",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "SUCCEEDED",
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 13.302
+        },
+        {
+          "case_id": "parallel_distinct",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 17.77
+        },
+        {
+          "case_id": "payload_conflict",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 13.138
+        },
+        {
+          "case_id": "lost_reply",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "after business commit",
+          "fault_observed": 1,
+          "duration_ms": 14.726
+        },
+        {
+          "case_id": "temporary_db",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 2,
+          "duration_ms": 161.902
+        },
+        {
+          "case_id": "persistent_db",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "RETRYABLE_FAILURE"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 3,
+          "duration_ms": 150.507
+        },
+        {
+          "case_id": "normal",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.899
+        },
+        {
+          "case_id": "store_credit",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 10.352
+        },
+        {
+          "case_id": "within_window",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.773
+        },
+        {
+          "case_id": "exact_boundary",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 10.449
+        },
+        {
+          "case_id": "expired_one_second",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.323
+        },
+        {
+          "case_id": "expired_old",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.89
+        },
+        {
+          "case_id": "missing_delivery",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 7.672
+        },
+        {
+          "case_id": "future_delivery",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.314
+        },
+        {
+          "case_id": "conflicting_delivery",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.582
+        },
+        {
+          "case_id": "not_delivered",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 7.517
+        },
+        {
+          "case_id": "foreign_order",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 2.086
+        },
+        {
+          "case_id": "bad_uuid",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.049
+        },
+        {
+          "case_id": "empty_reason",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.048
+        },
+        {
+          "case_id": "long_reason",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.05
+        },
+        {
+          "case_id": "bad_refund_method",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.053
+        },
+        {
+          "case_id": "same_retry",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 14.794
+        },
+        {
+          "case_id": "parallel_same",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "SUCCEEDED",
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 14.878
+        },
+        {
+          "case_id": "parallel_distinct",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 19.194
+        },
+        {
+          "case_id": "payload_conflict",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 14.35
+        },
+        {
+          "case_id": "lost_reply",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "after business commit",
+          "fault_observed": 1,
+          "duration_ms": 14.269
+        },
+        {
+          "case_id": "temporary_db",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 2,
+          "duration_ms": 161.871
+        },
+        {
+          "case_id": "persistent_db",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "RETRYABLE_FAILURE"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 3,
+          "duration_ms": 150.535
+        }
+      ]
+    },
+    {
+      "variant": "A_no_recheck",
+      "trials": 66,
+      "passed": 45,
+      "illegal_writes": 18,
+      "duplicate_effects": 0,
+      "p50_ms": 12.911000000000001,
+      "p95_ms_exploratory": 150.615,
+      "cases": [
+        {
+          "case_id": "normal",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 14.642
+        },
+        {
+          "case_id": "store_credit",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 10.875
+        },
+        {
+          "case_id": "within_window",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.351
+        },
+        {
+          "case_id": "exact_boundary",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 11.673
+        },
+        {
+          "case_id": "expired_one_second",
+          "repetition": 0,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 30.643
+        },
+        {
+          "case_id": "expired_old",
+          "repetition": 0,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 10.498
+        },
+        {
+          "case_id": "missing_delivery",
+          "repetition": 0,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 11.415
+        },
+        {
+          "case_id": "future_delivery",
+          "repetition": 0,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 10.463
+        },
+        {
+          "case_id": "conflicting_delivery",
+          "repetition": 0,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.28
+        },
+        {
+          "case_id": "not_delivered",
+          "repetition": 0,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 10.167
+        },
+        {
+          "case_id": "foreign_order",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 1.811
+        },
+        {
+          "case_id": "bad_uuid",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.055
+        },
+        {
+          "case_id": "empty_reason",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.069
+        },
+        {
+          "case_id": "long_reason",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.063
+        },
+        {
+          "case_id": "bad_refund_method",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.048
+        },
+        {
+          "case_id": "same_retry",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 13.649
+        },
+        {
+          "case_id": "parallel_same",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "SUCCEEDED",
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 56.555
+        },
+        {
+          "case_id": "parallel_distinct",
+          "repetition": 0,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "EXCEPTION"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 16.759
+        },
+        {
+          "case_id": "payload_conflict",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 16.624
+        },
+        {
+          "case_id": "lost_reply",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "after business commit",
+          "fault_observed": 1,
+          "duration_ms": 14.047
+        },
+        {
+          "case_id": "temporary_db",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 2,
+          "duration_ms": 162.501
+        },
+        {
+          "case_id": "persistent_db",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "RETRYABLE_FAILURE"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 3,
+          "duration_ms": 150.743
+        },
+        {
+          "case_id": "normal",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.119
+        },
+        {
+          "case_id": "store_credit",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 11.192
+        },
+        {
+          "case_id": "within_window",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 11.787
+        },
+        {
+          "case_id": "exact_boundary",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 10.856
+        },
+        {
+          "case_id": "expired_one_second",
+          "repetition": 1,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 13.221
+        },
+        {
+          "case_id": "expired_old",
+          "repetition": 1,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 12.173
+        },
+        {
+          "case_id": "missing_delivery",
+          "repetition": 1,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 11.141
+        },
+        {
+          "case_id": "future_delivery",
+          "repetition": 1,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 12.601
+        },
+        {
+          "case_id": "conflicting_delivery",
+          "repetition": 1,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 13.681
+        },
+        {
+          "case_id": "not_delivered",
+          "repetition": 1,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 16.754
+        },
+        {
+          "case_id": "foreign_order",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 2.058
+        },
+        {
+          "case_id": "bad_uuid",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.056
+        },
+        {
+          "case_id": "empty_reason",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.069
+        },
+        {
+          "case_id": "long_reason",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.051
+        },
+        {
+          "case_id": "bad_refund_method",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.066
+        },
+        {
+          "case_id": "same_retry",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 15.848
+        },
+        {
+          "case_id": "parallel_same",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "SUCCEEDED",
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 13.519
+        },
+        {
+          "case_id": "parallel_distinct",
+          "repetition": 1,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "EXCEPTION"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 12.567
+        },
+        {
+          "case_id": "payload_conflict",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 13.327
+        },
+        {
+          "case_id": "lost_reply",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "after business commit",
+          "fault_observed": 1,
+          "duration_ms": 13.589
+        },
+        {
+          "case_id": "temporary_db",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 2,
+          "duration_ms": 162.376
+        },
+        {
+          "case_id": "persistent_db",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "RETRYABLE_FAILURE"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 3,
+          "duration_ms": 150.615
+        },
+        {
+          "case_id": "normal",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 12.447
+        },
+        {
+          "case_id": "store_credit",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 11.625
+        },
+        {
+          "case_id": "within_window",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 13.838
+        },
+        {
+          "case_id": "exact_boundary",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 14.508
+        },
+        {
+          "case_id": "expired_one_second",
+          "repetition": 2,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 14.741
+        },
+        {
+          "case_id": "expired_old",
+          "repetition": 2,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 18.284
+        },
+        {
+          "case_id": "missing_delivery",
+          "repetition": 2,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 16.171
+        },
+        {
+          "case_id": "future_delivery",
+          "repetition": 2,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 15.411
+        },
+        {
+          "case_id": "conflicting_delivery",
+          "repetition": 2,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 13.925
+        },
+        {
+          "case_id": "not_delivered",
+          "repetition": 2,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": true,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 13.332
+        },
+        {
+          "case_id": "foreign_order",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 1.98
+        },
+        {
+          "case_id": "bad_uuid",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.084
+        },
+        {
+          "case_id": "empty_reason",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.052
+        },
+        {
+          "case_id": "long_reason",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.049
+        },
+        {
+          "case_id": "bad_refund_method",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.057
+        },
+        {
+          "case_id": "same_retry",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 19.927
+        },
+        {
+          "case_id": "parallel_same",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "SUCCEEDED",
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 18.652
+        },
+        {
+          "case_id": "parallel_distinct",
+          "repetition": 2,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "EXCEPTION"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 15.269
+        },
+        {
+          "case_id": "payload_conflict",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 15.906
+        },
+        {
+          "case_id": "lost_reply",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "after business commit",
+          "fault_observed": 1,
+          "duration_ms": 20.32
+        },
+        {
+          "case_id": "temporary_db",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 2,
+          "duration_ms": 165.328
+        },
+        {
+          "case_id": "persistent_db",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "RETRYABLE_FAILURE"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 3,
+          "duration_ms": 150.583
+        }
+      ]
+    },
+    {
+      "variant": "A_no_reconcile",
+      "trials": 66,
+      "passed": 63,
+      "illegal_writes": 0,
+      "duplicate_effects": 0,
+      "p50_ms": 10.064,
+      "p95_ms_exploratory": 150.564,
+      "cases": [
+        {
+          "case_id": "normal",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 15.223
+        },
+        {
+          "case_id": "store_credit",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 10.662
+        },
+        {
+          "case_id": "within_window",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 10.435
+        },
+        {
+          "case_id": "exact_boundary",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 12.187
+        },
+        {
+          "case_id": "expired_one_second",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.093
+        },
+        {
+          "case_id": "expired_old",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.109
+        },
+        {
+          "case_id": "missing_delivery",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.497
+        },
+        {
+          "case_id": "future_delivery",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.971
+        },
+        {
+          "case_id": "conflicting_delivery",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.741
+        },
+        {
+          "case_id": "not_delivered",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.213
+        },
+        {
+          "case_id": "foreign_order",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 2.237
+        },
+        {
+          "case_id": "bad_uuid",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.062
+        },
+        {
+          "case_id": "empty_reason",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.047
+        },
+        {
+          "case_id": "long_reason",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.06
+        },
+        {
+          "case_id": "bad_refund_method",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.056
+        },
+        {
+          "case_id": "same_retry",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 18.283
+        },
+        {
+          "case_id": "parallel_same",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "SUCCEEDED",
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 79.297
+        },
+        {
+          "case_id": "parallel_distinct",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 25.278
+        },
+        {
+          "case_id": "payload_conflict",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 20.183
+        },
+        {
+          "case_id": "lost_reply",
+          "repetition": 0,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "UNKNOWN"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "after business commit",
+          "fault_observed": 1,
+          "duration_ms": 10.753
+        },
+        {
+          "case_id": "temporary_db",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 2,
+          "duration_ms": 162.958
+        },
+        {
+          "case_id": "persistent_db",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "RETRYABLE_FAILURE"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 3,
+          "duration_ms": 150.644
+        },
+        {
+          "case_id": "normal",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 10.93
+        },
+        {
+          "case_id": "store_credit",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 10.634
+        },
+        {
+          "case_id": "within_window",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 10.645
+        },
+        {
+          "case_id": "exact_boundary",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.663
+        },
+        {
+          "case_id": "expired_one_second",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.482
+        },
+        {
+          "case_id": "expired_old",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.684
+        },
+        {
+          "case_id": "missing_delivery",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 10.297
+        },
+        {
+          "case_id": "future_delivery",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.81
+        },
+        {
+          "case_id": "conflicting_delivery",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.759
+        },
+        {
+          "case_id": "not_delivered",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 10.082
+        },
+        {
+          "case_id": "foreign_order",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 1.885
+        },
+        {
+          "case_id": "bad_uuid",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.057
+        },
+        {
+          "case_id": "empty_reason",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.048
+        },
+        {
+          "case_id": "long_reason",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.046
+        },
+        {
+          "case_id": "bad_refund_method",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.065
+        },
+        {
+          "case_id": "same_retry",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 14.846
+        },
+        {
+          "case_id": "parallel_same",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "SUCCEEDED",
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 14.216
+        },
+        {
+          "case_id": "parallel_distinct",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 17.393
+        },
+        {
+          "case_id": "payload_conflict",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 16.298
+        },
+        {
+          "case_id": "lost_reply",
+          "repetition": 1,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "UNKNOWN"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "after business commit",
+          "fault_observed": 1,
+          "duration_ms": 10.585
+        },
+        {
+          "case_id": "temporary_db",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 2,
+          "duration_ms": 162.399
+        },
+        {
+          "case_id": "persistent_db",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "RETRYABLE_FAILURE"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 3,
+          "duration_ms": 150.564
+        },
+        {
+          "case_id": "normal",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 10.046
+        },
+        {
+          "case_id": "store_credit",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 11.153
+        },
+        {
+          "case_id": "within_window",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 10.735
+        },
+        {
+          "case_id": "exact_boundary",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.836
+        },
+        {
+          "case_id": "expired_one_second",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.709
+        },
+        {
+          "case_id": "expired_old",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.521
+        },
+        {
+          "case_id": "missing_delivery",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 10.121
+        },
+        {
+          "case_id": "future_delivery",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.469
+        },
+        {
+          "case_id": "conflicting_delivery",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 7.923
+        },
+        {
+          "case_id": "not_delivered",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.351
+        },
+        {
+          "case_id": "foreign_order",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 2.197
+        },
+        {
+          "case_id": "bad_uuid",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.057
+        },
+        {
+          "case_id": "empty_reason",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.046
+        },
+        {
+          "case_id": "long_reason",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.049
+        },
+        {
+          "case_id": "bad_refund_method",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.048
+        },
+        {
+          "case_id": "same_retry",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 12.275
+        },
+        {
+          "case_id": "parallel_same",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "SUCCEEDED",
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 13.139
+        },
+        {
+          "case_id": "parallel_distinct",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 17.953
+        },
+        {
+          "case_id": "payload_conflict",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 13.725
+        },
+        {
+          "case_id": "lost_reply",
+          "repetition": 2,
+          "passed": false,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "UNKNOWN"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "after business commit",
+          "fault_observed": 1,
+          "duration_ms": 26.151
+        },
+        {
+          "case_id": "temporary_db",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 2,
+          "duration_ms": 164.229
+        },
+        {
+          "case_id": "persistent_db",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "RETRYABLE_FAILURE"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 3,
+          "duration_ms": 150.534
+        }
+      ]
+    },
+    {
+      "variant": "A_no_budget",
+      "trials": 66,
+      "passed": 63,
+      "illegal_writes": 0,
+      "duplicate_effects": 0,
+      "p50_ms": 9.41,
+      "p95_ms_exploratory": 161.856,
+      "cases": [
+        {
+          "case_id": "normal",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 14.965
+        },
+        {
+          "case_id": "store_credit",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.67
+        },
+        {
+          "case_id": "within_window",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.62
+        },
+        {
+          "case_id": "exact_boundary",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 10.086
+        },
+        {
+          "case_id": "expired_one_second",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.875
+        },
+        {
+          "case_id": "expired_old",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.464
+        },
+        {
+          "case_id": "missing_delivery",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.895
+        },
+        {
+          "case_id": "future_delivery",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.88
+        },
+        {
+          "case_id": "conflicting_delivery",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.543
+        },
+        {
+          "case_id": "not_delivered",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.52
+        },
+        {
+          "case_id": "foreign_order",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 1.864
+        },
+        {
+          "case_id": "bad_uuid",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.058
+        },
+        {
+          "case_id": "empty_reason",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.055
+        },
+        {
+          "case_id": "long_reason",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.05
+        },
+        {
+          "case_id": "bad_refund_method",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.049
+        },
+        {
+          "case_id": "same_retry",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 13.592
+        },
+        {
+          "case_id": "parallel_same",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "SUCCEEDED",
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 58.684
+        },
+        {
+          "case_id": "parallel_distinct",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 25.102
+        },
+        {
+          "case_id": "payload_conflict",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 19.748
+        },
+        {
+          "case_id": "lost_reply",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "after business commit",
+          "fault_observed": 1,
+          "duration_ms": 15.709
+        },
+        {
+          "case_id": "temporary_db",
+          "repetition": 0,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 2,
+          "duration_ms": 161.717
+        },
+        {
+          "case_id": "persistent_db",
+          "repetition": 0,
+          "passed": false,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "TIMEOUT"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 5,
+          "duration_ms": 1000.581
+        },
+        {
+          "case_id": "normal",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.356
+        },
+        {
+          "case_id": "store_credit",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 11.315
+        },
+        {
+          "case_id": "within_window",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 10.962
+        },
+        {
+          "case_id": "exact_boundary",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 11.081
+        },
+        {
+          "case_id": "expired_one_second",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.177
+        },
+        {
+          "case_id": "expired_old",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.532
+        },
+        {
+          "case_id": "missing_delivery",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.083
+        },
+        {
+          "case_id": "future_delivery",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 7.576
+        },
+        {
+          "case_id": "conflicting_delivery",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.033
+        },
+        {
+          "case_id": "not_delivered",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 7.856
+        },
+        {
+          "case_id": "foreign_order",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 1.774
+        },
+        {
+          "case_id": "bad_uuid",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.047
+        },
+        {
+          "case_id": "empty_reason",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.053
+        },
+        {
+          "case_id": "long_reason",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.046
+        },
+        {
+          "case_id": "bad_refund_method",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.05
+        },
+        {
+          "case_id": "same_retry",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 13.055
+        },
+        {
+          "case_id": "parallel_same",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "SUCCEEDED",
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 11.979
+        },
+        {
+          "case_id": "parallel_distinct",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 17.337
+        },
+        {
+          "case_id": "payload_conflict",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 14.738
+        },
+        {
+          "case_id": "lost_reply",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "after business commit",
+          "fault_observed": 1,
+          "duration_ms": 12.72
+        },
+        {
+          "case_id": "temporary_db",
+          "repetition": 1,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 2,
+          "duration_ms": 163.236
+        },
+        {
+          "case_id": "persistent_db",
+          "repetition": 1,
+          "passed": false,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "TIMEOUT"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 5,
+          "duration_ms": 1000.541
+        },
+        {
+          "case_id": "normal",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 10.327
+        },
+        {
+          "case_id": "store_credit",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 11.972
+        },
+        {
+          "case_id": "within_window",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 9.153
+        },
+        {
+          "case_id": "exact_boundary",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 10.268
+        },
+        {
+          "case_id": "expired_one_second",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.196
+        },
+        {
+          "case_id": "expired_old",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.383
+        },
+        {
+          "case_id": "missing_delivery",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.853
+        },
+        {
+          "case_id": "future_delivery",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.725
+        },
+        {
+          "case_id": "conflicting_delivery",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_REVIEW"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 7.982
+        },
+        {
+          "case_id": "not_delivered",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 8.248
+        },
+        {
+          "case_id": "foreign_order",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 1.969
+        },
+        {
+          "case_id": "bad_uuid",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.053
+        },
+        {
+          "case_id": "empty_reason",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.045
+        },
+        {
+          "case_id": "long_reason",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.045
+        },
+        {
+          "case_id": "bad_refund_method",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "NEEDS_INPUT"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 0.048
+        },
+        {
+          "case_id": "same_retry",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 13.502
+        },
+        {
+          "case_id": "parallel_same",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "SUCCEEDED",
+            "SUCCEEDED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 12.668
+        },
+        {
+          "case_id": "parallel_distinct",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 17.809
+        },
+        {
+          "case_id": "payload_conflict",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED",
+            "REJECTED"
+          ],
+          "fault_requested": false,
+          "fault_boundary": null,
+          "fault_observed": 0,
+          "duration_ms": 13.9
+        },
+        {
+          "case_id": "lost_reply",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "after business commit",
+          "fault_observed": 1,
+          "duration_ms": 12.901
+        },
+        {
+          "case_id": "temporary_db",
+          "repetition": 2,
+          "passed": true,
+          "database_returns": 1,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "SUCCEEDED"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 2,
+          "duration_ms": 161.856
+        },
+        {
+          "case_id": "persistent_db",
+          "repetition": 2,
+          "passed": false,
+          "database_returns": 0,
+          "illegal_write": false,
+          "duplicate_effect": false,
+          "outcomes": [
+            "TIMEOUT"
+          ],
+          "fault_requested": true,
+          "fault_boundary": "before database preparation",
+          "fault_observed": 5,
+          "duration_ms": 1000.665
+        }
+      ]
+    }
+  ],
+  "local_service_load": [
+    {
+      "concurrency": 1,
+      "requests": 100,
+      "successful": 100,
+      "elapsed_seconds": 0.8203,
+      "throughput_per_second": 121.91,
+      "service_p50_ms": 8.05,
+      "service_p95_ms": 8.972
+    },
+    {
+      "concurrency": 3,
+      "requests": 100,
+      "successful": 100,
+      "elapsed_seconds": 0.3939,
+      "throughput_per_second": 253.89,
+      "service_p50_ms": 9.877,
+      "service_p95_ms": 11.909
+    },
+    {
+      "concurrency": 5,
+      "requests": 100,
+      "successful": 100,
+      "elapsed_seconds": 0.2822,
+      "throughput_per_second": 354.39,
+      "service_p50_ms": 11.225,
+      "service_p95_ms": 16.25
+    }
+  ]
+}

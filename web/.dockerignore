@@ -1,0 +1,12 @@
+node_modules
+.next
+.next-*
+.env*
+.git
+test-results
+playwright-report
+*.log
+*.tsbuildinfo
+.local
+credentials*
+build-source-manifest.json

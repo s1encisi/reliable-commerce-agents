@@ -40,8 +40,8 @@
 | 19 | 限流 | `shared/rate_limit.py` —— 两条对话路由上的 Redis 滑动窗口，按用户计，匿名流量按 IP 计 | 已实现 | 失败时放行 |
 | 20 | 成本估算与预算上限 | `shared/cost.py` + `cost_budget_middleware.py`，`COST_BUDGET_MODE` 默认 `observe` | 已实现 | 按轮次估算 token 与成本 |
 | 21 | 遥测深度 | `shared/telemetry.py` —— 追踪发往 Jaeger；指标与日志导出需要兼容的独立接收端；对 httpx、asyncpg 与 OpenAI 自动埋点；采用 `invoke_agent` 这一 GenAI 跨度约定；`trace_id` 关联写入 `usage_logs`。本项目自有的自定义指标只有 `ecommerce.llm.cost.usd`，以及按方向拆分的 token 计数，二者复用预算上限已经算出的按轮次估算。其余全部来自自动埋点 | 已实现（可选的 Langfuse 导出器除外） | 同一套指标命名可覆盖全部服务 |
-| 22 | 已注册的编排模式 | 五种：`tool`、`handoff`、`workflow:pre-purchase`、`workflow:return-replace`、`group-chat` | 已实现 | 已在运行中的服务栈上实测：同一个问题用三种模式作答，分别得到编排器自身的综合结果、专业智能体未经改写的回答，以及一份圆桌记录 |
-| 23 | `/api/orchestration/*` 路由 | `modes`、`modes/{name}/graph`、`compare`、`{run_id}/resume` | 已实现 | `resume` 从检查点恢复暂停的工作流，并在执行前**先认领待处理行**，避免两次点击同时释放一笔退款 |
+| 22 | 已注册的编排模式 | 六种：`tool`、`decision-router`、`handoff`、`workflow:pre-purchase`、`workflow:return-replace`、`group-chat` | 已实现 | 模式目录来自当前注册表；决策路由策略默认 off。历史模式比较不替代当前各路径验收 |
+| 23 | `/api/orchestration/*` 路由 | `modes`、`modes/{name}/graph`、`compare`、`{run_id}/resume` | 已实现 | `resume` 从检查点恢复暂停的工作流，并在执行前**先认领待处理行**，仅管理员可决定；业务执行按原申请人身份复核，防止重复创建退货申请，不表示退款到账 |
 | 24 | MCP 消费（客户端侧） | `product-discovery` 与 `inventory-fulfillment` 可以把直连 asyncpg 的工具替换为针对两个 FastMCP 服务的 `MCPStreamableHTTPTool`，由 `MCP_ENABLED` 控制 | 已实现 | 默认关闭；开启后走 MCP 数据层 |
 | 25 | 实际使用的会话与检查点后端 | `MAF_SESSION_BACKEND` 与 `MAF_CHECKPOINT_BACKEND` 驱动真实的后端实现 | 已实现 | 工作流在运行期间通过 MAF 的 `CheckpointManager` 写入检查点，这正是 `GET /api/runs/{id}/checkpoints` 能返回内容的原因 —— 仅有依赖注入注册是不够的 |
 | 26 | 种子数据与认证服务 | `scripts/seed.py`（确定性，`random.seed(42)`）与 `auth_server` 镜像 | 已实现 | 种子脚本是演示数据的唯一来源，确定性保证重复运行产出同样的数据行 |

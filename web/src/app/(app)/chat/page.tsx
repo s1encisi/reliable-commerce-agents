@@ -46,6 +46,7 @@ import {
   Share2,
   Sparkles,
 } from "lucide-react";
+import { ConversationContextEditor } from "@/components/chat/conversation-context";
 import { ApprovalCard } from "@/components/chat/approval-card";
 import { DEMO_SCENARIOS } from "@/lib/scenarios";
 import { deriveSuggestions } from "@/lib/suggestions";
@@ -305,7 +306,7 @@ function MessageContent({ content }: { content: string }) {
 // ---------------------------------------------------------------------------
 
 export default function ChatPage() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const { itemCount } = useCart();
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -775,6 +776,8 @@ export default function ChatPage() {
           </Button>
         </div>
 
+        {activeConversationId && <ConversationContextEditor key={activeConversationId} conversationId={activeConversationId} disabled={isResponding} />}
+
         {/* ---- 消息区 ---- */}
         <div className="flex-1 overflow-y-auto">
           {messages.length === 0 && !isResponding ? (
@@ -867,6 +870,7 @@ export default function ChatPage() {
                     {msg.role === "assistant" && msg.pendingApproval && msg.runId && (
                       <ApprovalCard
                         runId={msg.runId}
+                        canApprove={user?.role === "admin"}
                         onResolved={(outcome) => {
                           // 清除这条消息上的关卡，并把恢复后的轮次作为独立的助手
                           // 消息追加，使整段对话读起来就是它真实的样子：暂停、

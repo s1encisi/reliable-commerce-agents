@@ -18,6 +18,11 @@ from shared.config import settings
 from shared.context import current_user_email, current_user_role
 
 
+@pytest.fixture(autouse=True)
+def _isolated_redis(redis_client, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("shared.rate_limit._redis_client", redis_client)
+
+
 async def _eligible(order_id: str) -> dict[str, Any]:
     return {"eligible": True}
 
@@ -53,16 +58,16 @@ async def _seed_user(clean_db, email: str) -> uuid.UUID:
     return user_id
 
 
-def _app_for(email: str, user_id: uuid.UUID) -> FastAPI:
+def _app_for(email: str, user_id: uuid.UUID, role: str = "customer") -> FastAPI:
     async def _fake_optional_auth():
         current_user_email.set(email)
-        current_user_role.set("customer")
-        return {"sub": email, "role": "customer", "user_id": str(user_id)}
+        current_user_role.set(role)
+        return {"sub": email, "role": role, "user_id": str(user_id)}
 
     async def _fake_require_auth():
         current_user_email.set(email)
-        current_user_role.set("customer")
-        return {"sub": email, "role": "customer"}
+        current_user_role.set(role)
+        return {"sub": email, "role": role}
 
     app = FastAPI()
     app.include_router(router)
@@ -107,7 +112,7 @@ async def test_resume_approves_and_finalizes(clean_db, monkeypatch: pytest.Monke
     user_id = await _seed_user(clean_db, email)
     _, run_id = await _pause_a_return(clean_db, monkeypatch, email, user_id)
 
-    app = _app_for(email, user_id)
+    app = _app_for("reviewer@example.com", uuid.uuid4(), role="admin")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:
         resp = await http.post(
             f"/api/orchestration/{run_id}/resume",
@@ -118,7 +123,8 @@ async def test_resume_approves_and_finalizes(clean_db, monkeypatch: pytest.Monke
     assert resp.status_code == 200
     data = resp.json()
     assert data["approved"] is True
-    assert "approved and finalized" in data["text"]
+    assert "退货申请已创建" in data["text"]
+    assert "不表示退款已到账" in data["text"]
     assert "finalize" in data["agents_involved"]
 
     hitl_row = await clean_db.fetchrow(
@@ -134,7 +140,7 @@ async def test_resume_rejection_recorded(clean_db, monkeypatch: pytest.MonkeyPat
     user_id = await _seed_user(clean_db, email)
     _, run_id = await _pause_a_return(clean_db, monkeypatch, email, user_id)
 
-    app = _app_for(email, user_id)
+    app = _app_for("reviewer@example.com", uuid.uuid4(), role="admin")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:
         resp = await http.post(
             f"/api/orchestration/{run_id}/resume",
@@ -167,7 +173,7 @@ async def test_resume_blocks_a_different_user(clean_db, monkeypatch: pytest.Monk
             headers={"Authorization": "Bearer fake"},
         )
 
-    assert resp.status_code == 404
+    assert resp.status_code == 403
 
 
 @pytest.mark.asyncio
@@ -176,7 +182,7 @@ async def test_resume_twice_404s_the_second_time(clean_db, monkeypatch: pytest.M
     user_id = await _seed_user(clean_db, email)
     _, run_id = await _pause_a_return(clean_db, monkeypatch, email, user_id)
 
-    app = _app_for(email, user_id)
+    app = _app_for("reviewer@example.com", uuid.uuid4(), role="admin")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:
         first = await http.post(
             f"/api/orchestration/{run_id}/resume",

@@ -142,8 +142,8 @@ def _maybe_add_langfuse(tracer_provider: Any, batch_span_processor: Any) -> None
 
 
 def instrument_fastapi(app: Any) -> None:
-    """在 setup_telemetry 之后为 FastAPI 应用安装自动插桩。"""
-    if not settings.OTEL_ENABLED:
+    """在应用构造期安装插桩；代理 tracer/meter 会连接到启动时初始化的提供器。"""
+    if not settings.OTEL_ENABLED or getattr(app, "_is_instrumented_by_opentelemetry", False):
         return
     try:
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor

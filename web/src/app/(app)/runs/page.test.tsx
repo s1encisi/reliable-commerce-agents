@@ -3,6 +3,9 @@ import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import RunsPage from "./page";
 import { api, type RunEntry } from "@/lib/api";
 
+const auth = vi.hoisted(() => ({ isAdmin: true }));
+vi.mock("@/lib/auth-context", () => ({ useAuth: () => auth }));
+
 const PENDING_RUN: RunEntry = {
   id: "run-1",
   agent_name: "orchestrator",
@@ -21,9 +24,21 @@ const PENDING_RUN: RunEntry = {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  auth.isAdmin = true;
 });
 
 describe("RunsPage —— 检查点续跑", () => {
+  it("客户可查看待审批运行但没有批准/拒绝入口", async () => {
+    auth.isAdmin = false;
+    const resume = vi.spyOn(api, "resumeRun");
+    vi.spyOn(api, "getRuns").mockResolvedValue({ entries: [PENDING_RUN], total: 1, limit: 20, offset: 0 });
+    vi.spyOn(api, "getRunCheckpoints").mockResolvedValue({ run_id: "run-1", checkpoints: [], hitl_request: { id: "h1", status: "pending", payload: {}, response: null, created_at: "2026-10-01", responded_at: null } });
+    render(<RunsPage />);
+    fireEvent.click(await screen.findByText("return order abc"));
+    expect(await screen.findByText(/等待管理员审批/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "批准" })).not.toBeInTheDocument();
+    expect(resume).not.toHaveBeenCalled();
+  });
   it("在折叠列表中即显示「待审批」徽章，无需先展开", async () => {
     // 回归测试：checkpoint/HITL 数据此前是展开时才懒加载的，
     // 导致这个本应能整列扫视的徽章，在行被打开过一次之前永远
@@ -134,6 +149,6 @@ describe("RunsPage —— 检查点续跑", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "拒绝" })).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: "拒绝" }));
-    await waitFor(() => expect(screen.getByText("No pending approval found for this run")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("该运行没有待处理审批，请刷新状态。")).toBeInTheDocument());
   });
 });

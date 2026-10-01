@@ -141,6 +141,7 @@ async def _persist_assistant_turn(
     run_payload_box: dict[str, Any],
     stream_usage: dict[str, Any],
     disconnected: bool,
+    context_epoch: int | None = None,
 ) -> None:
     """为一次 chat_stream 轮次持久化助手的消息 + 时间线。
 
@@ -154,7 +155,7 @@ async def _persist_assistant_turn(
         # 应当描述这次运行，而不是它的帧是如何投递的。
         for step in steps:
             step.pop("_live", None)
-        metadata = {"steps": steps[:50], "agents_involved": agents_involved}
+        metadata = {"steps": steps[:50], "agents_involved": agents_involved, "context_epoch": context_epoch or 0}
         await pool.execute(
             """INSERT INTO messages (conversation_id, role, content, agent_name, agents_involved, metadata)
                VALUES ($1, 'assistant', $2, 'orchestrator', $3, $4::jsonb)""",
@@ -196,10 +197,10 @@ async def _persist_assistant_turn(
         # 比 `metadata` 已经发出的时间晚了好几帧。
         run_payload_box["usage_log_id"] = usage_log_id
         await _link_run_artifacts(pool, usage_log_id, user_email, run_payload_box)
-        if run_payload_box.get("decision", {}).get("context_enabled"):
+        if context_epoch is not None:
             from shared.context_pipeline import remember_evidence
 
-            await remember_evidence(conversation_id, steps)
+            await remember_evidence(conversation_id, steps, expected_epoch=context_epoch)
         if disconnected:
             logger.info(
                 "chat_stream.persisted_after_disconnect conversation=%s chars=%d",
@@ -309,6 +310,7 @@ async def chat(
 
     conversation_id = body.conversation_id
     history: list[dict[str, str]] = []
+    user_message_id: str | None = None
 
     if not is_anon:
         # 解析或创建会话
@@ -340,11 +342,13 @@ async def chat(
         history = await get_history_as_dicts(get_history_provider(pool=pool), conversation_id)
 
         # 保存用户消息
+        user_message_id = str(uuid4())
         await pool.execute(
-            """INSERT INTO messages (conversation_id, role, content, agent_name)
-               VALUES ($1, 'user', $2, NULL)""",
+            """INSERT INTO messages (conversation_id, role, content, agent_name, id)
+               VALUES ($1, 'user', $2, NULL, $3::uuid)""",
             conversation_id,
             body.message,
+            user_message_id,
         )
 
         # 获取用户上下文（资料 + 近期订单）供智能体使用 —— 通过
@@ -382,7 +386,27 @@ async def chat(
     agents_involved: list[str] = ["orchestrator"]
     steps: list[dict[str, Any]] = []
     run_payload: dict[str, Any] = {}
-    ctx = RunContext(history=history, conversation_id=conversation_id)
+    from shared.context_pipeline import (
+        ContextEpochMismatchError,
+        ContextOverflowError,
+        current_context_binding,
+        prepare_chat_context,
+    )
+
+    try:
+        history, context_prepared = await prepare_chat_context(
+            body.message,
+            history,
+            conversation_id,
+            message_id=user_message_id,
+        )
+    except ContextEpochMismatchError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except ContextOverflowError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    binding = current_context_binding.get()
+    context_epoch = binding[1] if binding and binding[0] == conversation_id else None
+    ctx = RunContext(history=history, conversation_id=conversation_id, context_prepared=context_prepared)
 
     with UsageTimer() as timer:
         with agent_run_span("orchestrator"):
@@ -404,11 +428,12 @@ async def chat(
     if not is_anon:
         # 保存助手消息 + 更新会话 + 用量记录（仅已认证用户）
         assistant_message_id = await pool.fetchval(
-            """INSERT INTO messages (conversation_id, role, content, agent_name, agents_involved)
-               VALUES ($1, 'assistant', $2, 'orchestrator', $3) RETURNING id""",
+            """INSERT INTO messages (conversation_id, role, content, agent_name, agents_involved, metadata)
+               VALUES ($1, 'assistant', $2, 'orchestrator', $3, $4::jsonb) RETURNING id""",
             conversation_id,
             response_text,
             agents_involved,
+            json.dumps({"context_epoch": context_epoch or 0}),
         )
         await pool.execute(
             "UPDATE conversations SET last_message_at = NOW() WHERE id = $1",
@@ -437,10 +462,10 @@ async def chat(
                     duration_ms=step.get("duration_ms", 0),
                 )
         await _link_run_artifacts(pool, usage_log_id, user_email, run_payload)
-        if run_payload.get("decision", {}).get("context_enabled"):
+        if context_prepared:
             from shared.context_pipeline import remember_evidence
 
-            await remember_evidence(conversation_id, steps)
+            await remember_evidence(conversation_id, steps, expected_epoch=context_epoch)
         if run_payload.get("text") and run_payload["text"] != response_text:
             response_text = run_payload["text"]
             await pool.execute("UPDATE messages SET content = $2 WHERE id = $1", assistant_message_id, response_text)
@@ -484,6 +509,7 @@ async def chat_stream(
 
     conversation_id = body.conversation_id
     history: list[dict[str, str]] = []
+    user_message_id: str | None = None
 
     if not is_anon:
         # 解析或创建会话
@@ -512,11 +538,13 @@ async def chat_stream(
         history = await get_history_as_dicts(get_history_provider(pool=pool), conversation_id)
 
         # 保存用户消息
+        user_message_id = str(uuid4())
         await pool.execute(
-            """INSERT INTO messages (conversation_id, role, content, agent_name)
-               VALUES ($1, 'user', $2, NULL)""",
+            """INSERT INTO messages (conversation_id, role, content, agent_name, id)
+               VALUES ($1, 'user', $2, NULL, $3::uuid)""",
             conversation_id,
             body.message,
+            user_message_id,
         )
 
         # 获取用户上下文 —— 通过 ECommerceContextProvider 链注入。
@@ -541,7 +569,27 @@ async def chat_stream(
     current_root_run.set(str(uuid4()))
     current_run_deadline.set(time.time() + run_settings.MAF_STREAM_TIMEOUT_SECONDS)
 
-    ctx = RunContext(history=history, conversation_id=conversation_id)
+    from shared.context_pipeline import (
+        ContextEpochMismatchError,
+        ContextOverflowError,
+        current_context_binding,
+        prepare_chat_context,
+    )
+
+    try:
+        history, context_prepared = await prepare_chat_context(
+            body.message,
+            history,
+            conversation_id,
+            message_id=user_message_id,
+        )
+    except ContextEpochMismatchError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except ContextOverflowError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    binding = current_context_binding.get()
+    context_epoch = binding[1] if binding and binding[0] == conversation_id else None
+    ctx = RunContext(history=history, conversation_id=conversation_id, context_prepared=context_prepared)
 
     async def event_generator() -> AsyncGenerator[str, None]:
         """从流式智能体响应中产出 SSE 格式的事件。
@@ -791,6 +839,7 @@ async def chat_stream(
                         run_payload_box=run_payload_box,
                         stream_usage=(run_metadata.get("_maf_usage") or {}) if mode.name == "tool" else {},
                         disconnected=True,
+                        context_epoch=context_epoch if context_prepared else None,
                     )
                 )
             raise
@@ -848,6 +897,7 @@ async def chat_stream(
                 run_payload_box=run_payload_box,
                 stream_usage=stream_usage,
                 disconnected=False,
+                context_epoch=context_epoch if context_prepared else None,
             )
         )
         try:

@@ -11,7 +11,7 @@ RUN corepack enable && corepack prepare pnpm@10.15.0 --activate
 # ── Dependencies ─────────────────────────────────────────────
 FROM base AS deps
 WORKDIR /app
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # ── Build ────────────────────────────────────────────────────
@@ -27,7 +27,7 @@ ENV CI=true
 # and src/app/api/[...path]/route.ts forwards to ORCHESTRATOR_URL at runtime,
 # so this image is not built against a particular backend. That is what lets
 # one image be promoted from compose to Azure without a rebuild.
-RUN pnpm build
+RUN node scripts/source-manifest.mjs && pnpm build
 
 # ── Runtime ──────────────────────────────────────────────────
 FROM base AS runner
@@ -40,6 +40,7 @@ RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
 COPY --from=builder /app/public ./public
+COPY --from=builder /app/build-source-manifest.json ./build-source-manifest.json
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
@@ -53,5 +54,8 @@ ENV HOSTNAME="0.0.0.0"
 # Where the server-side /api/* proxy forwards to. Override per environment:
 # a compose service name locally, an internal FQDN on Container Apps.
 ENV ORCHESTRATOR_URL="http://localhost:8080"
+
+HEALTHCHECK --interval=10s --timeout=5s --start-period=25s --retries=6 \
+    CMD node -e "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 CMD ["node", "server.js"]

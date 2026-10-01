@@ -1,5 +1,5 @@
 # 可靠电商多智能体平台的多目标镜像。
-# 构建上下文为 ./agents；用 AGENT_NAME 选择专业智能体。
+# 构建上下文为 ./agents/python；用 AGENT_NAME 选择专业智能体。
 
 FROM python:3.12-slim AS base
 
@@ -9,7 +9,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # 安装 uv。
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.11.17 /uv /uvx /bin/
 
 # 创建非 root 用户。
 RUN groupadd -r agent && useradd -r -g agent -d /app -s /sbin/nologin agent
@@ -19,7 +19,8 @@ WORKDIR /app
 # 按提交的锁文件安装依赖，复用镜像缓存层。
 # --frozen 避免重新解析依赖时受到外部版本变动影响。
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+COPY packages/ packages/
+RUN uv sync --frozen --all-packages --no-dev --no-install-project
 
 # 按需修复早期 MAF 空 __init__.py 的公开导出。
 COPY patch_maf.py .

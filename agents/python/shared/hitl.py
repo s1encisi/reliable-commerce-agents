@@ -19,7 +19,7 @@ from uuid import UUID
 from agent_framework._middleware import FunctionInvocationContext, FunctionMiddleware
 
 from shared.config import settings
-from shared.context import current_session_id, current_user_email
+from shared.context import current_session_id, current_user_email, current_user_role
 from shared.idempotency import idempotent
 
 logger = logging.getLogger(__name__)
@@ -378,7 +378,12 @@ async def _execute_approved_return(
         operation_id = str(UUID(params.pop("_operation_id")))
     except (KeyError, TypeError, ValueError):
         return failure("APPROVAL_STALE", "This approval predates the return policy. Request fresh approval.")
+    requester_role = await pool.fetchval("SELECT role FROM users WHERE email = $1", user_email)
+    if requester_role is None:
+        return failure("APPROVAL_INVALID", "The original requester no longer exists.")
+    # 审批只授权原申请意图，不把审批人的管理员角色交给业务执行。
     identity_token = current_user_email.set(user_email)
+    role_token = current_user_role.set(requester_role)
     approval_token = current_return_approval.set(approval)
     operation_token = current_operation_id.set(operation_id)
     try:
@@ -386,6 +391,7 @@ async def _execute_approved_return(
     finally:
         current_return_approval.reset(approval_token)
         current_operation_id.reset(operation_token)
+        current_user_role.reset(role_token)
         current_user_email.reset(identity_token)
 
 

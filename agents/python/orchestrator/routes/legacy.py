@@ -2616,3 +2616,14 @@ async def get_seller_stats(user: dict[str, Any] = Depends(require_seller)) -> di
         "order_count": order_count,
         "avg_rating": round(float(avg_rating), 2),
     }
+
+
+@router.get("/api/returns/{return_id}/fulfillment")
+async def get_return_fulfillment(return_id: uuid.UUID, user: dict = Depends(require_auth)) -> dict[str, Any]:
+    """查询本人退货的模拟履约状态；入队与供应商已受理是不同状态。"""
+    from shared.after_sales.fulfillment import get_status
+
+    status = await get_status(get_pool(), return_id, user["sub"])
+    if status is None:
+        raise HTTPException(404, "Fulfillment request not found")
+    return status

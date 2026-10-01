@@ -1,79 +1,43 @@
-# 可靠电商多智能体平台
+# 可靠电商 Agent：售后执行与只读任务
 
-一个基于**微软智能体框架（Microsoft Agent Framework，MAF）**构建的多智能体电商平台，纯 **Python** 技术栈，概念说明与运行它的代码并排呈现。
+项目以 Python、Microsoft Agent Framework、FastAPI、PostgreSQL 和 Next.js 构建电商助手，重点是把自然语言入口接到可审批、可核实的业务执行上。运行单元为**一个编排器与五个专业智能体**；退货能力位于订单领域和共享售后服务，不是额外的第六个专业服务。
 
-六个专业智能体通过 A2A 协议（Agent-to-Agent，智能体间通信协议）协同工作，覆盖商品发现、订单管理、定价与促销、评论情感分析、库存与履约、售后支持。五种编排模式可在运行时从同一个对话框中选择，因此你可以看到同一个问题被路由到五种不同的实现路径，并比较各自的成本。
+## 先运行一条完整路径
 
-本站由仓库自动生成。这里的每个页面都是你可以在仓库中读到的文件，每个代码指针都指向真实的源码。
-
-## 运行它
-
-唯一的前置条件是 Docker —— 无需安装 Python 或 Node，也
-[无需付费 API Key]({{ site.baseurl }}/getting-started/quick-start.html#run-without-a-paid-api-key)。
+推荐使用独立的本地合成演示。准备 Python 3.12、uv、Node.js 22、pnpm 10 和 Docker 后，在仓库根目录运行：
 
 ```bash
-git clone https://github.com/s1encisi/reliable-commerce-agents.git
-cd reliable-commerce-agents
-cp .env.example .env          # 填入你的 OPENAI_API_KEY（或 Azure OpenAI 凭据）
-./scripts/dev.sh              # 构建、灌入种子数据并启动全部服务
+bash scripts/install-deps.sh --core --images
+bash scripts/demo.sh
 ```
 
-然后打开 **<http://localhost:3000>**，用 `zhangwei@example.com` / `customer123` 登录。
+打开 **http://localhost:3010**。客户 `customer@example.test` 提交退货，管理员 `admin@example.test` 审批；公开演示密码均为 `DemoPass123!`。客户再查询同一操作标识，核实申请是否创建。演示只用合成数据，不代表退款已到账，也不需要真实模型账号。
 
-**在 Windows 上**，`scripts/dev.sh` 是 bash 脚本，无法在 PowerShell 中运行 —— 请改用功能等价的
-PowerShell 版本，它接受相同的参数：
+完整步骤、专用端口和停止方法见[本地演示](portfolio-demo.md)。只使用 Docker 的独立容器方案见[本地容器作品展示](local-showcase.md)；真实模型开发配置见[快速开始](quick-start.md)。不同环境的端口与数据卷不能混用。
 
-```powershell
-Copy-Item .env.example .env    # 然后在 .env 中设置 OPENAI_API_KEY
-./scripts/dev.ps1
-```
+## 当前可追踪的能力
 
-→ **[完整快速开始]({{ site.baseurl }}/getting-started/quick-start.html)** —— 无需 API Key 的运行方式、WSL2 注意事项，以及出问题时该怎么办。
+| 能力 | 实现与证据入口 |
+| --- | --- |
+| 客户发起、管理员审批、原申请人身份执行 | [售后架构](after-sales-architecture.md)、[API](api-reference.md) |
+| 幂等操作与中断后核实实际结果 | [当前验证记录](verification.md) |
+| 只读任务规划、事实验收、显式恢复与人工确认 | [任务工作台](task-workspace.md) |
+| 目标和约束修订、版本冲突与来源记录 | [上下文 API](api-reference.md#任务与可修订上下文) |
+| 一致过滤的词法、向量融合和降级检索 | [检索评测](retrieval-evaluation.md) |
+| 本机供应商、outbox、幂等投递与对账 | [履约模拟](fulfillment-simulation.md) |
 
----
+![中文任务工作台](images/upgrade-20261001/reliable-commerce-tasks-desktop.png)
 
-## 从哪里开始
+## 六种已注册编排模式
 
-| 如果你是…… | 从这里开始 |
-|---|---|
-| 刚接触智能体 —— 此前从未构建过 | [概念]({{ site.baseurl }}/concepts/) —— 什么是智能体、为什么要多个智能体、这里的「图」指什么 |
-| 准备动手实现 | [教程]({{ site.baseurl }}/tutorials/) —— 34 章，每章都可在无需 API Key 的情况下运行 |
-| 想直接把应用跑起来 | [快速开始]({{ site.baseurl }}/getting-started/) |
-| 想评估架构 | [架构]({{ site.baseurl }}/architecture/) |
-| 想了解各模块能力覆盖情况 | [能力矩阵]({{ site.baseurl }}/reference/parity-matrix.html) |
+`tool`、`decision-router`、`handoff`、`workflow:pre-purchase`、`workflow:return-replace`、`group-chat` 由同一个[模式注册表](../agents/python/orchestrator/modes/__init__.py)暴露。决策路由策略默认 `off`；注册不代表每种路径都启用了真实模型，也不代表它们完成相同任务、可以直接按耗时排名。
 
-## 本项目的不同之处
+专业智能体通信使用项目自定义的 A2A 风格 HTTP 契约，入口由 `shared/agent_host.py` 实现，没有使用 `agent-framework-a2a` SDK。固定离线任务与退货工作流执行真实工具和数据库操作，但不能当作模型自由规划或泛化效果的证据。
 
-大多数智能体框架示例只孤立地展示一种编排模式。本仓库把**同一个非平凡业务域用五种方式实现** —— 工具路由、处理权交接网络、两张工作流图，以及群聊圆桌 —— 并放在同一个可运行应用里，因此从业者真正关心的问题（「我该用哪一种？」）有了带延迟和 token 数据的答案。
+## 阅读顺序与能力边界
 
-它还做了示例通常跳过的部分：服务端事实核验（grounding），在答案离开服务端之前用数据库校验模型的结论；真正会拦截的护栏；破坏性操作上的人工审批；退款操作的幂等性；以及一套跑生产路径（而非其副本）的评测运行框架。
+先看[项目首页](../README.md)、[售后架构](after-sales-architecture.md)、[验证记录](verification.md)和[演示指南](portfolio-demo.md)，再按需进入[平台架构](architecture.md)、[概念](concepts/README.md)与[教程](../tutorials/README.md)。
 
-## 四个层次
+当前和历史报告分别保留。检索数据及相关性标签由助手编写，尚待人工审核；离线哈希嵌入不是语义模型。真实模型质量、付费调用、公网体验部署和真实物流／支付不由本地回归代替。具体已执行结果、源码散列和限制以[验证说明](verification.md)及各报告为准，不从旧教程或旧计划推断当前能力。
 
-每一层都以不同深度讲解同样的概念，并指出下一步该看什么：
-
-- **[概念]({{ site.baseurl }}/concepts/)** —— 用平实的语言讲清思路，配一张图，并指向它真正发挥作用的地方。
-- **[教程]({{ site.baseurl }}/tutorials/)** —— 自己动手实现，规模很小，一次只讲一个机制。
-- **[架构]({{ site.baseurl }}/architecture/)** —— 整个系统如何拼合在一起。
-- **代码** —— [在 GitHub 上](https://github.com/s1encisi/reliable-commerce-agents)，按完整规模实现。
-
-## 项目当前状态
-
-**v1.1。** 暂停—恢复式审批循环、服务端事实核验、涉及资金操作的幂等性、限流，以及五种编排模式均已稳定运行在 Python 技术栈上。
-
-### 近期完成
-
-- 追问会保留上下文。此前任何来自浏览器的对话轮次，专业智能体都收不到*任何*对话历史 —— 而且是确定性地复现，与此同时所有测试却都是通过的。
-- Python 运行现在会出现在 Jaeger 视图中；此前不可见，是因为跨度（span）命名与 Jaeger 的选取约定不一致。
-- 语义检索可用。它在重放模式下完全失效，而其下还藏着一个生产缺陷：IVFFlat 索引建在空表上，返回了不相关的商品。
-- 促销可以生效了。种子数据写入方与读取方对 `promotions.rules` 的键名理解不一致，因此此前没有任何促销活动正确生效过。
-- 本站可被搜索引擎索引 —— 逐页元数据，以及全部 71 张图上可访问的标题。
-
-### 后续计划
-
-- **评测数据集覆盖** —— 7 个数据集中已接入 6 个；录制运行、基线与 CI 门禁仍待补齐。
-- **教程代码覆盖** —— 第 12–19 章有代码但缺少测试，第 22–32 章尚无配套示例。
-- **编辑器体验** —— 上下文相关的提示词建议，以及可折叠的模式选择器。
-- **检索** —— `search_products` 目前仍是 `ILIKE`；全文检索与混合检索已在计划中。
-
-完整清单（包括本页未声称覆盖的缺口）见 [`.claude/plans/remaining-work.md`](https://github.com/s1encisi/reliable-commerce-agents/blob/26f47c494dd6b371312593e82f066713f6f56e9c/.claude/plans/remaining-work.md)。
+完整阅读顺序、贡献规范与本地隐私边界见[项目导览](README.md)。

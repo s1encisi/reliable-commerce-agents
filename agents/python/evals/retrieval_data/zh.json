@@ -1,0 +1,301 @@
+{
+  "version": "commerce-retrieval-zh-20261001-v1",
+  "provenance": "由助手编写的合成商品和查询；相关性标签未经独立人工审核，人工审核待用户。本集合用于工程验收，不是线上用户分布。",
+  "human_review_status": "pending_user_review",
+  "embedding_scope": "使用项目ReplayEmbeddingsClient的确定性词元哈希；无训练语义能力、无外部模型调用，不据此宣称真实模型检索收益。",
+  "currency": "catalog_units_no_conversion",
+  "catalog": [
+    {
+      "key": "sony_xm5",
+      "name": "Sony WH-1000XM5 Headphones",
+      "description": "Wireless over-ear headphones with active noise cancelling for daily travel.",
+      "category": "Electronics",
+      "brand": "Sony",
+      "price": 299,
+      "rating": 4.7
+    },
+    {
+      "key": "bose_qc",
+      "name": "Bose QuietComfort Headphones",
+      "description": "Comfortable wireless headphones with noise cancellation and long battery life.",
+      "category": "Electronics",
+      "brand": "Bose",
+      "price": 249,
+      "rating": 4.6
+    },
+    {
+      "key": "sony_ch520",
+      "name": "Sony WH-CH520 Headphones",
+      "description": "Lightweight wireless headphones for everyday listening.",
+      "category": "Electronics",
+      "brand": "Sony",
+      "price": 99,
+      "rating": 4.3
+    },
+    {
+      "key": "mx_keys",
+      "name": "Logitech MX Keys Keyboard",
+      "description": "Quiet wireless keyboard for office typing.",
+      "category": "Electronics",
+      "brand": "Logitech",
+      "price": 109,
+      "rating": 4.8
+    },
+    {
+      "key": "keychron_k2",
+      "name": "Keychron K2 Keyboard",
+      "description": "Compact mechanical keyboard for desk typing.",
+      "category": "Electronics",
+      "brand": "Keychron",
+      "price": 79,
+      "rating": 4.5
+    },
+    {
+      "key": "anker_20k",
+      "name": "Anker PowerCore Power Bank",
+      "description": "Portable power bank with 20000 mAh capacity and USB charging.",
+      "category": "Electronics",
+      "brand": "Anker",
+      "price": 49,
+      "rating": 4.6
+    },
+    {
+      "key": "xiaomi_10k",
+      "name": "Xiaomi Power Bank",
+      "description": "Compact 10000 mAh power bank for phones.",
+      "category": "Electronics",
+      "brand": "Xiaomi",
+      "price": 29,
+      "rating": 4.2
+    },
+    {
+      "key": "philips_air",
+      "name": "Philips Air Fryer",
+      "description": "Compact air fryer for home cooking.",
+      "category": "Home",
+      "brand": "Philips",
+      "price": 129,
+      "rating": 4.6
+    },
+    {
+      "key": "nike_run",
+      "name": "Nike Pegasus Shoes",
+      "description": "Lightweight running shoes for outdoor sports.",
+      "category": "Sports",
+      "brand": "Nike",
+      "price": 119,
+      "rating": 4.4
+    },
+    {
+      "key": "fitbit",
+      "name": "Fitbit Fitness Tracker",
+      "description": "Fitness tracker with heart rate and sleep monitoring.",
+      "category": "Electronics",
+      "brand": "Fitbit",
+      "price": 69,
+      "rating": 4.4
+    },
+    {
+      "key": "book",
+      "name": "Practical Home Cooking",
+      "description": "Illustrated cookbook with simple meals.",
+      "category": "Books",
+      "brand": "Example Press",
+      "price": 19,
+      "rating": 4.7
+    },
+    {
+      "key": "retired_headset",
+      "name": "Discontinued Headphones",
+      "description": "Wireless headphones no longer sold.",
+      "category": "Electronics",
+      "brand": "Retired",
+      "price": 10,
+      "rating": 5,
+      "is_active": false
+    }
+  ],
+  "cases": [
+    {
+      "id": "zh_headphones",
+      "query": "耳机",
+      "tags": [
+        "中文",
+        "品类别名"
+      ],
+      "k": 3,
+      "filters": {
+        "category": "电子产品"
+      },
+      "relevance": {
+        "sony_xm5": 2,
+        "bose_qc": 2,
+        "sony_ch520": 1
+      }
+    },
+    {
+      "id": "zh_budget",
+      "query": "耳机",
+      "tags": [
+        "中文",
+        "预算"
+      ],
+      "k": 3,
+      "filters": {
+        "category": "Electronics",
+        "max_price": 150
+      },
+      "relevance": {
+        "sony_ch520": 2
+      }
+    },
+    {
+      "id": "exact_model",
+      "query": "WH-1000XM5",
+      "tags": [
+        "精确型号"
+      ],
+      "k": 3,
+      "filters": {
+        "category": "Electronics"
+      },
+      "relevance": {
+        "sony_xm5": 3
+      }
+    },
+    {
+      "id": "stemmed_terms",
+      "query": "noise cancellation headphones",
+      "tags": [
+        "词干",
+        "同义表达"
+      ],
+      "k": 3,
+      "filters": {
+        "min_rating": 4.5
+      },
+      "relevance": {
+        "sony_xm5": 2,
+        "bose_qc": 2
+      }
+    },
+    {
+      "id": "synonym_uncovered",
+      "query": "headset for subway commute",
+      "tags": [
+        "未覆盖同义词",
+        "能力边界"
+      ],
+      "k": 3,
+      "filters": {
+        "category": "Electronics",
+        "min_rating": 4.5
+      },
+      "relevance": {
+        "sony_xm5": 2,
+        "bose_qc": 2
+      }
+    },
+    {
+      "id": "zh_power_bank",
+      "query": "充电宝",
+      "tags": [
+        "中文",
+        "品类别名",
+        "预算"
+      ],
+      "k": 3,
+      "filters": {
+        "max_price": 50
+      },
+      "relevance": {
+        "anker_20k": 2,
+        "xiaomi_10k": 1
+      }
+    },
+    {
+      "id": "zh_keyboard_rating",
+      "query": "键盘",
+      "tags": [
+        "中文",
+        "评分"
+      ],
+      "k": 3,
+      "filters": {
+        "min_rating": 4.7
+      },
+      "relevance": {
+        "mx_keys": 2
+      }
+    },
+    {
+      "id": "zh_category_filter",
+      "query": "空气炸锅",
+      "tags": [
+        "中文",
+        "分类"
+      ],
+      "k": 3,
+      "filters": {
+        "category": "家居"
+      },
+      "relevance": {
+        "philips_air": 2
+      }
+    },
+    {
+      "id": "price_interval",
+      "query": "headphones",
+      "tags": [
+        "价格区间"
+      ],
+      "k": 3,
+      "filters": {
+        "min_price": 200,
+        "max_price": 280
+      },
+      "relevance": {
+        "bose_qc": 2
+      }
+    },
+    {
+      "id": "impossible_budget",
+      "query": "耳机",
+      "tags": [
+        "无结果",
+        "预算"
+      ],
+      "k": 3,
+      "filters": {
+        "category": "Electronics",
+        "max_price": 1
+      },
+      "relevance": {}
+    },
+    {
+      "id": "unknown_product",
+      "query": "quantum teleportation device",
+      "tags": [
+        "无结果",
+        "未知品类",
+        "能力边界"
+      ],
+      "k": 3,
+      "filters": {},
+      "relevance": {}
+    },
+    {
+      "id": "inactive_excluded",
+      "query": "Discontinued Headphones",
+      "tags": [
+        "下架商品",
+        "有效性"
+      ],
+      "k": 3,
+      "filters": {
+        "max_price": 15
+      },
+      "relevance": {}
+    }
+  ]
+}

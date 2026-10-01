@@ -10,7 +10,7 @@ from pydantic import Field
 
 from shared.agent_factory import create_embedding_client, get_embedding_model
 from shared.db import get_pool
-from shared.search import RRF_K, or_joined_tsquery
+from shared.search import RRF_K, catalog_filters, expand_catalog_query, or_joined_tsquery
 from shared.tool_inputs import clamp_limit
 
 SORT_CLAUSES = {
@@ -43,7 +43,7 @@ async def search_products(
 ) -> list[dict]:
     pool = get_pool()
     safe_limit = clamp_limit(limit, default=10, maximum=100)
-    conditions = ["p.is_active = TRUE"]
+    conditions: list[str] = []
     args: list = []
     idx = 1
 
@@ -65,25 +65,15 @@ async def search_products(
         args.append(query)
         idx += 1
 
-    if category:
-        conditions.append(f"p.category = ${idx}")
-        args.append(category)
-        idx += 1
-
-    if min_price is not None:
-        conditions.append(f"p.price >= ${idx}")
-        args.append(min_price)
-        idx += 1
-
-    if max_price is not None:
-        conditions.append(f"p.price <= ${idx}")
-        args.append(max_price)
-        idx += 1
-
-    if min_rating is not None:
-        conditions.append(f"p.rating >= ${idx}")
-        args.append(min_rating)
-        idx += 1
+    filters, values = catalog_filters(
+        category=category,
+        min_price=min_price,
+        max_price=max_price,
+        min_rating=min_rating,
+        parameter_offset=len(args),
+    )
+    conditions.extend(filters)
+    args.extend(values)
 
     # 显式指定 sort_by 时始终优先。否则在有查询时按文本相关性排序
     # （旧代码无论有没有查询都按评分排序，导致一个弱匹配但评价多的商品
@@ -199,8 +189,22 @@ async def compare_products(
 async def semantic_search(
     query: Annotated[str, Field(description="Descriptive search query in natural language")],
     limit: Annotated[int, Field(description="Max results")] = 5,
+    category: Annotated[str | None, Field(description="Category filter, same as search_products")] = None,
+    min_price: Annotated[float | None, Field(description="Minimum price in catalog currency")] = None,
+    max_price: Annotated[float | None, Field(description="Maximum price in catalog currency")] = None,
+    min_rating: Annotated[float | None, Field(description="Minimum rating from 0 to 5")] = None,
 ) -> list[dict]:
     pool = get_pool()
+    safe_limit = clamp_limit(limit, default=5, maximum=100)
+    filters, filter_args = catalog_filters(
+        category=category,
+        min_price=min_price,
+        max_price=max_price,
+        min_rating=min_rating,
+        parameter_offset=4,
+    )
+    filter_where = " AND ".join(filters)
+    query = expand_catalog_query(query)
 
     # 通过 OpenAI / Azure OpenAI 生成嵌入向量
     from shared.factory import EmbeddingsUnavailableError
@@ -209,35 +213,41 @@ async def semantic_search(
         client = create_embedding_client()
     except EmbeddingsUnavailableError:
         # 不调用错误的提供方，不把词法结果标记成语义相似度。
-        rows = await search_products.func(query=query, limit=limit)
+        rows = await search_products.func(
+            query=query,
+            limit=safe_limit,
+            category=category,
+            min_price=min_price,
+            max_price=max_price,
+            min_rating=min_rating,
+        )
         return [{**row, "retrieval_mode": "lexical", "embedding_available": False} for row in rows]
     response = await client.embeddings.create(model=get_embedding_model(), input=[query])
     embedding = response.data[0].embedding
 
     # 从每一路召回比最终返回更多的候选 —— 只有当某个文档出现在一路列表中
     # 而没出现在另一路时，融合才有可用的信息。
-    candidates = max(limit * 4, 20)
+    candidates = max(safe_limit * 4, 20)
 
     # 混合检索：分别按向量余弦相似度和全文相关性排序，再用
     # Reciprocal Rank Fusion 融合。RRF 对各路累加 1/(k+rank)，
     # 因此两路都认可的商品会排在只在一路登顶的商品之前，
     # 并且两路的原始分数无需处于可比的量纲上。
     sql = f"""
-        WITH vec AS (
+        WITH eligible AS (SELECT p.* FROM products p WHERE {filter_where}),
+        vec AS (
             SELECT pe.product_id,
                    1 - (pe.embedding <=> $1::vector) AS similarity,
                    ROW_NUMBER() OVER (ORDER BY pe.embedding <=> $1::vector) AS rank
             FROM product_embeddings pe
-            JOIN products p ON pe.product_id = p.id
-            WHERE p.is_active = TRUE
+            JOIN eligible p ON pe.product_id = p.id
             LIMIT $3
         ),
         fts AS (
             SELECT p.id AS product_id,
                    ROW_NUMBER() OVER (ORDER BY ts_rank(p.search_vector, {or_joined_tsquery("$2")}) DESC) AS rank
-            FROM products p
-            WHERE p.is_active = TRUE
-              AND {or_joined_tsquery("$2")} <> ''::tsquery
+            FROM eligible p
+            WHERE {or_joined_tsquery("$2")} <> ''::tsquery
               AND p.search_vector @@ {or_joined_tsquery("$2")}
             LIMIT $3
         ),
@@ -251,7 +261,7 @@ async def semantic_search(
         SELECT p.id, p.name, p.description, p.category, p.brand, p.price, p.rating, p.image_url,
                fu.similarity, fu.score
         FROM fused fu
-        JOIN products p ON p.id = fu.product_id
+        JOIN eligible p ON p.id = fu.product_id
         ORDER BY fu.score DESC, p.rating DESC
         LIMIT $4
     """
@@ -281,7 +291,7 @@ async def semantic_search(
         # 空操作，这本身就是个安静的陷阱。
         async with conn.transaction():
             await conn.execute("SET LOCAL ivfflat.probes = 10")
-            rows = await conn.fetch(sql, json.dumps(embedding), query, candidates, limit)
+            rows = await conn.fetch(sql, json.dumps(embedding), query, candidates, safe_limit, *filter_args)
 
         return [
             {
@@ -294,6 +304,8 @@ async def semantic_search(
                 "rating": float(r["rating"]),
                 # 仅当文本这一路匹配时，该值为 None —— 说明该商品没有嵌入
                 # 记录，或排名落在向量候选窗口之外。
+                "retrieval_mode": "hybrid",
+                "embedding_available": True,
                 "similarity": round(float(r["similarity"]), 3) if r["similarity"] is not None else None,
                 "score": round(float(r["score"]), 5),
                 "image_url": r["image_url"],

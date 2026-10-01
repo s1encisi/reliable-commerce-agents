@@ -4,103 +4,50 @@
 
 ---
 
-## 流程 1：退货与换购
+## 流程 1：退货申请、管理员审批与结果核实
 
-**用户**：「帮我把夹克退掉，再找一件更保暖的」
-
-该流程横跨四个智能体：订单管理检查退货资格并发起退货，商品发现寻找更保暖的替代品，库存确认现货，定价负责抵扣退货余额。
+当前固定退货模式调用共享业务工具，顺序是资格检查、需要时等待管理员、执行前复核、创建申请与只读替代品建议。不能把工具调用成功理解成退款到账，也没有自动把退货金额存入余额或抵扣新订单的交易。
 
 ```mermaid
 sequenceDiagram
-    actor User
-    participant FE as Next.js 前端
-    participant ORCH as 编排器<br/>（FastAPI :8080）
-    participant LLM as OpenAI / Azure OpenAI
-    participant OM as 订单管理<br/>（:8082）
-    participant PD as 商品发现<br/>（:8081）
-    participant IF as 库存与履约<br/>（:8085）
-    participant PP as 定价与促销<br/>（:8083）
+    actor Customer as 客户
+    actor Admin as 管理员
+    participant UI as 前端
+    participant API as 编排器 API
+    participant WF as 固定退货工作流
     participant DB as PostgreSQL
 
-    User->>FE: 「帮我把夹克退掉，再找一件更保暖的」
-    FE->>ORCH: POST /api/chat<br/>Authorization: Bearer {JWT}
+    Customer->>UI: 提交明确订单及原因
+    UI->>API: POST /api/chat（workflow:return-replace）
+    API->>WF: 以可信客户身份运行
+    WF->>DB: 核对订单归属和签收证据
+    DB-->>WF: 当前资格与审批要求
 
-    Note over ORCH: JWT 校验通过，设置 ContextVars<br/>ECommerceContextProvider 加载<br/>用户画像 + 近期订单
-
-    ORCH->>LLM: ChatAgent.run()<br/>意图：退货 + 商品检索
-    LLM-->>ORCH: 工具调用：call_specialist_agent<br/>（order-management，「用户想退掉夹克」）
-
-    rect rgb(15, 118, 110)
-        Note over ORCH,OM: A2A 调用 1：订单管理
-        ORCH->>OM: POST /message:send<br/>X-Agent-Secret + X-User-Email
-        OM->>LLM: ChatAgent.run()
-        LLM-->>OM: 工具：get_user_orders()
-        OM->>DB: SELECT orders + order_items<br/>WHERE user_email, category='Clothing'
-        DB-->>OM: 找到近期的夹克订单
-        LLM-->>OM: 工具：check_return_eligibility(order_id)
-        OM->>DB: 比较下单时间与 7 天窗口
-        DB-->>OM: 符合退货条件
-        LLM-->>OM: 工具：initiate_return(order_id, reason)
-        OM->>DB: INSERT INTO returns<br/>status='requested'
-        DB-->>OM: 退货单已创建，面单已生成
-        OM-->>ORCH: 退货已发起，退款：¥89.99 余额<br/>已提供退货面单链接
+    alt 需要审批
+        WF->>DB: 保存检查点、审批请求和等待状态
+        WF-->>API: AWAITING_APPROVAL + operation_id
+        API-->>UI: 等待管理员，未创建退货
+        Admin->>API: POST /api/orchestration/{run_id}/resume
+        API->>WF: 恢复原申请人身份及绑定的审批决定
     end
 
-    ORCH->>LLM: 处理订单管理的响应，继续路由
-    LLM-->>ORCH: 工具调用：call_specialist_agent<br/>（product-discovery，「寻找更保暖的夹克」）
-
-    rect rgb(13, 148, 136)
-        Note over ORCH,PD: A2A 调用 2：商品发现
-        ORCH->>PD: POST /message:send
-        PD->>LLM: ChatAgent.run()
-        LLM-->>PD: 工具：semantic_search("warm winter jacket insulated")
-        PD->>DB: 生成向量嵌入 -> pgvector 余弦相似度
-        DB-->>PD: 最匹配的 5 款夹克
-        LLM-->>PD: 工具：get_product_details(top_match_id)
-        PD->>DB: SELECT 商品详情 + 规格参数
-        DB-->>PD: 完整商品信息
-        PD-->>ORCH: 3 款更保暖的推荐夹克<br/>含价格、评分、规格
+    WF->>DB: 事务内再次检查规则与审批绑定
+    alt 复核通过
+        WF->>DB: 原子保存退货申请、订单状态和操作回执
+        DB-->>WF: 持久 return_id
+        WF-->>API: 申请已创建，非退款到账
+    else 复核失败
+        WF-->>API: 拒绝或需要核实，无新增退货
     end
-
-    ORCH->>LLM: 处理商品发现的响应，继续路由
-    LLM-->>ORCH: 工具调用：call_specialist_agent<br/>（inventory-fulfillment，「查询推荐夹克的库存」）
-
-    rect rgb(100, 116, 139)
-        Note over ORCH,IF: A2A 调用 3：库存与履约
-        ORCH->>IF: POST /message:send
-        IF->>LLM: ChatAgent.run()
-        LLM-->>IF: 工具：check_stock(product_ids)
-        IF->>DB: SELECT warehouse_inventory<br/>逐个商品查询
-        DB-->>IF: 各仓库库存量
-        LLM-->>IF: 工具：estimate_shipping(product_id, address)
-        IF->>DB: SELECT 按地区查询运费
-        DB-->>IF: 预计送达时间
-        IF-->>ORCH: 3 款夹克中有 2 款有现货<br/>配送：3–5 个工作日
-    end
-
-    ORCH->>LLM: 处理库存与履约的响应，继续路由
-    LLM-->>ORCH: 工具调用：call_specialist_agent<br/>（pricing-promotions，「把退货余额用于新订单」）
-
-    rect rgb(217, 119, 6)
-        Note over ORCH,PP: A2A 调用 4：定价与促销
-        ORCH->>PP: POST /message:send
-        PP->>LLM: ChatAgent.run()
-        LLM-->>PP: 工具：get_loyalty_tier(user_email)
-        PP->>DB: SELECT loyalty_tier FROM users
-        DB-->>PP: 白银等级（95 折）
-        LLM-->>PP: 工具：get_active_deals()
-        PP->>DB: SELECT 进行中的促销与优惠券
-        DB-->>PP: 冬季大促：外套类 85 折
-        PP-->>ORCH: ¥89.99 余额 + 白银 95 折 + 冬季大促 85 折
-    end
-
-    ORCH->>LLM: 综合所有专业智能体的响应
-    Note over LLM: 把退货确认、<br/>夹克推荐、<br/>库存状态与定价<br/>合并为一条自然回复
-
-    ORCH->>DB: 持久化会话 + 用量日志
-    ORCH-->>FE: 合并后的回复
-    FE-->>User: 「您的夹克退货已发起（余额 ¥89.99）。<br/>以下有 2 款有现货的保暖款式……」
+    Customer->>API: GET /api/returns/operations/{operation_id}
+    API->>DB: 按本人归属查询实际回执
+    DB-->>API: 已持久结果或仍未知
+    API-->>Customer: 明确状态与下一步
 ```
+
+REST、普通工具也使用同一售后服务，但工具审批队列经 `/api/admin/hitl/requests/{id}/approve` 执行。两类入口都要求管理员决定、按原申请人身份做业务复核。后续商品、库存和价格建议是只读能力，不授予新的敏感写入权限。
+
+可追踪实现：[工作流](../agents/python/workflows/return_replace.py)、[审批恢复接口](../agents/python/orchestrator/routes/orchestration.py)、[统一事务](../agents/python/shared/after_sales/service.py)。详见[售后架构](after-sales-architecture.md)。
 
 ---
 
@@ -126,13 +73,13 @@ sequenceDiagram
 
     Note over ORCH: 意图：评论分析 +<br/>商品对比 + 定价
 
-    ORCH->>LLM: ChatAgent.run()
+    ORCH->>LLM: Agent.run()
     LLM-->>ORCH: 工具调用：call_specialist_agent<br/>（review-sentiment，「分析 Sony WH-1000XM5 的评论」）
 
     rect rgb(15, 118, 110)
         Note over ORCH,RS: A2A 调用 1：评论与情感分析
         ORCH->>RS: POST /message:send
-        RS->>LLM: ChatAgent.run()
+        RS->>LLM: Agent.run()
         LLM-->>RS: 工具：get_product_reviews(product_id)
         RS->>DB: SELECT reviews WHERE product_id<br/>ORDER BY helpful_count DESC
         DB-->>RS: 47 条评论，平均 4.6 星
@@ -154,7 +101,7 @@ sequenceDiagram
     rect rgb(13, 148, 136)
         Note over ORCH,PD: A2A 调用 2：商品发现
         ORCH->>PD: POST /message:send
-        PD->>LLM: ChatAgent.run()
+        PD->>LLM: Agent.run()
         LLM-->>PD: 工具：find_similar_products(product_id)
         PD->>DB: 基于商品向量嵌入做<br/>pgvector 相似度检索
         DB-->>PD: Bose QC Ultra、Apple AirPods Max、<br/>Sennheiser Momentum 4
@@ -170,7 +117,7 @@ sequenceDiagram
     rect rgb(217, 119, 6)
         Note over ORCH,PP: A2A 调用 3：定价与促销
         ORCH->>PP: POST /message:send
-        PP->>LLM: ChatAgent.run()
+        PP->>LLM: Agent.run()
         LLM-->>PP: 工具：get_active_deals()
         PP->>DB: SELECT promotions WHERE<br/>category 含 Electronics
         DB-->>PP: 春季数码促销进行中
@@ -214,14 +161,14 @@ sequenceDiagram
 
     Note over ORCH: 意图：订单物流查询<br/>ECommerceContextProvider 把<br/>近期订单注入上下文
 
-    ORCH->>LLM: ChatAgent.run()
+    ORCH->>LLM: Agent.run()
     Note over LLM: 上下文中已包含<br/>近期订单 —— 选中<br/>最近一笔进行中的订单
     LLM-->>ORCH: 工具调用：call_specialist_agent<br/>（order-management，「查询用户最近一笔订单的物流」）
 
     rect rgb(15, 118, 110)
         Note over ORCH,OM: A2A 调用 1：订单管理
         ORCH->>OM: POST /message:send
-        OM->>LLM: ChatAgent.run()
+        OM->>LLM: Agent.run()
         LLM-->>OM: 工具：get_user_orders()
         OM->>DB: SELECT orders WHERE user_id<br/>ORDER BY created_at DESC LIMIT 5
         DB-->>OM: 最近一笔：订单号 #a1b2c3<br/>状态：已发货，合计：¥149.99
@@ -240,7 +187,7 @@ sequenceDiagram
     rect rgb(100, 116, 139)
         Note over ORCH,IF: A2A 调用 2：库存与履约
         ORCH->>IF: POST /message:send
-        IF->>LLM: ChatAgent.run()
+        IF->>LLM: Agent.run()
         LLM-->>IF: 工具：get_tracking_status(tracking_number)
         IF->>DB: SELECT order_status_history<br/>+ 承运商信息
         DB-->>IF: 运输中，最新扫描记录在杭州转运中心
@@ -279,13 +226,13 @@ sequenceDiagram
 
     Note over ORCH: 意图：库存查询 +<br/>补货计划 + 替代品
 
-    ORCH->>LLM: ChatAgent.run()
+    ORCH->>LLM: Agent.run()
     LLM-->>ORCH: 工具调用：call_specialist_agent<br/>（inventory-fulfillment，「查询 Dyson V15 的库存与补货计划」）
 
     rect rgb(100, 116, 139)
         Note over ORCH,IF: A2A 调用 1：库存与履约
         ORCH->>IF: POST /message:send
-        IF->>LLM: ChatAgent.run()
+        IF->>LLM: Agent.run()
         LLM-->>IF: 工具：check_stock(product_id)
         IF->>DB: SELECT SUM(quantity)<br/>FROM warehouse_inventory<br/>WHERE product_id = $1
         DB-->>IF: 总库存：0 件
@@ -306,7 +253,7 @@ sequenceDiagram
     rect rgb(13, 148, 136)
         Note over ORCH,PD: A2A 调用 2：商品发现
         ORCH->>PD: POST /message:send
-        PD->>LLM: ChatAgent.run()
+        PD->>LLM: Agent.run()
         LLM-->>PD: 工具：find_similar_products(dyson_v15_id)
         PD->>DB: 基于 Dyson V15 的向量嵌入<br/>做 pgvector 相似度检索
         DB-->>PD: 按相似度排序的同类吸尘器
@@ -350,13 +297,13 @@ sequenceDiagram
 
     Note over ORCH: 意图：商品检索 +<br/>批量定价 + 按数量核库存
 
-    ORCH->>LLM: ChatAgent.run()
+    ORCH->>LLM: Agent.run()
     LLM-->>ORCH: 工具调用：call_specialist_agent<br/>（product-discovery，「筛选适合团队/办公场景的耳机与音箱」）
 
     rect rgb(13, 148, 136)
         Note over ORCH,PD: A2A 调用 1：商品发现
         ORCH->>PD: POST /message:send
-        PD->>LLM: ChatAgent.run()
+        PD->>LLM: Agent.run()
         LLM-->>PD: 工具：search_products("office headphones", category="Electronics", sort_by="rating")
         PD->>DB: SELECT products WHERE category='Electronics'<br/>AND name ILIKE '%headphone%'<br/>ORDER BY rating DESC
         DB-->>PD: 评分最高的耳机
@@ -375,7 +322,7 @@ sequenceDiagram
     rect rgb(217, 119, 6)
         Note over ORCH,PP: A2A 调用 2：定价与促销
         ORCH->>PP: POST /message:send
-        PP->>LLM: ChatAgent.run()
+        PP->>LLM: Agent.run()
         LLM-->>PP: 工具：check_bundle_eligibility(product_ids)
         PP->>DB: SELECT promotions WHERE type='bundle'<br/>AND rules 匹配商品分类
         DB-->>PP: 「数码组合购」促销进行中<br/>满 3 件：9 折
@@ -397,7 +344,7 @@ sequenceDiagram
     rect rgb(100, 116, 139)
         Note over ORCH,IF: A2A 调用 3：库存与履约
         ORCH->>IF: POST /message:send
-        IF->>LLM: ChatAgent.run()
+        IF->>LLM: Agent.run()
         LLM-->>IF: 工具：get_warehouse_availability(product_ids)
         IF->>DB: SELECT warehouse_inventory<br/>逐商品查询所有仓库
         DB-->>IF: 各仓库各商品的库存量
@@ -424,7 +371,7 @@ sequenceDiagram
 
 | 流程 | 涉及智能体 | 关键模式 |
 |------|----------------|-------------|
-| **退货与换购** | 订单管理 -> 商品发现 -> 库存 -> 定价 | 顺序链：先执行操作（退货），再检索、再核对、最后优化 |
+| **退货与换购** | 固定退货工作流 + 共享业务服务 | 资格、必要审批、复核与申请回执；后续建议是只读，不代表退款到账 |
 | **购买前调研** | 评论与情感分析 -> 商品发现 -> 定价 | 并行调研：汇集口碑、替代品与优惠 |
 | **我的订单到哪了** | 订单管理 -> 库存与履约 | 聚焦式：先取订单数据，再取承运与送达状态 |
 | **缺货提醒** | 库存与履约 -> 商品发现 | 兜底方案：先查库存，不可得时给出替代品 |

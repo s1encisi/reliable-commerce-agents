@@ -113,6 +113,50 @@ async def _run_agent_native_stream(
             metadata_box["_maf_usage"] = dict(usage)
 
 
+async def _request_history(request: Request, body: dict) -> list[dict] | None:
+    """所有A2A入口读同一权威epoch；message是模型参数，不作为状态更新输入。"""
+    from uuid import UUID
+
+    from shared.context_pipeline import ContextEpochMismatchError, specialist_context
+
+    history = body.get("history")
+    session_id = request.headers.get("x-session-id", "")
+    value = request.headers.get("x-context-epoch")
+    if not session_id:
+        if value is not None:
+            raise ContextEpochMismatchError("版本化上下文需要有效的会话标识")
+        return history
+    try:
+        expected_epoch = int(value) if value is not None else None
+        if expected_epoch is not None and expected_epoch < 0:
+            raise ValueError
+    except ValueError as exc:
+        raise ContextEpochMismatchError("会话版本标识无效") from exc
+    try:
+        UUID(session_id)
+    except ValueError as exc:
+        if expected_epoch is not None:
+            raise ContextEpochMismatchError("版本化上下文需要有效的会话UUID") from exc
+        # 旧A2A调用方可使用不透明会话标签；它不能索引PostgreSQL会话，
+        # 因而仅沿用调用方显式提供的不可信history，绝不进入权威状态读取。
+        return history
+    if not history and not body.get("context_supplied", False):
+        history = await _rehydrate_history_from_session(session_id)
+    return await specialist_context(session_id, history, expected_epoch=expected_epoch)
+
+
+def _context_error(exc: Exception) -> JSONResponse | None:
+    from shared.context_pipeline import ContextEpochMismatchError, ContextNeedsInputError, ContextOverflowError
+
+    if isinstance(exc, ContextEpochMismatchError):
+        return JSONResponse({"error": str(exc), "outcome": "CONTEXT_CHANGED"}, status_code=409)
+    if isinstance(exc, (ContextNeedsInputError, ContextOverflowError)):
+        return JSONResponse({"error": str(exc), "outcome": "NEEDS_INPUT"}, status_code=422)
+    if isinstance(exc, PermissionError):
+        return JSONResponse({"error": "无法访问该会话"}, status_code=403)
+    return None
+
+
 # ─────────────────────── Session rehydration ──────────────────────
 
 
@@ -228,6 +272,11 @@ def create_agent_app(
 
     app = FastAPI(title=agent_name, lifespan=lifespan)
 
+    # 在 ASGI 首次构建中间件链前安装；启动回调负责初始化导出器。
+    from shared.telemetry import instrument_fastapi
+
+    instrument_fastapi(app)
+
     @app.get("/health")
     async def health():
         return {"status": "ok", "agent": agent_name, "port": port}
@@ -251,11 +300,7 @@ def create_agent_app(
 
             # 优先使用旧 A2A 调用方转发的历史；未提供时，
             # 通过会话标识从 PostgreSQL 恢复。
-            history = body.get("history", None)
-            if not history and not body.get("context_supplied", False):
-                session_id = request.headers.get("x-session-id", "")
-                if session_id:
-                    history = await _rehydrate_history_from_session(session_id)
+            history = await _request_history(request, body)
 
             from shared.agent_observability import get_steps, reset_steps
             from shared.execution_policy import current_policy_denials
@@ -284,6 +329,9 @@ def create_agent_app(
             }
 
         except Exception as exc:
+            context_error = _context_error(exc)
+            if context_error is not None:
+                return context_error
             from shared.campaign_budget import BudgetError
 
             cause = exc
@@ -317,12 +365,11 @@ def create_agent_app(
                     iter(["data: [ERROR: no message]\n\n"]),
                     media_type="text/event-stream",
                 )
-            history = body.get("history", None)
-            if not history and not body.get("context_supplied", False):
-                session_id = request.headers.get("x-session-id", "")
-                if session_id:
-                    history = await _rehydrate_history_from_session(session_id)
-        except Exception:
+            history = await _request_history(request, body)
+        except Exception as exc:
+            context_error = _context_error(exc)
+            if context_error is not None:
+                return context_error
             logger.exception("%s.message_stream_parse_error", agent_name)
             return StreamingResponse(
                 iter(["data: [ERROR: bad request]\n\n"]),

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ApprovalCard } from "./approval-card";
 import { api } from "@/lib/api";
@@ -16,8 +16,14 @@ const RESUMED = {
 };
 
 describe("ApprovalCard", () => {
-  it("运行暂停期间同时提供两种决定", () => {
+  it("客户仅能查看等待状态，不能批准自己的退货", () => {
     render(<ApprovalCard runId="run-1" onResolved={() => {}} />);
+    expect(screen.getByText(/等待管理员审批/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "查看运行状态" })).toHaveAttribute("href", "/runs");
+    expect(screen.queryByRole("button", { name: /批准|拒绝/ })).not.toBeInTheDocument();
+  });
+  it("运行暂停期间同时提供两种决定", () => {
+    render(<ApprovalCard canApprove runId="run-1" onResolved={() => {}} />);
 
     expect(screen.getByRole("button", { name: /批准/ })).toBeEnabled();
     expect(screen.getByRole("button", { name: /拒绝/ })).toBeEnabled();
@@ -27,7 +33,7 @@ describe("ApprovalCard", () => {
     const resume = vi.spyOn(api, "resumeRun").mockResolvedValue(RESUMED);
     const onResolved = vi.fn();
     const user = userEvent.setup();
-    render(<ApprovalCard runId="run-1" onResolved={onResolved} />);
+    render(<ApprovalCard canApprove runId="run-1" onResolved={onResolved} />);
 
     await user.click(screen.getByRole("button", { name: /批准/ }));
 
@@ -46,7 +52,7 @@ describe("ApprovalCard", () => {
     // 会让这次运行永远停在暂停状态。
     const resume = vi.spyOn(api, "resumeRun").mockResolvedValue({ ...RESUMED, approved: false });
     const user = userEvent.setup();
-    render(<ApprovalCard runId="run-9" onResolved={() => {}} />);
+    render(<ApprovalCard canApprove runId="run-9" onResolved={() => {}} />);
 
     await user.click(screen.getByRole("button", { name: /拒绝/ }));
 
@@ -57,7 +63,7 @@ describe("ApprovalCard", () => {
     // 一个决定作出后还留着可点按钮，会引诱用户对已经翻篇的运行再次审批。
     vi.spyOn(api, "resumeRun").mockResolvedValue(RESUMED);
     const user = userEvent.setup();
-    render(<ApprovalCard runId="run-1" onResolved={() => {}} />);
+    render(<ApprovalCard canApprove runId="run-1" onResolved={() => {}} />);
 
     await user.click(screen.getByRole("button", { name: /批准/ }));
 
@@ -73,12 +79,12 @@ describe("ApprovalCard", () => {
       })
     );
     const user = userEvent.setup();
-    render(<ApprovalCard runId="run-1" onResolved={() => {}} />);
+    render(<ApprovalCard canApprove runId="run-1" onResolved={() => {}} />);
 
     await user.click(screen.getByRole("button", { name: /批准/ }));
 
     expect(screen.getByRole("button", { name: /拒绝/ })).toBeDisabled();
-    release(RESUMED);
+    await act(async () => { release(RESUMED); });
   });
 
   it("恢复失败时展示错误并保持可操作", async () => {
@@ -86,11 +92,11 @@ describe("ApprovalCard", () => {
     // 这次运行会一直停在暂停状态而毫无提示。
     vi.spyOn(api, "resumeRun").mockRejectedValue(new Error("checkpoint not found"));
     const user = userEvent.setup();
-    render(<ApprovalCard runId="run-1" onResolved={() => {}} />);
+    render(<ApprovalCard canApprove runId="run-1" onResolved={() => {}} />);
 
     await user.click(screen.getByRole("button", { name: /批准/ }));
 
-    await waitFor(() => expect(screen.getByText(/checkpoint not found/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/未找到可恢复的检查点/)).toBeInTheDocument());
     expect(screen.getByRole("button", { name: /批准/ })).toBeEnabled();
   });
 
@@ -98,11 +104,11 @@ describe("ApprovalCard", () => {
     vi.spyOn(api, "resumeRun").mockRejectedValue(new Error("nope"));
     const onResolved = vi.fn();
     const user = userEvent.setup();
-    render(<ApprovalCard runId="run-1" onResolved={onResolved} />);
+    render(<ApprovalCard canApprove runId="run-1" onResolved={onResolved} />);
 
     await user.click(screen.getByRole("button", { name: /批准/ }));
 
-    await waitFor(() => expect(screen.getByText(/nope/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/无法提交该决定/)).toBeInTheDocument());
     expect(onResolved).not.toHaveBeenCalled();
   });
 });

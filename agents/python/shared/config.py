@@ -69,6 +69,9 @@ class Settings(BaseSettings):
     # 数据库配置
     DATABASE_URL: str = "postgresql://ecommerce:ecommerce_secret@localhost:5432/ecommerce_agents"
 
+    # 仅用于本地合成履约实验：入队不是供应商已受理，更不是退款成功。
+    FULFILLMENT_SIMULATION_ENABLED: bool = False
+
     # Redis 配置
     REDIS_URL: str = "redis://localhost:6379"
 

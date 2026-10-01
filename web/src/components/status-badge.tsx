@@ -11,7 +11,8 @@ const STATUS_CONFIG: Record<string, { label: string; tone: SemanticTone; icon: L
   shipped: { label: "已发货", tone: "warning", icon: Truck },
   out_for_delivery: { label: "配送中", tone: "warning", icon: Truck },
   delivered: { label: "已送达", tone: "success", icon: CheckCircle },
-  returned: { label: "已退货", tone: "warning", icon: RotateCcw },
+  // 当前 returned 写入发生在退货申请创建时，不代表商品已经退回或退款到账。
+  returned: { label: "已申请退货", tone: "warning", icon: RotateCcw },
   cancelled: { label: "已取消", tone: "destructive", icon: XCircle },
 };
 

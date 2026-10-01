@@ -37,6 +37,7 @@ class RunContext:
 
     history: list[dict[str, str]] = field(default_factory=list)
     conversation_id: str | None = None
+    context_prepared: bool = False
 
 
 class OrchestrationMode(Protocol):

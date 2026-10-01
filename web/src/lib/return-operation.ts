@@ -10,7 +10,7 @@ export const returnOperationSchema = z.object({
   operation_id: z.string().uuid().optional(),
   return_id: z.string().uuid().optional(),
   order_id: z.string().uuid().optional(),
-  outcome: z.enum(["READY", "NEEDS_INPUT", "NEEDS_REVIEW", "AWAITING_APPROVAL", "SUCCEEDED", "REJECTED", "RETRYABLE_FAILURE", "UNKNOWN"]).optional(),
+  outcome: z.enum(["READY", "NEEDS_INPUT", "NEEDS_REVIEW", "AWAITING_APPROVAL", "SUCCEEDED", "REJECTED", "RETRYABLE_FAILURE", "UNKNOWN", "FAILED_FINAL"]).optional(),
   status: z.string().optional(),
   success: z.boolean().optional(),
   message: z.string().optional(),

@@ -291,3 +291,58 @@ async def test_hybrid_respects_limit(_pool: Any, _stub_embeddings: None) -> None
     results = await pd_tools.semantic_search(query="headphones", limit=2)
 
     assert len(results) == 2
+
+
+async def test_hybrid_hard_filters_apply_to_both_arms(_pool, _stub_embeddings):
+    await _seed_catalog(_pool)
+    await _seed_embedding(_pool, KETTLE, _unit_vector(0))
+    await _seed_embedding(_pool, EXACT, _unit_vector(0))
+    kwargs = dict(query="耳机", category="电子产品", min_price=100, max_price=300, min_rating=4.4)
+    lexical = await pd_tools.search_products(**kwargs)
+    hybrid = await pd_tools.semantic_search(**kwargs)
+    assert [row["id"] for row in lexical] == [str(ANC)]
+    assert [row["id"] for row in hybrid] == [str(ANC)]
+    assert hybrid[0]["retrieval_mode"] == "hybrid"
+
+
+async def test_lexical_fallback_preserves_all_hard_filters(_pool, monkeypatch):
+    from shared.factory import EmbeddingsUnavailableError
+
+    await _seed_catalog(_pool)
+
+    def unavailable():
+        raise EmbeddingsUnavailableError("no embedding provider")
+
+    monkeypatch.setattr(pd_tools, "create_embedding_client", unavailable)
+    rows = await pd_tools.semantic_search(
+        query="耳机", category="Electronics", min_price=100, max_price=300, min_rating=4.4
+    )
+    assert [row["id"] for row in rows] == [str(ANC)]
+    assert rows[0]["retrieval_mode"] == "lexical" and rows[0]["embedding_available"] is False
+
+
+async def test_hybrid_no_eligible_product_returns_empty(_pool, _stub_embeddings):
+    await _seed_catalog(_pool)
+    await _seed_embedding(_pool, KETTLE, _unit_vector(0))
+    assert await pd_tools.semantic_search(query="耳机", max_price=1) == []
+
+
+@pytest.mark.parametrize(
+    "filters",
+    [
+        {"max_price": float("nan")},
+        {"min_price": -1},
+        {"max_price": float("inf")},
+        {"min_price": 10, "max_price": 5},
+        {"min_rating": 6},
+    ],
+)
+async def test_invalid_filters_fail_before_embedding_call(_pool, monkeypatch, filters):
+    def unexpected():
+        raise AssertionError("invalid input must not spend an embedding call")
+
+    monkeypatch.setattr(pd_tools, "create_embedding_client", unexpected)
+    with pytest.raises(ValueError):
+        await pd_tools.semantic_search(query="earphones", **filters)
+    with pytest.raises(ValueError):
+        await pd_tools.search_products(query="earphones", **filters)

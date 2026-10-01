@@ -4,7 +4,7 @@ from orchestrator.events import OrchestrationEvent
 from orchestrator.modes.base import RunContext
 from orchestrator.modes.decision_router import DecisionRouterMode
 from shared.jev.async_client import Decision
-from shared.task_state import successful_receipt
+from shared.task_acceptance import StepAcceptance, evidence_ids
 
 
 async def test_write_intent_returns_to_original_approval_path(monkeypatch):
@@ -39,7 +39,7 @@ async def test_write_intent_returns_to_original_approval_path(monkeypatch):
 
 
 def test_denied_write_is_not_completed_because_a_query_succeeded():
-    assert not successful_receipt(
+    assert not evidence_ids(
         {"requires_original_route": True, "steps": [{"status": "success", "result_confirmed": True}]},
-        "successful_tool_result",
+        StepAcceptance(kind="product_selection"),
     )

@@ -1,0 +1,389 @@
+{
+  "created_at_utc": "2026-10-01T05:51:20.622219+00:00",
+  "scope": "Local OTLP integration, real HTTP and SQL; separate synthetic cross-service read probe. No LLM/payment.",
+  "collector_image": "ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.123.0",
+  "collector_image_id": "sha256:b6be1d9c10123821bebc952c62642abc36fe93c39c143faabc14e0e05065695a",
+  "collector_repo_digests": [
+    "ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib@sha256:b6be1d9c10123821bebc952c62642abc36fe93c39c143faabc14e0e05065695a"
+  ],
+  "source_sha256": {
+    "scripts/verify_local_telemetry.py": "5d1cce9f246a1fc7e5357d122cd1b1c9506e0575994219bc746529ddc89972c7",
+    "docker-compose.telemetry-check.yml": "d411a7ed0cb5f67a8a5cb13b956d6a29a4510791aa51de230825f695aee515dc",
+    "docker/observability/local-verification.yml": "c0ac22d67b4cc062d6480bd85a447a778b8389016de07bfd55f93e3d5e78e5f7",
+    "agents/python/orchestrator/main.py": "700a6b61aaa4858fe1cb6870f1d45f6828f1e7c93b73263f89b56749a61d5697",
+    "agents/python/shared/agent_host.py": "2f90641f9a76761684ac8319d30aa05ccd64873f131f0e7de8a7f6d6b2554780",
+    "agents/python/shared/telemetry.py": "413a230c9f51ff438230b9ad5e4af4165831a8a005fef510073d4e69e6bbe8aa",
+    "agents/python/shared/task_observability.py": "93f38d29ed112ae4dba4b9cf916f689725c4fff1dfac92341ae20183b848e58b",
+    "agents/python/shared/task_state.py": "34280eecede980e2aa5b157778ab5322ac15b72c135ca1d10292a209d1f0a218",
+    "agents/python/shared/task_acceptance.py": "af76f3efbbef8c5d7910958172dbb5562877bea34b6be084d9c6bc5d803ea814",
+    "agents/python/orchestrator/routes/tasks.py": "f23f1f345cd8b75c52b7d9b0a996336500173cfbdb2c4660ead22bdaa5b056de",
+    "agents/python/shared/config.py": "efe765bc337c29d9b3c1289b1622bb7e2c74b4e8d6dbcaf8bc24730c1e9a1340",
+    "agents/python/uv.lock": "e982ee0be9a2b3474c1e4a5c28e0f2f0fc06d3d2ba2a44afafc226aca416cc24"
+  },
+  "business_http_to_sql": [
+    {
+      "phase": "create",
+      "trace_id": "1c33a63291cbda297050280074251a8f",
+      "http_status": 200,
+      "server_spans": 1,
+      "task_spans": 1,
+      "sql_spans": 2,
+      "real_parent_child_chain": true,
+      "example_chain": [
+        {
+          "name": "POST /api/tasks",
+          "service": "ecommerce.orchestrator",
+          "span_id": "a1ed1c2fa440ce16",
+          "parent_span_id": "d512d03acdb2a9a9",
+          "instrumentation_scope": "opentelemetry.instrumentation.fastapi",
+          "kind": 2
+        },
+        {
+          "name": "task.create",
+          "service": "ecommerce.orchestrator",
+          "span_id": "966c18d819e78299",
+          "parent_span_id": "a1ed1c2fa440ce16",
+          "instrumentation_scope": "commerce.tasks",
+          "kind": 1
+        },
+        {
+          "name": "INSERT",
+          "service": "ecommerce.orchestrator",
+          "span_id": "7813f221725a5196",
+          "parent_span_id": "966c18d819e78299",
+          "instrumentation_scope": "opentelemetry.instrumentation.asyncpg",
+          "kind": 3
+        }
+      ]
+    },
+    {
+      "phase": "plan",
+      "trace_id": "979c3f4fa9fb252157d8f86c55499253",
+      "http_status": 200,
+      "server_spans": 1,
+      "task_spans": 1,
+      "sql_spans": 10,
+      "real_parent_child_chain": true,
+      "example_chain": [
+        {
+          "name": "POST /api/tasks/{task_id}/plan",
+          "service": "ecommerce.orchestrator",
+          "span_id": "4eb7cc5ac6524267",
+          "parent_span_id": "3a3a5aea6dc4a425",
+          "instrumentation_scope": "opentelemetry.instrumentation.fastapi",
+          "kind": 2
+        },
+        {
+          "name": "task.plan",
+          "service": "ecommerce.orchestrator",
+          "span_id": "787a935fc7f8481d",
+          "parent_span_id": "4eb7cc5ac6524267",
+          "instrumentation_scope": "commerce.tasks",
+          "kind": 1
+        },
+        {
+          "name": "SELECT",
+          "service": "ecommerce.orchestrator",
+          "span_id": "1a84d9f4090de460",
+          "parent_span_id": "787a935fc7f8481d",
+          "instrumentation_scope": "opentelemetry.instrumentation.asyncpg",
+          "kind": 3
+        }
+      ]
+    },
+    {
+      "phase": "next",
+      "trace_id": "f578d2b5e135abd5473ae82dcc06b426",
+      "http_status": 200,
+      "server_spans": 1,
+      "task_spans": 1,
+      "sql_spans": 17,
+      "real_parent_child_chain": true,
+      "example_chain": [
+        {
+          "name": "POST /api/tasks/{task_id}/next",
+          "service": "ecommerce.orchestrator",
+          "span_id": "4eb9b10c89ea0045",
+          "parent_span_id": "a5be1a0cae12b2ce",
+          "instrumentation_scope": "opentelemetry.instrumentation.fastapi",
+          "kind": 2
+        },
+        {
+          "name": "task.next",
+          "service": "ecommerce.orchestrator",
+          "span_id": "576e8ae8019a7610",
+          "parent_span_id": "4eb9b10c89ea0045",
+          "instrumentation_scope": "commerce.tasks",
+          "kind": 1
+        },
+        {
+          "name": "SELECT",
+          "service": "ecommerce.orchestrator",
+          "span_id": "6f15b6b7e0ce37d3",
+          "parent_span_id": "576e8ae8019a7610",
+          "instrumentation_scope": "opentelemetry.instrumentation.asyncpg",
+          "kind": 3
+        }
+      ]
+    },
+    {
+      "phase": "next",
+      "trace_id": "2f4d84369e25c311fddc1ad9f0dc718e",
+      "http_status": 200,
+      "server_spans": 1,
+      "task_spans": 1,
+      "sql_spans": 19,
+      "real_parent_child_chain": true,
+      "example_chain": [
+        {
+          "name": "POST /api/tasks/{task_id}/next",
+          "service": "ecommerce.orchestrator",
+          "span_id": "f190f77389b28de3",
+          "parent_span_id": "7deacc348a2c7e17",
+          "instrumentation_scope": "opentelemetry.instrumentation.fastapi",
+          "kind": 2
+        },
+        {
+          "name": "task.next",
+          "service": "ecommerce.orchestrator",
+          "span_id": "eb25266b8a3dedfb",
+          "parent_span_id": "f190f77389b28de3",
+          "instrumentation_scope": "commerce.tasks",
+          "kind": 1
+        },
+        {
+          "name": "SELECT",
+          "service": "ecommerce.orchestrator",
+          "span_id": "eb5e4e9821f6317d",
+          "parent_span_id": "eb25266b8a3dedfb",
+          "instrumentation_scope": "opentelemetry.instrumentation.asyncpg",
+          "kind": 3
+        }
+      ]
+    }
+  ],
+  "cross_service_read_probe": {
+    "trace_id": "14bc7ee919effa1e06b8543f0b784b6c",
+    "scope": "synthetic agent-card GET, not model/tool execution",
+    "real_parent_child_chain": true,
+    "example_chain": [
+      {
+        "name": "verification.agent_card_read",
+        "service": "ecommerce.telemetry-verifier",
+        "span_id": "97aa995a799820e9",
+        "parent_span_id": "",
+        "instrumentation_scope": "commerce.verification",
+        "kind": 1
+      },
+      {
+        "name": "GET",
+        "service": "ecommerce.telemetry-verifier",
+        "span_id": "66a5537db6c39a2a",
+        "parent_span_id": "97aa995a799820e9",
+        "instrumentation_scope": "opentelemetry.instrumentation.httpx",
+        "kind": 3
+      },
+      {
+        "name": "GET /.well-known/agent-card.json",
+        "service": "ecommerce.product-discovery",
+        "span_id": "872da0f413186f6d",
+        "parent_span_id": "66a5537db6c39a2a",
+        "instrumentation_scope": "opentelemetry.instrumentation.fastapi",
+        "kind": 2
+      }
+    ]
+  },
+  "task_metrics": [
+    {
+      "name": "commerce.task.requests",
+      "attribute_keys": [
+        "phase",
+        "status_class"
+      ],
+      "phase": "create",
+      "status_class": "2xx",
+      "count_or_value": "1"
+    },
+    {
+      "name": "commerce.task.requests",
+      "attribute_keys": [
+        "phase",
+        "status_class"
+      ],
+      "phase": "plan",
+      "status_class": "2xx",
+      "count_or_value": "1"
+    },
+    {
+      "name": "commerce.task.requests",
+      "attribute_keys": [
+        "phase",
+        "status_class"
+      ],
+      "phase": "next",
+      "status_class": "2xx",
+      "count_or_value": "2"
+    },
+    {
+      "name": "commerce.task.duration",
+      "attribute_keys": [
+        "phase",
+        "status_class"
+      ],
+      "phase": "create",
+      "status_class": "2xx",
+      "count_or_value": "1"
+    },
+    {
+      "name": "commerce.task.duration",
+      "attribute_keys": [
+        "phase",
+        "status_class"
+      ],
+      "phase": "plan",
+      "status_class": "2xx",
+      "count_or_value": "1"
+    },
+    {
+      "name": "commerce.task.duration",
+      "attribute_keys": [
+        "phase",
+        "status_class"
+      ],
+      "phase": "next",
+      "status_class": "2xx",
+      "count_or_value": "2"
+    }
+  ],
+  "task_metric_counts_verified": true,
+  "prometheus_task_metrics_present": true,
+  "privacy": {
+    "task_marker_absent": true,
+    "bearer_text_absent": true,
+    "this_access_token_absent": true,
+    "task_metric_labels_low_cardinality": true,
+    "synthetic_email_in_raw_auth_logs": true,
+    "note": "Synthetic auth email in logs is reported separately; task UUIDs may appear on spans, not metric labels."
+  },
+  "genai_operation_spans": 0,
+  "exported_spans": 95,
+  "restoration_verified": true,
+  "restored_otel_disabled": {
+    "orchestrator": true,
+    "product-discovery": true,
+    "order-management": true,
+    "pricing-promotions": true,
+    "review-sentiment": true,
+    "inventory-fulfillment": true
+  },
+  "restored_services": [
+    {
+      "service": "db",
+      "state": "running",
+      "health": "healthy",
+      "published": []
+    },
+    {
+      "service": "inventory-fulfillment",
+      "state": "running",
+      "health": "healthy",
+      "published": []
+    },
+    {
+      "service": "orchestrator",
+      "state": "running",
+      "health": "healthy",
+      "published": []
+    },
+    {
+      "service": "order-management",
+      "state": "running",
+      "health": "healthy",
+      "published": []
+    },
+    {
+      "service": "pricing-promotions",
+      "state": "running",
+      "health": "healthy",
+      "published": []
+    },
+    {
+      "service": "product-discovery",
+      "state": "running",
+      "health": "healthy",
+      "published": []
+    },
+    {
+      "service": "redis",
+      "state": "running",
+      "health": "healthy",
+      "published": []
+    },
+    {
+      "service": "review-sentiment",
+      "state": "running",
+      "health": "healthy",
+      "published": []
+    },
+    {
+      "service": "web",
+      "state": "running",
+      "health": "healthy",
+      "published": [
+        {
+          "URL": "127.0.0.1",
+          "TargetPort": 3000,
+          "PublishedPort": 3020,
+          "Protocol": "tcp"
+        }
+      ]
+    }
+  ],
+  "raw_capture_sha256": {
+    "collector.log": "91a4e7f94b2ed25b906796e721db4a2b7b6db5e725c5897a40ee56e072688bf5",
+    "logs.jsonl": "b45e85fbd9f6320a74966ad462ccce38ba28b9bf48fd60d8024b448516acf0b5",
+    "metrics.jsonl": "1111260ae9ebb96b95b688c88205a1ebdfebaf6c7cfa60424cdab1ced89f54a7",
+    "prometheus.txt": "7d61c596ff2413642d2bc991fbadccfc3e6bb97caf58fc1a1deecfc1c25d98e4",
+    "traces.jsonl": "01bfc7aeb6c4f431d3f4ed55a74fce65c592bde519ad0db9c0415f708f5d062c"
+  },
+  "passed": true,
+  "task": {
+    "task_id": "6e3740f0-2c02-4664-b845-535d4eed55d8",
+    "task_status": "needs_review",
+    "plan_source": "deterministic_demo",
+    "task_phases": [
+      {
+        "phase": "create",
+        "trace_id": "1c33a63291cbda297050280074251a8f",
+        "http_status": 200
+      },
+      {
+        "phase": "plan",
+        "trace_id": "979c3f4fa9fb252157d8f86c55499253",
+        "http_status": 200
+      },
+      {
+        "phase": "next",
+        "trace_id": "f578d2b5e135abd5473ae82dcc06b426",
+        "http_status": 200
+      },
+      {
+        "phase": "next",
+        "trace_id": "2f4d84369e25c311fddc1ad9f0dc718e",
+        "http_status": 200
+      }
+    ]
+  },
+  "before_database_counts": {
+    "orders": 8,
+    "returns": 5,
+    "tool_approval_requests": 6,
+    "agent_tasks": 41
+  },
+  "after_database_counts": {
+    "orders": 8,
+    "returns": 5,
+    "tool_approval_requests": 6,
+    "agent_tasks": 42
+  }
+}

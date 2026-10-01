@@ -27,7 +27,7 @@ test("审批先于创建，随后由顾客确认收货", async ({ page, browser 
   page.on("pageerror", (error) => runtimeErrors.push(error.message));
   await login(page, "customer@example.test");
   await requestReturn(page, normal);
-  await expect(page.getByRole("status")).toContainText("submitted for approval");
+  await expect(page.getByRole("status")).toContainText("等待管理员审批");
   await expect(page.getByText("退货信息", { exact: true })).toHaveCount(0);
   await page.screenshot({ path: "/tmp/reliable-commerce-pending.png", fullPage: false });
 
@@ -39,11 +39,11 @@ test("审批先于创建，随后由顾客确认收货", async ({ page, browser 
   await expect(reviewer.getByText(normal, { exact: false })).toBeVisible();
   await reviewer.screenshot({ path: "/tmp/reliable-commerce-approval.png", fullPage: false });
   await reviewer.getByRole("button", { name: "批准", exact: true }).first().click();
-  await expect(reviewer.getByText("Return request created. No refund has been issued.", { exact: false }).first()).toBeVisible();
+  await expect(reviewer.getByText("退货申请已创建，尚未发放退款。", { exact: false }).first()).toBeVisible();
 
   await page.getByRole("button", { name: "查看请求状态", exact: true }).click();
   await expect(page.getByText("退货信息", { exact: true })).toBeVisible();
-  await expect(page.getByText(/View the label in your order details/)).toBeVisible();
+  await expect(page.getByText("原路退回", { exact: true })).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`/orders/${normal}`));
   expect(await page.title()).toBeTruthy();
   expect(runtimeErrors).toEqual([]);
@@ -53,6 +53,7 @@ test("审批先于创建，随后由顾客确认收货", async ({ page, browser 
   await expect(page.getByText("退货信息", { exact: true })).toBeVisible();
   await page.getByText("退货信息", { exact: true }).scrollIntoViewIfNeeded();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  expect(await page.locator("main").evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
   await page.screenshot({ path: "/tmp/reliable-commerce-mobile.png", fullPage: true });
   await reviewerContext.close();
 });
@@ -70,14 +71,16 @@ test("首次响应丢失后仍保留操作 ID 以便查询状态", async ({ page
   await requestReturn(page, lost);
   await expect.poll(() => intercepted).toBe(true);
   await page.unroute(`**/api/orders/${lost}/return`);
+  await page.reload();
+  await expect(page.getByRole("region", { name: "退货申请状态" })).toBeVisible();
   await page.getByRole("button", { name: "查看请求状态", exact: true }).click();
-  await expect(page.getByRole("status")).toContainText("submitted for approval");
+  await expect(page.getByRole("status")).toContainText("等待管理员审批");
   await expect(page.getByText("退货信息", { exact: true })).toHaveCount(0);
 });
 
 test("缺少送达凭证时给出复核提示，而不是成功 toast", async ({ page }) => {
   await login(page, "customer@example.test");
   await requestReturn(page, missing);
-  await expect(page.getByRole("status")).toContainText("human verification");
+  await expect(page.getByRole("status")).toContainText("人工核实");
   await expect(page.getByText("退货信息", { exact: true })).toHaveCount(0);
 });

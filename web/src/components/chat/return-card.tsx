@@ -5,6 +5,7 @@ import { Download, RotateCcw, Package, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { refundMethodLabel, returnStatusLabel } from "@/lib/business-copy";
 import { apiUrl } from "@/lib/api";
 
 interface ReturnData {
@@ -27,7 +28,7 @@ export function ChatReturnCard({ data }: { data: ReturnData }) {
         </div>
         {data.status && (
           <Badge variant="outline" className="border-warning/30 bg-warning/10 text-warning text-xs">
-            {data.status}
+            {returnStatusLabel(data.status)}
           </Badge>
         )}
       </div>
@@ -55,22 +56,22 @@ export function ChatReturnCard({ data }: { data: ReturnData }) {
       <div className="space-y-1.5 text-sm">
         {data.refund_amount != null && (
           <div className="flex justify-between">
-            <span className="text-muted-foreground">退款金额</span>
+            <span className="text-muted-foreground">申请退款金额</span>
             <span className="font-medium text-success">¥{data.refund_amount.toFixed(2)}</span>
           </div>
         )}
         {data.refund_method && (
           <div className="flex justify-between">
             <span className="text-muted-foreground">退款方式</span>
-            <span className="text-foreground">{data.refund_method.replace(/_/g, " ")}</span>
+            <span className="text-foreground">{refundMethodLabel(data.refund_method)}</span>
           </div>
         )}
         {data.refund_timeline && (
           <div className="flex justify-between">
-            <span className="text-muted-foreground">到账时间</span>
+            <span className="text-muted-foreground">退款进度</span>
             <span className="flex items-center gap-1 text-foreground">
               <Clock className="size-3" />
-              {data.refund_timeline}
+              {/[\u3400-\u9fff]/.test(data.refund_timeline) ? data.refund_timeline : "退货申请已创建，退款尚未发放。"}
             </span>
           </div>
         )}

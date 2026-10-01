@@ -47,7 +47,14 @@ async def test_interrupted_readonly_step_can_be_explicitly_recovered(owner):
     plan = TaskPlan(
         goal=task["goal"],
         constraints=task["constraints"],
-        steps=[{"id": "stock", "service": "inventory-fulfillment", "instruction": "查库存"}],
+        steps=[
+            {
+                "id": "stock",
+                "service": "inventory-fulfillment",
+                "instruction": "查库存",
+                "acceptance": {"kind": "inventory_check"},
+            }
+        ],
     )
     await save_plan(task["id"], claimed["revision"], plan)
     ready = await load_task(task["id"])

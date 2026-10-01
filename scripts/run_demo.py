@@ -38,6 +38,11 @@ def demo_environment() -> dict[str, str]:
         **values,
         "REDIS_URL": "redis://localhost:56379",
         "LLM_PROVIDER": "replay",
+        "APP_ENV_FILE": "/dev/null",
+        "DEEPSEEK_API_KEY": "",
+        "MOONSHOT_API_KEY": "",
+        "TYPESAFE_API_KEY": "",
+        "DECISION_ROUTING_MODE": "off",
         "RECORD": "false",
         "OPENAI_API_KEY": "",
         "AZURE_OPENAI_KEY": "",
@@ -89,12 +94,12 @@ async def initialize(reset: bool) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--reset", action="store_true", help="Reset ONLY synthetic portfolio demo data"
+        "--reset", action="store_true", help="仅重置独立演示库中的合成数据"
     )
     parser.add_argument(
         "--seed-only",
         action="store_true",
-        help="Prepare demo data without starting app processes",
+        help="仅准备演示数据，不启动应用进程",
     )
     args = parser.parse_args()
     env = demo_environment()
@@ -120,13 +125,21 @@ def main() -> None:
     subprocess.run(
         [os.sys.executable, "scripts/migrate_db.py"], cwd=ROOT, env=env, check=True
     )
+    subprocess.run(
+        [os.sys.executable, "scripts/migrate_upgrade.py"], cwd=ROOT, env=env, check=True
+    )
     if args.seed_only:
-        print("Synthetic portfolio data is ready.")
+        print("合成演示数据和任务状态结构已就绪。")
         return
     logs = ROOT / ".local/demo"
     logs.mkdir(parents=True, exist_ok=True)
     processes: list[subprocess.Popen] = []
     handles = []
+
+    def stop_apps(_signum, _frame):
+        raise KeyboardInterrupt
+
+    signal.signal(signal.SIGTERM, stop_apps)
     try:
         agents = [
             "orchestrator",
@@ -179,13 +192,15 @@ def main() -> None:
                 start_new_session=True,
             )
         )
-        print("演示地址: http://localhost:3010  | API: http://localhost:8180", flush=True)
+        print(
+            "演示地址: http://localhost:3010  | API: http://localhost:8180", flush=True
+        )
         print(
             "customer@example.test / DemoPass123!  | admin@example.test / DemoPass123!",
             flush=True,
         )
         print(
-            "未接入真实大模型：请使用「退货与换货」工作流，或访问订单 / 审批页面。Ctrl-C 可停止应用进程。",
+            "未接入真实大模型：可体验订单 / 管理员审批，或 /tasks 的离线固定示例。Ctrl-C 停止应用进程。",
             flush=True,
         )
         while all(process.poll() is None for process in processes):

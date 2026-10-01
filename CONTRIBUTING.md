@@ -1,55 +1,60 @@
 # 贡献指南
 
-感谢你的关注。本仓库是微软智能体框架（Microsoft Agent Framework，MAF）v1 多智能体模式的展示项目；
-欢迎能提升可读性、测试覆盖或演示体验的 PR。
+本仓库是基于 Microsoft Agent Framework 的 Python 电商 Agent 项目。改动应提升业务正确性、可解释性或演示体验，并保留已有数据与用户改动。
 
 ## 环境搭建
 
-```bash
-./scripts/dev.sh            # 全栈（Postgres + Redis + Jaeger + 智能体 + Web）
-./scripts/dev.ps1           # 同上，PowerShell 版（Windows，或 macOS/Linux 上的 pwsh 7）
-# 也可以按需分步：
-cd agents/python && uv sync --extra dev      # Python（用 uv，不用 pip/poetry）
-cd web && pnpm install                        # 前端（用 pnpm，不用 npm/yarn）
-```
-
-需要 Docker、`uv` 与 `pnpm`。隔离的求职作品演示与确定性测试不需要任何模型凭据。真实模型对话需要显式配置提供方；见 `docs/portfolio-demo.md`。
-
-## 约定
-
-架构见 [项目文档](docs/architecture.md)。开发约定如下：
-
-- **Python**：处处使用类型标注、`async`、`asyncpg`（不用 ORM）、`httpx`（不用
-  `requests`）、Pydantic Settings、请求状态用 ContextVars、MAF `@tool`
-  装饰器、YAML 提示词（不得硬编码提示词字符串）。用 `ruff` 做代码检查。
-- **前端**：Next.js 16 App Router、Tailwind 4 + shadcn/ui、OKLCH **主题
-  token**（绝不硬编码 slate/white —— 那会破坏暗色模式）、运行时校验用 Zod。
-  改动框架代码前先读 `node_modules/next/dist/docs/`。
-- 内部工作产物保存在仓库外，不纳入提交。
-
-## 测试（硬性要求）
-
-每一处改动都要随附测试。
-
-- **Python**：`cd agents/python && uv run pytest`。集成测试使用
-  **testcontainers**（真实 Postgres）。确定性的工作流/工具测试不发起真实模型调用；
-  真实模型测试需显式开启，且无凭据时会被跳过。CI 通过 `.coveragerc.ci` 对可单测面
-  强制覆盖率要求（本地/集成运行使用 `pyproject.toml` 中完整的 70% 门槛）。
-- **前端**：`cd web && pnpm test`（vitest）+ `pnpm exec playwright test`
-  （E2E；`ui-smoke.spec.ts` 不依赖后端）。
-
-## 完成定义（开 PR 前执行）
+需要 Python 3.12、uv、Node.js 22、pnpm 10 和 Docker。在仓库根目录同步锁定依赖：
 
 ```bash
-# Python
-cd agents/python && uv run ruff check . && uv run ruff format --check . && uv run pytest
-# 前端
-cd web && pnpm lint && pnpm exec tsc --noEmit && pnpm test && pnpm build
+uv sync --project agents/python --frozen --all-packages --extra dev
+pnpm --dir web install --frozen-lockfile
+bash scripts/demo.sh
 ```
 
-## PR
+`--all-packages` 包含两个 MCP workspace 成员，避免测试收集时缺少包。Python 使用 uv，前端使用 pnpm。隔离演示不需要模型凭据，数据和端口说明见[演示指南](docs/portfolio-demo.md)；独立容器路径见[容器展示](docs/local-showcase.md)。
 
-- 从 `main` 拉分支；保持 PR 聚焦。
-- 说明改了什么、如何验证（命令 + 结果）。
-- 行为变更时同步更新文档；补充/调整测试。
-- CI（`.github/workflows/tests.yml`）必须全绿。
+真实模型开发环境使用 `scripts/dev.sh` 或 PowerShell 版 `scripts/dev.ps1`，需单独配置提供方。不要用主数据库运行会重置数据的测试或演示种子命令。
+
+## 开发约定
+
+- **Python**：类型标注、async/await、asyncpg 原生 SQL、httpx、Pydantic Settings；可信身份保存在请求 ContextVars。工具参数不能替代认证或审批。
+- **提示词**：遵循现有 YAML 提示词配置。提示词变化可能影响模型行为，不能与界面文案翻译混作同一种验证。
+- **前端**：Next.js App Router、Tailwind、shadcn/ui 与现有主题 token；使用 Zod 验证接口结果。修改框架代码前阅读 `web/node_modules/next/dist/docs/`。
+- **变更范围**：补充行为变更所需的测试，优先验证权限、边界与恢复；不为无关文件做全仓格式化。冻结基线源码和历史结果不能为获得更好的指标而重写。
+- **记录与凭据**：内部工作产物保存在仓库外；密钥、本地环境文件和真实用户数据不提交。公开材料只保存合成数据、必要日志与脱敏截图。
+
+## 确定性验证环境
+
+在 Bash 中先设置本轮测试环境，避免自动读取私人 `.env` 或录制真实模型调用：
+
+```bash
+export APP_ENV_FILE=/dev/null ENVIRONMENT=test RECORD=false LLM_PROVIDER=replay
+export OPENAI_API_KEY= AZURE_OPENAI_KEY= AZURE_OPENAI_API_KEY=
+export DEEPSEEK_API_KEY= MOONSHOT_API_KEY= TYPESAFE_API_KEY=
+uv run --project agents/python --no-sync python -m pytest agents/python/tests -q
+```
+
+涉及数据库和 Redis 的集成测试使用真实隔离 testcontainers，保持默认 reaper 清理。真实模型试验必须另行配置并明确费用范围；跳过的测试要如实记录。用 `python -m pytest` 调用当前虚拟环境解释器，避免移动目录后的旧脚本 shebang。
+
+前端单元测试使用 Vitest；Playwright 默认不启动服务，需先运行隔离演示。`ui-smoke.spec.ts` 使用模拟接口，不能代替真实后端验收。CI 的 `.coveragerc.ci` 对限定模块设置覆盖率门槛，不代表所有 HTTP、数据库和端到端路径都经过相同覆盖验证。
+
+## 开 PR 前
+
+先运行与改动相关的测试，集成收尾时再执行必要的整体检查：
+
+```bash
+uv run --project agents/python --no-sync python -m ruff check agents/python
+uv run --project agents/python --no-sync python -m ruff format --check agents/python
+uv run --project agents/python --no-sync python -m pytest agents/python/tests -q
+pnpm --dir web lint
+pnpm --dir web exec tsc --noEmit
+pnpm --dir web test
+pnpm --dir web build
+uv run --project agents/python --no-sync python scripts/build_docs_site.py --check
+git diff --check
+```
+
+上述 Python 测试沿用前一节的隔离环境变量。评估应生成新的带日期文件，保留全部失败及旧报告；工作树未提交时记录实际源码散列，不能只写 Git HEAD。复验协议见[验证说明](docs/verification.md)。
+
+PR 从 main 建分支，说明问题、实际行为变化、验证命令与结果。行为变化同步更新公开文档和 API；远端 CI 未运行时不能仅凭配置文件声称通过。

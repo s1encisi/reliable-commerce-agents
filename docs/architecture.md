@@ -1,6 +1,6 @@
 # 架构
 
-可靠电商多智能体平台是一个基于微软智能体框架（Microsoft Agent Framework，MAF）构建的多智能体电商平台。六个专业智能体通过 A2A 协议（Agent-to-Agent，智能体间通信协议）协作，由中央客服编排器统一调度，它负责识别用户意图并把请求路由到合适的专业智能体。
+平台基于 Microsoft Agent Framework，由一个编排器与五个专业智能体组成，共六个 Python 服务。专业智能体使用项目自定义的 A2A 风格 HTTP 契约通信；编排模式、只读任务、售后事务与会话上下文有各自明确的执行边界。
 
 ---
 
@@ -89,11 +89,33 @@ graph TB
     style LLM fill:#fbbf24,stroke:#f59e0b,color:#78350f
 ```
 
+本图展示通用开发端口与可选模型/遥测依赖。独立演示使用 3010/8180–8185，容器展示只发布本机 3020；详见[演示](portfolio-demo.md)与[容器方案](local-showcase.md)。
+
+当前应用还有三条不应混为一次 LLM 路由的执行路径：
+
+```mermaid
+flowchart LR
+    API[认证后的 FastAPI 入口] --> Chat[聊天：模式分发]
+    API --> Task[只读任务：计划、版本与事实验收]
+    API --> Return[退货：业务规则与审批]
+    API --> Context[会话：目标和约束修订]
+    Task --> DB[(PostgreSQL 事实与回执)]
+    Return --> Gate[需要时管理员审批]
+    Gate --> Owner[恢复原申请人身份]
+    Owner --> DB
+    DB --> Outbox[可选：事务内写入待投递记录]
+    Outbox --> Worker[事务外 HTTP 投递与对账]
+    Worker --> Supplier[本机模拟供应商]
+```
+
+任务状态和文字目标确认见[任务工作台](task-workspace.md)；售后事务见[售后架构](after-sales-architecture.md)；履约模拟默认关闭，不接真实支付或物流。
+
+
 ---
 
 ## 2. 智能体通信模式
 
-所有用户请求都经由编排器进入。编排器识别意图，通过 A2A 调用一个或多个专业智能体，并汇总出统一的回复。
+下图展示已登录用户在默认 tool 模式、配置真实模型时的一条请求链。固定工作流、只读任务和离线演示不必经过图中的每一次模型调用。浏览器通过 Next.js 同源代理访问编排器，公开购物能力允许匿名，个人业务继续验证身份。
 
 ```mermaid
 sequenceDiagram
@@ -101,7 +123,7 @@ sequenceDiagram
     participant FE as Next.js 前端
     participant ORCH as 编排器<br/>（FastAPI :8080）
     participant LLM as OpenAI / Azure OpenAI
-    participant AGENT as 专业智能体<br/>（A2AAgentHost）
+    participant AGENT as 专业智能体<br/>（项目 create_agent_app）
     participant DB as PostgreSQL + pgvector
 
     User->>FE: 发送对话消息
@@ -109,7 +131,7 @@ sequenceDiagram
 
     Note over ORCH: JWT 校验<br/>设置 ContextVars（email、role）
 
-    ORCH->>LLM: ChatAgent.run() 携带系统提示词<br/>+ ECommerceContextProvider
+    ORCH->>LLM: Agent.run() 携带系统提示词<br/>+ ECommerceContextProvider
     Note over LLM: 意图识别<br/>工具选择
 
     LLM-->>ORCH: 工具调用：call_specialist_agent<br/>（agent_name、message）
@@ -117,7 +139,7 @@ sequenceDiagram
     ORCH->>AGENT: POST /message:send<br/>X-Agent-Secret + X-User-Email
     Note over AGENT: 认证中间件校验<br/>共享密钥并设置 ContextVars
 
-    AGENT->>LLM: ChatAgent.run() 携带<br/>专业智能体系统提示词
+    AGENT->>LLM: Agent.run() 携带<br/>专业智能体系统提示词
     Note over LLM: 选择领域工具<br/>（search、check_stock 等）
     LLM-->>AGENT: 工具调用
 
@@ -137,15 +159,15 @@ sequenceDiagram
 
 ## 3. 智能体架构
 
-每个专业智能体都遵循一致的四文件结构。编排器是唯一直接使用 FastAPI 的智能体 —— 所有专业智能体都使用 MAF A2A 库提供的 `A2AAgentHost`。
+每个专业智能体遵循 main、agent、tools 与 prompts 的模块结构。HTTP 宿主由项目的 [shared/agent_host.py](../agents/python/shared/agent_host.py) 中的 create_agent_app 创建；MAF 负责模型与工具运行，不通过 agent-framework-a2a SDK 托管服务。prompts.py 读取 YAML 提示词配置。
 
 ```mermaid
 graph TB
     subgraph AgentHost["专业智能体（例如 product_discovery/）"]
-        MAIN["main.py<br/>A2AAgentHost 入口<br/>Lifespan：遥测 + 数据库连接池"]
-        AGENTPY["agent.py<br/>create_*_agent() -> ChatAgent<br/>注册工具与上下文提供器"]
+        MAIN["main.py<br/>项目 create_agent_app 入口<br/>Lifespan：遥测 + 数据库连接池"]
+        AGENTPY["agent.py<br/>create_*_agent() -> Agent<br/>注册工具与上下文提供器"]
         TOOLS["tools.py<br/>@tool 装饰的函数<br/>领域相关的数据库查询"]
-        PROMPTS["prompts.py<br/>SYSTEM_PROMPT 常量<br/>智能体人设与指令"]
+        PROMPTS["prompts.py<br/>读取 YAML 提示词<br/>智能体人设与指令"]
     end
 
     subgraph SharedLib["shared/（跨智能体共享库）"]
@@ -205,7 +227,20 @@ graph TB
 
 ## 4. 编排器模式
 
-编排器是所有用户流量的唯一入口。它负责认证、通过 LLM 做意图识别、通过 A2A 做智能体路由，以及会话持久化。
+当前[模式注册表](../agents/python/orchestrator/modes/__init__.py)有六种模式，均由聊天接口按请求选择：
+
+| 模式 | 作用与边界 |
+| --- | --- |
+| `tool` | 默认工具路由，模型选择专业工具调用 |
+| `decision-router` | 可选结构化决策路由；策略默认 off |
+| `handoff` | MAF 处理权交接网络 |
+| `workflow:pre-purchase` | 售前固定图，包含并发检查与合并 |
+| `workflow:return-replace` | 资格检查、需要时管理员审批、退货执行与收尾 |
+| `group-chat` | 共享讨论记录的多角色圆桌 |
+
+注册数量不等于每条路径都启用真实模型。固定离线流程可直接调用工具；不同模式完成的任务和调用范围不同，不能只按耗时排名。运行图可由 `GET /api/orchestration/modes/{name}/graph` 追踪到对应模式。
+
+下图仅展开默认 tool 模式的模型路由，不是所有请求的唯一运行流程。退货工作流先检查资格，再在需要时等待管理员审批，之后才创建退货；只读任务的验收与恢复见任务工作台。
 
 ```mermaid
 flowchart TD
@@ -214,7 +249,7 @@ flowchart TD
     REJECT["401 未授权"]
     SETCTX["设置 ContextVars<br/>（email、role、session_id）"]
     LOAD["加载对话历史<br/>+ ECommerceContextProvider"]
-    CLASSIFY["LLM 意图识别<br/>经由 ChatAgent.run()"]
+    CLASSIFY["LLM 意图识别<br/>经由 Agent.run()"]
 
     SINGLE{"单一意图还是<br/>多意图？"}
 
@@ -275,7 +310,7 @@ flowchart TD
 
 ## 5. 认证流程
 
-可靠电商多智能体平台使用自包含的 JWT 认证（PyJWT + bcrypt）。没有外部身份提供方。智能体之间的调用使用共享密钥而非 JWT。
+默认 AUTH_MODE=local 使用自包含 JWT（PyJWT + bcrypt），服务间使用共享密钥。另有 AUTH_MODE=oauth 的 OAuth/RS256 路径，用户令牌和服务间令牌按配置校验。以下时序图展示默认本地模式；两种模式都不能从模型生成的工具参数取得用户身份。
 
 ### 用户认证
 
@@ -379,14 +414,14 @@ flowchart LR
     end
 
     subgraph A2A_1["商品发现智能体"]
-        PD_LLM["ChatAgent 选择工具"]
+        PD_LLM["Agent 选择工具"]
         PD_SEARCH["semantic_search()<br/>查询向量化 -> pgvector"]
         PD_FILTER["search_products()<br/>分类 + 价格过滤"]
         PD_STOCK["check_stock()<br/>交叉核对库存"]
     end
 
     subgraph A2A_2["评论与情感分析智能体"]
-        RS_LLM["ChatAgent 选择工具"]
+        RS_LLM["Agent 选择工具"]
         RS_REVIEWS["get_product_reviews()"]
         RS_SENT["analyze_sentiment()<br/>评分分布 + 主题"]
     end
@@ -455,25 +490,25 @@ flowchart LR
 
 | 决策 | 选择 | 理由 |
 |----------|--------|-----------|
-| **智能体框架** | 微软智能体框架（Microsoft Agent Framework，MAF）Python SDK | 开箱即用的 `ChatAgent` 抽象，配合 `@tool` 装饰器、`ContextProvider` 与内置 A2A 支持，无需手写函数调用循环。 |
-| **智能体间协议** | 通过 `agent-framework-a2a` 使用 A2A | 智能体间通信的标准协议。每个专业智能体暴露 `/message:send`。与传输层解耦 —— 日后可把 HTTP 换成 gRPC。 |
+| **智能体框架** | 微软智能体框架（Microsoft Agent Framework，MAF）Python SDK | Agent、工具循环、上下文提供器与工作流构建由 MAF 提供；HTTP 服务适配由本项目实现。 |
+| **智能体间协议** | 自定义 A2A 风格 HTTP 契约 | shared/agent_host.py 暴露 /message:send 等接口；不是 agent-framework-a2a SDK 或完整标准兼容性承诺。 |
 | **LLM 提供方** | OpenAI / Azure OpenAI（可配置） | 通过 MAF 统一到单一 `ChatClient` 接口，用 `LLM_PROVIDER` 环境变量切换。生产用 Azure（托管身份、RBAC）；本地开发用 OpenAI —— 或通过 `LLM_BASE_URL` 接入任何兼容 OpenAI 的端点（Ollama、LM Studio、vLLM、OpenRouter），实现完全本地、零成本的开发闭环。 |
 | **数据库** | PostgreSQL 16 + pgvector | 用同一个数据库承载关系型数据与向量嵌入。语义商品检索使用 `text-embedding-3-small`（1536 维）。IVFFlat 索引用于快速余弦相似度检索。 |
-| **Web 框架** | FastAPI（编排器）+ Starlette（专业智能体） | 编排器用 FastAPI，因为它需要 REST 端点（认证、对话、应用市场、管理）。专业智能体使用更轻量的 `A2AAgentHost`，它封装了 Starlette。 |
+| **Web 框架** | FastAPI（编排器）+ Starlette（专业智能体） | 编排器用 FastAPI，因为它需要 REST 端点（认证、对话、应用市场、管理）。专业智能体由 shared/agent_host.py 的 create_agent_app 适配 MAF Agent。 |
 | **认证** | 自包含 JWT（HS256）+ bcrypt | 演示环境不依赖外部身份提供方。访问令牌（60 分钟）+ 刷新令牌（7 天）。智能体间认证通过共享密钥请求头。 |
 | **用户上下文** | Python ContextVars | 按请求作用域的状态（email、role），由认证中间件设置，任何 `@tool` 函数都可读取。无需通过函数参数传递用户信息。 |
 | **数据库访问** | asyncpg（原生 SQL） | 对查询拥有最大控制力，没有 ORM 开销。参数化的 `$1, $2` 语法可防止 SQL 注入。每个智能体一个连接池（5–20）。 |
 | **遥测** | OpenTelemetry -> Jaeger | 自动埋点：httpx（LLM + A2A 调用）、asyncpg（数据库查询）、FastAPI/Starlette（HTTP）。A2A 调用与工具执行有自定义跨度。全部通过 trace_id 关联。 |
-| **缓存** | Redis 7 | 缓存会话数据与对话状态。使用 Alpine 镜像以最小化体积。 |
+| **缓存** | Redis 7 | 聊天滑动窗口限流；会话历史和持久业务状态保存在 PostgreSQL。 |
 | **前端** | Next.js 16 + React 19 + Tailwind + shadcn/ui | 默认使用服务端组件，用 `pnpm` 管理依赖。客户端 JS 尽可能少。 |
-| **容器化** | Docker Compose + 多目标 Dockerfile | 全部 6 个智能体共用一份 Dockerfile，通过 `ARG AGENT_NAME` 区分。每个智能体是独立服务，各自占用端口。一条 `docker compose up --build` 即可启动全部服务。 |
+| **容器化** | Docker Compose + 多目标 Dockerfile | 全部 6 个智能体共用一份 Dockerfile，通过 `ARG AGENT_NAME` 区分。每个智能体是独立服务，各自占用端口。scripts/dev.sh 显式启用 agents/frontend 等 profile；隔离容器展示由 scripts/showcase.sh 启动。 |
 | **包管理** | `uv`（Python）+ `pnpm`（Node） | `uv` 提供快速的依赖解析与虚拟环境管理。`pnpm` 提供磁盘高效的 node_modules。 |
 
 ---
 
 ## 8. A2A 协议
 
-所有智能体间通信都使用 A2A（Agent-to-Agent，智能体间通信协议）。编排器通过 HTTP POST 调用每个专业智能体的 `/message:send`。没有消息代理或事件总线 —— 调用是 Docker 网络内的同步 HTTP。
+专业服务之间使用本项目的 A2A 风格 HTTP 请求-响应契约。编排器通过 httpx 异步请求调用 `/message:send`；这里没有独立消息代理。售后可选 outbox 是另一条持久投递路径。
 
 ### 端点
 
@@ -481,7 +516,7 @@ flowchart LR
 POST http://{agent-host}:{port}/message:send
 ```
 
-每个专业智能体都通过 `agent-framework-a2a` 的 `A2AAgentHost` 自动注册该端点。主机、端口与服务名来自 `AGENT_REGISTRY` 环境变量，编排器在启动时读取它。
+各专业服务调用 shared/agent_host.py 的 create_agent_app 注册端点。目标主机、端口与服务名来自 `AGENT_REGISTRY`；认证、身份和上下文信息由可信调用路径传播，Python ContextVar 不会自行跨 HTTP 传播。
 
 ### 请求格式
 
@@ -515,11 +550,11 @@ POST http://{agent-host}:{port}/message:send
 
 专业智能体以 JSON 返回完整的智能体响应。编排器把它交给自己的 LLM，综合为最终的自然语言回复。
 
-### 为什么用同步 HTTP？
+### 请求顺序与并发
 
-平台使用同步 A2A 调用（一次一个专业智能体）而非并行扇出，原因有两个：单个智能体的处理足够快，顺序调用完全落在可接受的延迟范围内；而后面的专业智能体往往需要前面结果的上下文（定价需要先知道推荐了哪些商品，才能优化购物车）。
+HTTP 使用异步请求-响应方式。默认 tool 模式由工具调用链决定下一步；售前固定工作流有明确的并发扇出/扇入，不能把“顺序调用一个专业智能体”的示例推广成所有模式的执行规则。
 
-完整的时序图（含 JWT 校验、上下文加载与 A2A 调用流程）见[§2. 智能体通信模式](#2-智能体通信模式)。
+会话目标和约束由服务端 revision 保护，专业智能体消费可信上下文，不能把模型生成的 A2A 文本当成人类新指令写回。完整接口及权限边界见[API参考](api-reference.md)，固定退货链路见[售后架构](after-sales-architecture.md)。
 
 ## 相关内容
 

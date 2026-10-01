@@ -97,7 +97,12 @@ async def test_workflow_operation_has_persisted_wait_and_terminal_receipts(
     # 重复初始请求引用原审批，不创建第二份。
     assert (await http_post("/api/chat", {"message": message, "mode": "workflow:return-replace"})).status_code == 200
     assert await returns_db.fetchval("SELECT count(*) FROM hitl_requests") == 1
-    response = await http_post(f"/api/orchestration/{pending['workflow_run_id']}/resume", {"approved": approved})
+    response = await http_post(
+        f"/api/orchestration/{pending['workflow_run_id']}/resume",
+        {"approved": approved},
+        email="admin@example.test",
+        role="admin",
+    )
     assert response.status_code == 200, response.text
     receipt = await service.get_operation(operation_id)
     assert receipt["outcome"] == ("SUCCEEDED" if approved else "REJECTED")
@@ -485,14 +490,24 @@ async def test_workflow_processing_record_recovers_after_interrupted_resume(
     with monkeypatch.context() as context:
         context.setattr(mode, "resume", interrupted)
         with pytest.raises(RuntimeError, match="injected interrupted resume"):
-            await http_post(f"/api/orchestration/{run_id}/resume", {"approved": True})
+            await http_post(
+                f"/api/orchestration/{run_id}/resume", {"approved": True}, email="admin@example.test", role="admin"
+            )
     assert (
         await returns_db.fetchval("SELECT status FROM hitl_requests WHERE workflow_run_id = $1", run_id) == "processing"
     )
     assert await returns_db.fetchval("SELECT count(*) FROM returns WHERE order_id = $1", order) == int(after_write)
-    conflict = await http_post(f"/api/orchestration/{run_id}/resume", {"approved": False})
+    conflict = await http_post(
+        f"/api/orchestration/{run_id}/resume", {"approved": False}, email="admin@example.test", role="admin"
+    )
     assert conflict.status_code == 409
-    recovered = await http_post(f"/api/orchestration/{run_id}/resume", {"approved": True})
+    recovered = await http_post(
+        f"/api/orchestration/{run_id}/resume", {"approved": True}, email="recovery-admin@example.test", role="admin"
+    )
+    decision = await returns_db.fetchval(
+        "SELECT response->>'reviewed_by' FROM hitl_requests WHERE workflow_run_id = $1", run_id
+    )
+    assert decision == "admin@example.test"
     assert recovered.status_code == 200, recovered.text
     assert recovered.json()["outcome"] == "SUCCEEDED"
     assert await returns_db.fetchval("SELECT count(*) FROM returns WHERE order_id = $1", order) == 1

@@ -4,7 +4,7 @@ Next.js 16（App Router）+ React 19 + Tailwind CSS 4 + shadcn/ui。这里承载
 智能体对话，以及面向多智能体后端的登录后账户控制台。
 
 > **注意：** 这是 Next.js **16.x** —— API 与旧文档存在差异。改动框架相关代码前，
-> 请先阅读 `node_modules/next/dist/docs/` 下对应的指南。参见 `AGENTS.md`。
+> 请先阅读 `node_modules/next/dist/docs/` 下对应的指南。参见根目录 `CONTRIBUTING.md`。
 
 ## 常用命令
 
@@ -39,3 +39,9 @@ pnpm exec playwright test e2e/ui-smoke.spec.ts   # 不依赖后端的 UI 冒烟�
 
 路由、主题、SSE 流式/时间线契约，以及「公开页 vs 需鉴权页」的模型，详见
 [`../docs/frontend.md`](../docs/frontend.md)。
+
+## 当前核心体验
+
+登录后的 `/orders/[id]` 提供中文售后申请、自动只读状态恢复与回执；`/admin/approvals`仅管理员批准；`/tasks`提供只读任务工作台、结构化要求、显式推进/恢复、文字目标确认及过期证据重新核实。`/chat`可编辑当前目标与约束，409时保留草稿且不自动覆盖服务器新版本。
+
+购物车实际位于鉴权的 `/cart`；公开店铺不应被描述为包含独立 `/shop/cart` 页面。浏览器只向同源 `/api/*` 发请求，由服务器代理到编排器。

@@ -486,6 +486,34 @@ erDiagram
 
 ---
 
+## 当前主线的状态与回执
+
+以下四张表承载当前售后、只读任务、上下文修订和可选履约实验。字段以 [init.sql](../docker/postgres/init.sql) 与增量迁移为准；这里说明执行关系，不替代完整 SQL 定义。
+
+```mermaid
+erDiagram
+    users ||--o{ after_sales_operations : owns
+    orders ||--o{ after_sales_operations : records
+    users ||--o{ agent_tasks : owns
+    conversations ||--o| conversation_contexts : snapshots
+    users ||--o{ conversation_contexts : owns
+    returns ||--o| fulfillment_outbox : enqueues
+    users ||--o{ fulfillment_outbox : owns
+```
+
+| 表 | 主键与关键字段 | 业务语义 |
+| --- | --- | --- |
+| `after_sales_operations` | 复合主键 `(user_id, operation_id)`；`order_id`、`payload_hash`、`request_payload`、`policy_version`、`status`、`result`、`approval_id`、`attempts` | 按用户隔离同一申请意图。批准等待、退货写入和持久回执相互关联；同一标识改参数被拒绝。`after_sales_operation_events` 用同一复合外键保存已持久化的决策事件 |
+| `agent_tasks` | `id`；`user_id`、`goal`、`constraints`、`requirements`、`constraint_confirmation`、`plan`、`results`、`receipt_history`、`status`、`revision`、`planning_attempts`、`active_step` | 计划与回执属于一个目标版本。修订使旧计划/确认失效，并保存历史回执；自然语言目标可要求用户确认。数据库将规划次数限制在 0–2 |
+| `conversation_contexts` | `conversation_id` 同时为主键和会话外键；`user_id`、`snapshot JSONB`、`revision`、`updated_at` | 保存本人会话的目标、约束与来源状态。PATCH 用 revision 防止覆盖并发更新，snapshot 的结构由 `TaskContext` 维护，不能把它当作模型可改的权限 |
+| `fulfillment_outbox` | `id`；唯一 `return_id` 与 `idempotency_key`；`user_id`、`order_id`、`payload`、`payload_hash`、`status`、`attempts`、`claim_token`、`lease_until`、`next_attempt_at`、`supplier_receipt`、`last_error` | 与退货在同一事务入队；worker 认领后在事务外发 HTTP。令牌隔离过期 worker，供应商按键幂等，响应未知先对账 |
+
+售后操作的持久状态为 `READY / NEEDS_REVIEW / AWAITING_APPROVAL / SUCCEEDED / REJECTED / RETRYABLE_FAILURE`；调用方看到 `UNKNOWN` 不会覆盖数据库已经提交的结果。履约 outbox 则允许持久的 `UNKNOWN`，并区分 `PENDING / PROCESSING / DELIVERED / NEEDS_REVIEW`。其中 `DELIVERED` 只表示本机模拟供应商已受理，不表示实际取件或退款。
+
+已有数据库按顺序应用 [001 售后操作](../docker/postgres/migrations/001_after_sales_operations.sql)、[002 任务与上下文](../docker/postgres/migrations/002_task_state.sql)、[003 任务验收](../docker/postgres/migrations/003_task_acceptance.sql)；可选履约使用 [004 outbox](../docker/postgres/migrations/004_fulfillment_outbox.sql)。003 增加 `requirements` 和 `constraint_confirmation`，不重置旧计划和回执；004 创建独立 outbox，不删除业务数据。执行入口与环境要求见[售后迁移说明](after-sales-architecture.md#升级已有数据库)。
+
+请求和结果怎样落到这些表，分别见[售后架构](after-sales-architecture.md)、[任务工作台](task-workspace.md)、[上下文 API](api-reference.md#任务与可修订上下文)和[履约实验](fulfillment-simulation.md)。
+
 ## 种子数据摘要
 
 种子数据生成器（`scripts/seed.py`）用确定性数据（`random.seed(42)`）填充数据库：
@@ -545,3 +573,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;   -- gen_random_uuid()
 - [`docs/api-reference.md`](api-reference.md) —— 读写这些表的 REST 端点
 - [`docs/deployment.md`](deployment.md) —— `init.sql` 的位置以及卷/种子数据的生命周期
 - [项目 README](../README.md)
+
+### 退货状态的显示语义
+
+为保留接口兼容性，`orders.status=returned` 仍是机器枚举，但当前写入发生在退货申请创建时。中文界面显示“已申请退货”；具体处理阶段读取退货记录与操作回执，不能从该枚举推断实际收货或退款到账。

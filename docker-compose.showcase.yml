@@ -1,0 +1,128 @@
+# 独立本地作品展示。数据库与后端只有内部网络，默认禁止模型付费调用。
+name: reliable-commerce-showcase
+
+x-environment: &environment
+  DATABASE_URL: postgresql://demo:${SHOWCASE_DB_PASSWORD:?Run scripts/showcase.sh first}@db:5432/reliable_commerce_demo
+  REDIS_URL: redis://redis:6379
+  APP_ENV_FILE: /dev/null
+  LLM_PROVIDER: replay
+  RECORD: "false"
+  DECISION_ROUTING_MODE: "off"
+  OPENAI_API_KEY: ""
+  AZURE_OPENAI_KEY: ""
+  AZURE_OPENAI_API_KEY: ""
+  DEEPSEEK_API_KEY: ""
+  MOONSHOT_API_KEY: ""
+  TYPESAFE_API_KEY: ""
+  AUTH_MODE: local
+  JWT_SECRET: ${SHOWCASE_JWT_SECRET:?Run scripts/showcase.sh first}
+  AGENT_SHARED_SECRET: ${SHOWCASE_AGENT_SECRET:?Run scripts/showcase.sh first}
+  OTEL_ENABLED: "false"
+  HITL_ENABLED: "true"
+  MAF_SESSION_BACKEND: postgres
+  MAF_CHECKPOINT_BACKEND: postgres
+  ORCHESTRATION_MODE: workflow:return-replace
+  CAMPAIGN_BUDGET_PATH: /var/lib/reliable-commerce/budget.json
+  PYTHONPATH: /app
+  AGENT_REGISTRY: >-
+    {"product-discovery":"http://product-discovery:8081","order-management":"http://order-management:8082","pricing-promotions":"http://pricing-promotions:8083","review-sentiment":"http://review-sentiment:8084","inventory-fulfillment":"http://inventory-fulfillment:8085"}
+
+x-backend: &backend
+  image: reliable-commerce-showcase-backend:local
+  build:
+    context: ./agents/python
+    args: { AGENT_NAME: orchestrator, AGENT_PORT: 8080 }
+  environment: *environment
+  volumes:
+    - showcase-budget:/var/lib/reliable-commerce
+    # 提供方文件可挂载审阅，但 APP_ENV_FILE=/dev/null，默认不加载、不启用。
+    - type: bind
+      source: ${SHOWCASE_PROVIDER_FILE:-./.env.example}
+      target: /run/config/provider.env
+      read_only: true
+      bind: { create_host_path: false }
+  restart: unless-stopped
+  depends_on:
+    db: { condition: service_healthy }
+    redis: { condition: service_healthy }
+    seed: { condition: service_completed_successfully }
+    budget-init: { condition: service_completed_successfully }
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: demo
+      POSTGRES_PASSWORD: ${SHOWCASE_DB_PASSWORD:?Run scripts/showcase.sh first}
+      POSTGRES_DB: reliable_commerce_demo
+    volumes:
+      - showcase-data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U demo -d reliable_commerce_demo"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  budget-init:
+    image: reliable-commerce-showcase-backend:local
+    build:
+      context: ./agents/python
+      args: { AGENT_NAME: orchestrator, AGENT_PORT: 8080 }
+    user: root
+    network_mode: none
+    command: ["sh", "-c", "chown agent:agent /var/lib/reliable-commerce"]
+    volumes: ["showcase-budget:/var/lib/reliable-commerce"]
+    restart: "no"
+  seed:
+    image: reliable-commerce-showcase-backend:local
+    build:
+      context: ./agents/python
+      args: { AGENT_NAME: orchestrator, AGENT_PORT: 8080 }
+    environment: *environment
+    command: ["/app/.venv/bin/python", "/app/scripts/seed_showcase.py"]
+    volumes:
+      - ./scripts:/app/scripts:ro
+      - ./docker:/app/docker:ro
+    depends_on:
+      db: { condition: service_healthy }
+    restart: "no"
+  orchestrator:
+    <<: *backend
+  product-discovery:
+    <<: *backend
+    environment: { <<: *environment, AGENT_NAME: product_discovery, AGENT_PORT: "8081" }
+  order-management:
+    <<: *backend
+    environment: { <<: *environment, AGENT_NAME: order_management, AGENT_PORT: "8082" }
+  pricing-promotions:
+    <<: *backend
+    environment: { <<: *environment, AGENT_NAME: pricing_promotions, AGENT_PORT: "8083" }
+  review-sentiment:
+    <<: *backend
+    environment: { <<: *environment, AGENT_NAME: review_sentiment, AGENT_PORT: "8084" }
+  inventory-fulfillment:
+    <<: *backend
+    environment: { <<: *environment, AGENT_NAME: inventory_fulfillment, AGENT_PORT: "8085" }
+  web:
+    image: reliable-commerce-showcase-web:local
+    build: { context: ./web }
+    environment:
+      ORCHESTRATOR_URL: http://orchestrator:8080
+      NEXT_TELEMETRY_DISABLED: "1"
+    ports: ["127.0.0.1:3020:3000"]
+    depends_on:
+      orchestrator: { condition: service_healthy }
+    restart: unless-stopped
+
+volumes:
+  showcase-data:
+  showcase-budget:

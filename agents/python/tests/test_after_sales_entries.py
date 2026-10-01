@@ -21,8 +21,9 @@ EMAIL = "after-sales@example.test"
 
 
 @pytest_asyncio.fixture
-async def returns_db(clean_db: asyncpg.Pool, monkeypatch: pytest.MonkeyPatch) -> asyncpg.Pool:
+async def returns_db(clean_db: asyncpg.Pool, redis_client, monkeypatch: pytest.MonkeyPatch) -> asyncpg.Pool:
     monkeypatch.setattr("shared.db._pool", clean_db)
+    monkeypatch.setattr("shared.rate_limit._redis_client", redis_client)
     monkeypatch.setattr(settings, "HITL_ENABLED", False)
     monkeypatch.setattr(settings, "AUTH_MODE", "local")
     monkeypatch.setattr("shared.after_sales.service.utc_now", lambda: NOW)
@@ -89,7 +90,7 @@ async def http_post(path: str, body: dict[str, Any], *, email: str = EMAIL, role
     user_id = await get_pool().fetchval("SELECT id FROM users WHERE email = $1", email)
     token = create_access_token(email, role, str(user_id or uuid4()))
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        return await client.post(path, json=body, headers={"Authorization": f"Bearer {token}"})
+        return await asyncio.create_task(client.post(path, json=body, headers={"Authorization": f"Bearer {token}"}))
 
 
 async def create_approval(order_id: UUID, *, reason: str = "Wrong size", method: str = "store_credit") -> str:
@@ -386,7 +387,12 @@ async def test_real_http_workflow_concurrent_resume_claims_only_once(
     run_id = await returns_db.fetchval("SELECT workflow_run_id FROM hitl_requests WHERE user_email = $1", EMAIL)
     await assert_unmodified(returns_db, order_id)
     responses = await asyncio.gather(
-        *(http_post(f"/api/orchestration/{run_id}/resume", {"approved": True}) for _ in range(2))
+        *(
+            http_post(
+                f"/api/orchestration/{run_id}/resume", {"approved": True}, email="admin@example.test", role="admin"
+            )
+            for _ in range(2)
+        )
     )
     assert sorted(response.status_code for response in responses) == [200, 404]
     assert await returns_db.fetchval("SELECT count(*) FROM returns WHERE order_id = $1", order_id) == 1

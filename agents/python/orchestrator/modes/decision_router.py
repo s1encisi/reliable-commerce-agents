@@ -62,7 +62,7 @@ class DecisionRouterMode:
         try:
             context = (
                 await persistent_context(message, history, ctx.conversation_id, max_bytes=settings.CONTEXT_MAX_BYTES)
-                if settings.DECISION_CONTEXT_ENABLED
+                if settings.DECISION_CONTEXT_ENABLED and not ctx.context_prepared
                 else None
             )
             if context:

@@ -88,7 +88,7 @@ const STATUS_CONFIG: Record<
   returned: {
     color: "border-orange-200 bg-orange-50 text-orange-700",
     icon: RotateCcw,
-    label: "已退货",
+    label: "已申请退货",
   },
   cancelled: {
     color: "border-red-200 bg-red-50 text-red-700",
@@ -118,7 +118,7 @@ const STATUS_TABS = [
   { value: "confirmed", label: "已确认" },
   { value: "shipped", label: "已发货" },
   { value: "delivered", label: "已送达" },
-  { value: "returned", label: "已退货" },
+  { value: "returned", label: "已申请退货" },
   { value: "cancelled", label: "已取消" },
 ];
 

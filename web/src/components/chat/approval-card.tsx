@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { CheckIcon, XIcon, Loader2Icon, ShieldAlertIcon } from "lucide-react";
+import Link from "next/link";
+import { errorMessage } from "@/lib/business-copy";
 import { api } from "@/lib/api";
 
 /**
@@ -22,16 +24,18 @@ export type ApprovalOutcome = { approved: boolean; text: string; agentsInvolved:
 
 export interface ApprovalCardProps {
   runId: string;
+  canApprove?: boolean;
   /** 以恢复后的这一轮内容回调，供调用方追加到对话流中。 */
   onResolved: (outcome: ApprovalOutcome) => void;
 }
 
-export function ApprovalCard({ runId, onResolved }: ApprovalCardProps) {
+export function ApprovalCard({ runId, onResolved, canApprove = false }: ApprovalCardProps) {
   const [pending, setPending] = useState<"approve" | "reject" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<boolean | null>(null);
 
   async function resolve(approved: boolean) {
+    if (!canApprove) return;
     setPending(approved ? "approve" : "reject");
     setError(null);
     try {
@@ -45,10 +49,17 @@ export function ApprovalCard({ runId, onResolved }: ApprovalCardProps) {
     } catch (err) {
       // 把失败暴露出来，而不是悄悄退回两个可点的按钮：在一个已经处理过的
       // 审批上再点一次，正是这个控件绝不能引诱用户犯的错误。
-      setError(err instanceof Error ? err.message : "无法提交该决定。");
+      setError(errorMessage(err, "无法提交该决定，请查询运行状态。"));
     } finally {
       setPending(null);
     }
+  }
+
+  if (!canApprove) {
+    return <div className="mt-2 flex flex-col gap-2 rounded-lg border p-3 text-sm">
+      <p>退货流程已暂停，等待管理员审批。</p>
+      <Link href="/runs" className="text-primary underline">查看运行状态</Link>
+    </div>;
   }
 
   if (done !== null) {
@@ -64,7 +75,7 @@ export function ApprovalCard({ runId, onResolved }: ApprovalCardProps) {
     <div className="mt-2.5 rounded-lg border border-amber-500/40 bg-amber-500/5 p-2.5">
       <div className="flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400">
         <ShieldAlertIcon className="size-3.5 shrink-0" />
-        这笔退货需要您审批后才能继续
+        这笔退货需要管理员审批后才能继续
       </div>
 
       <div className="mt-2 flex items-center gap-2">

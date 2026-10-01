@@ -19,6 +19,7 @@ from fastapi.responses import JSONResponse
 
 from orchestrator.routes import router
 from shared.db import close_db_pool, init_db_pool
+from shared.task_observability import TaskObservabilityMiddleware
 from shared.telemetry import instrument_fastapi, setup_telemetry
 
 logging.basicConfig(level=logging.INFO)
@@ -29,7 +30,6 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """启动：遥测 + DB 连接池。关闭：关闭连接池。"""
     setup_telemetry("ecommerce.orchestrator")
-    instrument_fastapi(app)
     await init_db_pool()
     logger.info("orchestrator.started")
     yield
@@ -52,7 +52,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.add_middleware(TaskObservabilityMiddleware)
 app.include_router(router)
+
+# ASGI 中间件链会在 lifespan 前构建；SDK 提供器仍在启动时初始化。
+instrument_fastapi(app)
 
 
 @app.exception_handler(ForeignKeyViolationError)

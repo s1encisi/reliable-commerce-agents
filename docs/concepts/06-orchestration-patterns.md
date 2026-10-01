@@ -25,15 +25,16 @@
 下面按模式分别说明——简短版本是：当正确的步骤顺序确实取决于你事先无法知道的东西时，让模型来
 决定；当不取决于时，就把顺序固定下来。
 
-## 本项目怎么实现——五种模式，一个端点
+## 本项目怎么实现——六种注册模式，一个端点
 
-本仓库让*同一个领域*——一个电商客服与购物助手——跑过五种不同的编排机制，可按请求选择。这正是
+本仓库让*同一个领域*——一个电商客服与购物助手——选择六种不同的编排机制，可按请求选择。这正是
 关键：你可以把同一个问题分别用每种模式问一遍并做对比，而不只是孤立地读介绍。注册表在
 [`agents/python/orchestrator/modes/__init__.py`](../../agents/python/orchestrator/modes/__init__.py)：
 
 ```python
 MODES: dict[str, OrchestrationMode] = {
     "tool": ToolRouterMode(),
+    "decision-router": DecisionRouterMode(),
     "handoff": HandoffMode(),
     "workflow:pre-purchase": PrePurchaseMode(),
     "workflow:return-replace": ReturnReplaceMode(),
@@ -58,6 +59,10 @@ MODES: dict[str, OrchestrationMode] = {
 **什么时候用：** 下一步是什么取决于自由形式的用户意图，且可能的下一步是开放集合。
 **什么时候不用：** 你需要保证每次运行什么、按什么顺序运行。
 
+### `decision-router` —— 可选的结构化决策路由
+
+此模式已注册，DECISION_ROUTING_MODE 默认 off；可配置 shadow 或 active。它与固定工作流不同，需要按决策输出、上下文和预算边界单独评估，不能把模型 confidence 直接视为准确率。实现与限制见[模型路由说明](../agent-upgrade.md)。
+
 ### `handoff` —— 固定网状拓扑，由 LLM 决定*何时*交接
 
 MAF 的 `HandoffBuilder` 构建一张参与者网状图，控制权会在智能体之间机械地传递——编排器不再每轮
@@ -81,16 +86,11 @@ MAF 的 `HandoffBuilder` 构建一张参与者网状图，控制权会在智能�
 模型判断，只需要在每项检查都返回后综合出一个*最终回答*。**什么时候不用：** 步骤集合确实需要随
 请求变化。
 
-### `workflow:return-replace` —— 带硬性暂停的顺序图
+### `workflow:return-replace` —— 顺序执行与管理员审批
 
-又一条固定的 MAF 工作流，这次是顺序而非扇出：资格校验、发起退货、换货搜索、针对高价值退货的
-工作流内审批门，然后是会员折扣与收尾
-（[`orchestrator/modes/workflow_mode.py`](../../agents/python/orchestrator/modes/workflow_mode.py)）。那个审批门值得单独一页——见
-[人工参与](11-human-in-the-loop.md)，那里把这个机制与 [`shared/hitl.py`](../../agents/python/shared/hitl.py) 基于中间件的做法做了直接对比。
+当前图依次为资格检查 → 需要时暂停审批 → 发起退货 → 查询替代品 → 会员折扣 → 收尾。审批在首次退货写入之前，客户不能调用恢复接口自批；管理员决定后，执行仍按原申请人身份复核订单、参数和审批有效期。见[售后架构](../after-sales-architecture.md)和[工作流实现](../../agents/python/workflows/return_replace.py)。
 
-**什么时候用：** 任务是固定序列，*并且*序列中的某一部分必须能暂停得比单个请求更久（这里是在
-等人），之后再恢复，而且可能在另一台服务器上恢复。**什么时候不用：** 序列中没有任何东西需要
-活过当前请求。
+适合有固定业务规则、需要持久暂停与恢复的退货流程。审批触发仍取决于 HITL 开关和金额阈值，不能把无须审批的低额路径解释成权限绕过。
 
 ### `group-chat` —— 每个参与者按顺序在共享记录上发言
 

@@ -1,8 +1,10 @@
+import type { TaskInput, TaskRecord } from "./tasks";
+import { apiErrorMessage } from "./business-copy";
 import { returnOperationSchema, type ReturnOperation } from "./return-operation";
 
 export class ApiError extends Error {
   constructor(public readonly status: number, public readonly data: Record<string, unknown>) {
-    super(typeof data.detail === "string" ? data.detail : typeof data.error === "string" ? data.error : `接口请求失败（${status}）`);
+    super(apiErrorMessage(status, data));
   }
 }
 
@@ -22,6 +24,12 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
  */
 export function apiUrl(path: string): string {
   return path.startsWith("/api") ? `${API_URL}${path}` : path;
+}
+
+export interface ConversationContext {
+  conversation_id: string;
+  revision: number;
+  context: { goal?: string; goal_needs_input?: boolean; epoch?: number; history_since?: string | null; constraints?: string[]; unresolved?: unknown[]; evidence_refs?: unknown[]; [key: string]: unknown };
 }
 
 export interface Address {
@@ -236,7 +244,7 @@ class ApiClient {
 
     const res = await fetch(`${API_URL}${path}`, { ...options, headers });
 
-    if (res.status === 401) {
+    if (res.status === 401 && !path.startsWith("/api/auth/")) {
       // 只重试一次：如果有刷新令牌，就用它换取新的访问令牌并重放该请求
       // 一次。这避免了长对话会话中「会话静默失效」这一问题。
       if (allowRefresh) {
@@ -256,6 +264,46 @@ class ApiClient {
     }
 
     return res.json();
+  }
+
+  getRuntimeCapabilities() {
+    return this.request<{ offline_demo: boolean; task_demo_goal: string | null }>("/api/runtime/capabilities");
+  }
+
+  getConversationContext(conversationId: string) {
+    return this.request<ConversationContext>(`/api/conversations/${conversationId}/context`);
+  }
+
+  updateConversationContext(conversationId: string, revision: number, input: { goal?: string; constraints?: string[] }) {
+    return this.request<ConversationContext>(`/api/conversations/${conversationId}/context`, { method: "PATCH", body: JSON.stringify({ revision, ...input }) });
+  }
+
+  createTask(input: TaskInput) {
+    return this.request<TaskRecord>("/api/tasks", { method: "POST", body: JSON.stringify(input) });
+  }
+
+  getTask(taskId: string) {
+    return this.request<TaskRecord>(`/api/tasks/${taskId}`);
+  }
+
+  updateTask(taskId: string, revision: number, input: TaskInput) {
+    return this.request<TaskRecord>(`/api/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify({ revision, ...input }) });
+  }
+
+  planTask(taskId: string, revision: number) {
+    return this.request<TaskRecord>(`/api/tasks/${taskId}/plan`, { method: "POST", body: JSON.stringify({ revision }) });
+  }
+
+  nextTaskStep(taskId: string, revision: number) {
+    return this.request<TaskRecord>(`/api/tasks/${taskId}/next`, { method: "POST", body: JSON.stringify({ revision }) });
+  }
+
+  recoverTask(taskId: string, revision: number) {
+    return this.request<TaskRecord>(`/api/tasks/${taskId}/recover`, { method: "POST", body: JSON.stringify({ revision }) });
+  }
+
+  confirmTask(taskId: string, revision: number) {
+    return this.request<TaskRecord>(`/api/tasks/${taskId}/confirm`, { method: "POST", body: JSON.stringify({ revision, confirmed: true }) });
   }
 
   // 认证

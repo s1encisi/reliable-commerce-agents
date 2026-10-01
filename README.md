@@ -2,7 +2,7 @@
 
 **让电商 Agent 的售后操作可审批、可重试、可核实。** 项目基于开源电商多智能体平台，围绕退货申请实现统一业务规则、人工审批、持久操作回执和故障恢复，避免把模型回复或 HTTP 成功误当成业务已经完成。
 
-平台通过 Microsoft Agent Framework、FastAPI 和 A2A 风格 HTTP 通信连接编排器与专业智能体；Next.js 前端提供聊天、订单、审批和运行记录页面。
+平台通过 Microsoft Agent Framework、FastAPI 和 A2A 风格 HTTP 通信连接编排器与专业智能体；Next.js 前端提供聊天、订单、审批、任务工作台和运行记录页面。
 
 ## 核心能力
 
@@ -28,20 +28,30 @@ flowchart LR
 
 ## 演示
 
-下图为仓库已有的本地合成订单审批界面：
+下图为本轮真实浏览器验证中的合成订单审批界面（历史截图继续保留）：
 
-![合成订单的退货审批队列](docs/images/reliable-commerce-approval.png)
+![合成订单的退货审批队列](docs/images/upgrade-20261001/reliable-commerce-approval.png)
 
-离线演示使用独立 Compose 项目和合成数据，不需要模型账号。准备 Python 3.12、uv、Node.js 22、pnpm 10 和 Docker 后：
+推荐使用已验证的独立容器展示。准备 Docker Engine/Compose 和 Python 3，在项目根目录执行：
 
 ```bash
-bash scripts/install-deps.sh --core --images
-bash scripts/demo.sh
+bash scripts/showcase.sh serve
 ```
 
-打开 `http://localhost:3010`。演示流程为客户提交申请、审批人批准、客户查询实际结果；缺少签收证据或超过期限的订单会分别进入核实或拒绝路径。完整账户与端口说明见 [演示指南](docs/portfolio-demo.md)。
+保持终端打开，访问 `http://localhost:3020`。客户账号 `customer@example.test`，管理员账号 `admin@example.test`，合成密码均为 `DemoPass123!`。依次体验客户申请、管理员审批、客户核实回执，再进入“任务工作台”运行固定离线查询。首次构建需要下载官方镜像与锁定依赖；无需模型账号。停止、数据保留与隔离边界见[容器展示指南](docs/local-showcase.md)。
+
+开发模式仍可通过 `scripts/demo.sh` 启动宿主服务，使用 3010/8180 端口；准备步骤、缺少签收证据和超期订单演示见[开发演示指南](docs/portfolio-demo.md)。
 
 真实模型对话需单独配置提供方并使用 `scripts/dev.sh`，离线工作流不会被当作实时模型推理。配置模板为 [.env.example](.env.example)。
+
+## 本轮增强：可核实的查询任务
+
+- **任务工作台**：在 `/tasks` 创建只读目标和结构化条件，显式规划、执行、核实和恢复；自由文本目标需用户确认，不以任意工具成功判定完成。
+- **可修订上下文**：聊天中可编辑目标和约束，保留替代、撤销和目标版本；历史偏好作为资料，不成为系统权限。
+- **一致检索**：词法、向量融合及无嵌入降级使用相同价格、品类与评分过滤；评测保留无结果失败，不夸大离线向量的语义效果。
+- **外部履约实验**：可选的本机模拟供应商与 outbox 演示幂等投递、丢响应核实和人工对账，默认关闭，不接真实物流或支付。
+
+离线任务示例是明确标注的固定计划，工具实际查询数据库；它不代表实时模型规划。见[任务工作台](docs/task-workspace.md)、[检索评测](docs/retrieval-evaluation.md)和[履约模拟](docs/fulfillment-simulation.md)。
 
 ## 技术栈与工程取舍
 
@@ -50,6 +60,14 @@ Python 3.12、Microsoft Agent Framework、FastAPI、asyncpg、PostgreSQL/pgvecto
 业务规则和执行结果由可信服务与数据库决定，LLM 负责理解和编排。操作回执解决同一数据库内的重试恢复；没有接入真实支付、物流或邮件，也不将本地事务描述为跨系统“恰好一次”。
 
 ## 验证
+
+本轮本地完整回归：后端 **1039 passed / 3 项真实模型测试跳过**，前端 **211 passed**；独立MCP包 **25 + 21 passed**。生产容器、真实浏览器、整栈重启保留数据和文档生成已验证。具体环境、警告及适用范围见[验证记录](docs/verification.md)。
+
+
+2026-10-01 已重新运行全部 396 次售后隔离 trial：B0 为 36/66、B1 为 51/66、当前实现 B2 为 66/66。新报告绑定本次工作树源码散列；旧报告保留，不能用旧文件的散列代表新代码。并发基线存在实际运行差异，逐次结果均保留。
+
+[当前售后结果](docs/evaluation/after-sales-20261001.json) · [基线来源审计](docs/evaluation/after-sales-baseline-audit-20261001.json) · [验证说明](docs/verification.md)
+
 
 2026-09-30 本地运行售后规则、入口、恢复和兼容预算相关的 69 项既有测试，全部通过：
 
@@ -65,6 +83,6 @@ OPENAI_API_KEY= AZURE_OPENAI_KEY= AZURE_OPENAI_API_KEY= RECORD=false \
 
 ## 进一步阅读
 
-[售后架构](docs/after-sales-architecture.md) · [快速开始](docs/quick-start.md) · [配置](docs/configuration.md) · [API](docs/api-reference.md) · [模型路由与预算](docs/agent-upgrade.md)
+[售后架构](docs/after-sales-architecture.md) · [快速开始](docs/quick-start.md) · [配置](docs/configuration.md) · [API](docs/api-reference.md) · [模型路由与预算](docs/agent-upgrade.md) · [中文项目讲解](docs/portfolio-interview.md) · [容器体验部署](docs/local-showcase.md)
 
 本项目基于 [nitin27may/e-commerce-agents](https://github.com/nitin27may/e-commerce-agents) 演进；上游提供平台基础，本仓库的售后可靠性与决策评估实现可在对应模块和测试中核对。采用 [MIT 许可证](LICENSE)。

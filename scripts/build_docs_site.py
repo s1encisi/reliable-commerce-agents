@@ -20,7 +20,7 @@ import shutil
 import subprocess
 import sys
 from dataclasses import dataclass, field
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -59,8 +59,27 @@ class Section:
 
 SECTIONS: tuple[Section, ...] = (
     Section(
-        "Getting Started",
+        "Project",
         2,
+        "从当前业务闭环、运行步骤和可复验证据进入项目。",
+        (
+            "docs/portfolio-demo.md",
+            "docs/after-sales-architecture.md",
+            "docs/verification.md",
+            "docs/task-workspace.md",
+            "docs/retrieval-evaluation.md",
+            "docs/fulfillment-simulation.md",
+            "docs/local-showcase.md",
+            "docs/local-telemetry-verification.md",
+            "docs/portfolio-interview.md",
+            "docs/local-privacy.md",
+            "CONTRIBUTING.md",
+        ),
+        index_source="docs/README.md",
+    ),
+    Section(
+        "Getting Started",
+        3,
         "启动服务、了解部署方式，并排查常见问题。",
         (
             "docs/quick-start.md",
@@ -72,21 +91,21 @@ SECTIONS: tuple[Section, ...] = (
     ),
     Section(
         "Concepts",
-        3,
+        4,
         "从智能体基本概念出发，解释多智能体协作及项目术语。",
         (),  # 从下方 docs/concepts/ 扫描填充。
         index_source="docs/concepts/README.md",
     ),
     Section(
         "Tutorials",
-        4,
+        5,
         "34 章教程，从单个智能体逐步连接到完整项目，包含 Python 示例与配置指南。",
         (),  # 从下方 tutorials/ 扫描填充。
         index_source="tutorials/README.md",
     ),
     Section(
         "Architecture",
-        5,
+        6,
         "了解运行中的应用如何连接各模块。",
         (
             "docs/architecture.md",
@@ -99,7 +118,7 @@ SECTIONS: tuple[Section, ...] = (
     ),
     Section(
         "Guides",
-        6,
+        7,
         "面向具体任务的操作指引，用于扩展与运维这套系统。",
         (
             "docs/adding-an-agent.md",
@@ -115,7 +134,7 @@ SECTIONS: tuple[Section, ...] = (
     ),
     Section(
         "Reference",
-        7,
+        8,
         "查询能力覆盖、智能体控制矩阵、术语表与绘图约定。",
         (
             "docs/parity-matrix.md",
@@ -139,7 +158,7 @@ SECTIONS: tuple[Section, ...] = (
 # 配置、完整项目导览和补充章节不属于数字层级，
 # 保留独立分组。
 TIERS: tuple[tuple[str, range], ...] = (
-    ("Setup", range(0, 1)),
+    ("Setup", range(1)),
     ("Tier 1 — Core Agent", range(1, 5)),
     ("Tier 2 — Agent Internals", range(5, 9)),
     ("Tier 3 — Workflow Foundations", range(9, 12)),
@@ -334,6 +353,7 @@ def collect_pages() -> list[Page]:
     # 路径仍使用稳定英文标识；仅在页面组装完成后本地化展示标题与导航。
     display_titles = {
         "Home": "首页",
+        "Project": "项目导览",
         "Getting Started": "快速开始",
         "Concepts": "核心概念",
         "Tutorials": "教程",
@@ -559,8 +579,8 @@ def seo_type(page: Page) -> str:
     return "TechArticle" if top in {"tutorials", "concepts", "guides", "architecture"} else "WebPage"
 
 
-_MERMAID_FENCE_RE = re.compile(r"(^```mermaid[^\n]*\n)(.*?)(^```\s*$)", re.M | re.S)
-_HEADING_RE = re.compile(r"^#{2,6}\s+(.*?)\s*$", re.M)
+_MERMAID_FENCE_RE = re.compile(r"(^```mermaid[^\n]*\n)(.*?)(^```\s*$)", re.MULTILINE | re.DOTALL)
+_HEADING_RE = re.compile(r"^#{2,6}\s+(.*?)\s*$", re.MULTILINE)
 
 
 def label_mermaid_diagrams(body: str, page_title: str) -> str:
@@ -616,7 +636,7 @@ def label_mermaid_diagrams(body: str, page_title: str) -> str:
     return _MERMAID_FENCE_RE.sub(repl, body)
 
 
-@lru_cache(maxsize=None)
+@cache
 def git_last_modified(source: str) -> str | None:
     """页面源文件的提交日期，ISO-8601。
 
@@ -630,6 +650,7 @@ def git_last_modified(source: str) -> str | None:
         out = subprocess.run(
             ["git", "log", "-1", "--format=%cI", "--", source],
             cwd=REPO_ROOT,
+            check=False,
             capture_output=True,
             text=True,
             timeout=10,
@@ -845,7 +866,7 @@ def write_llms_files(pages: list[Page], rendered: dict[Path, str]) -> None:
         "后端为 Python，前端为单个 Next.js 应用，五种编排模式可在运行时选择。",
         "本文档由仓库生成，因此每个页面都对应仓库中的一个文件。",
         "",
-        f"仓库: https://github.com/s1encisi/reliable-commerce-agents",
+        "仓库: https://github.com/s1encisi/reliable-commerce-agents",
         f"所有页面的全文: {SITE_ORIGIN}{SITE_BASEURL}/llms-full.txt",
         "",
     ]
@@ -867,7 +888,7 @@ def write_llms_files(pages: list[Page], rendered: dict[Path, str]) -> None:
     full = [
         "# 可靠电商多智能体平台 —— 完整文档",
         "",
-        f"由 https://github.com/s1encisi/reliable-commerce-agents 生成",
+        "由 https://github.com/s1encisi/reliable-commerce-agents 生成",
         f"索引: {SITE_ORIGIN}{SITE_BASEURL}/llms.txt",
         "",
         "---",
