@@ -1,70 +1,88 @@
 # Reliable Commerce Agents
 
-**让电商 Agent 的售后操作可审批、可重试、可核实。** 项目基于开源电商多智能体平台，围绕退货申请实现统一业务规则、人工审批、持久操作回执和故障恢复，避免把模型回复或 HTTP 成功误当成业务已经完成。
+面向电商业务的多智能体应用，支持商品查询、订单管理、促销咨询和售后处理。项目基于 Microsoft Agent Framework 与 FastAPI 构建，重点实现退货申请中的规则校验、人工审批、幂等执行和中断恢复。
 
-平台通过 Microsoft Agent Framework、FastAPI 和 A2A 风格 HTTP 通信连接编排器与专业智能体；Next.js 前端提供聊天、订单、审批和运行记录页面。
+[快速开始](#快速开始) · [架构设计](docs/after-sales-architecture.md) · [项目文档](docs/README.md)
 
-## 核心能力
+## 功能与特点
 
-- **规则一致：** 普通工具、HTTP 请求与工作流调用同一退货服务，依据可信用户身份、订单归属和签收证据判定资格。
-- **先审批再写入：** 审批绑定订单、参数、政策版本和有效期，执行前重新核对，不允许模型绕过审批。
-- **可恢复的执行：** 按用户隔离操作 ID，使用 PostgreSQL 事务、行锁和唯一约束保存业务结果；相同请求可重放原回执。
-- **明确处理未知结果：** 提交后连接中断时先查询实际结果，无法确认则保留“未知”，不盲目重复写入。
-- **可观测与评估：** 检查点、运行事件和故障注入测试支撑恢复验证；可选模型路由提供费用预算和结构化决策约束，默认关闭。
+- **多智能体协作**：编排器连接商品、订单、定价、评论和库存服务，支持工具路由、Handoff、工作流与群聊编排。
+- **统一售后规则**：聊天工具、HTTP API 和工作流共用退货服务，按用户身份、订单归属、签收时间与退货期限判断资格。
+- **人工审批**：按配置和订单金额触发审批；审批绑定申请参数、订单状态和有效期，执行前再次校验。
+- **幂等执行与恢复**：通过操作 ID、PostgreSQL 事务、行锁和唯一约束防止重复申请。响应中断后可查询原操作，返回已保存的结果。
+- **完整的操作界面**：Next.js 前端提供聊天、订单、审批队列与运行记录；OpenTelemetry 记录调用链路，便于排查问题。
+
+## 界面预览
+
+客户提交退货申请后，审批人可在队列中查看订单、申请原因和处理状态。
+
+![退货审批队列](docs/images/reliable-commerce-approval.png)
+
+## 售后流程
+
+LLM 负责理解请求和编排工具，业务服务负责校验与执行。退货申请、订单状态和操作回执在同一个数据库事务中提交。
 
 ```mermaid
 flowchart LR
-  UI[订单页面 / 聊天] --> API[认证与编排]
-  API --> P[统一规则与审批绑定]
-  P --> A[人工批准]
-  A --> T[事务：申请 + 订单 + 操作回执]
-  T --> R[已确认结果]
-  T --> U[确认中断]
-  U --> Q[查询同一操作 ID]
+  UI[订单页面 / 聊天] --> S[统一退货服务]
+  S --> P[身份与退货规则校验]
+  P --> A{需要审批?}
+  A -->|是| H[人工审批]
+  A -->|否| T[事务提交]
+  H -->|批准| T
+  H -->|拒绝| D[结束申请]
+  T --> R[退货申请与操作回执]
+  T -->|响应中断| Q[按操作 ID 查询]
   Q --> R
 ```
 
-关键实现位于 [`shared/after_sales`](agents/python/shared/after_sales/)、[`shared/hitl.py`](agents/python/shared/hitl.py) 和 [`return_replace.py`](agents/python/workflows/return_replace.py)。
+签收信息缺失或冲突时转人工核实，超过退货期限则拒绝申请。提交结果暂时无法确认时保留操作 ID，后续继续查询。
 
-## 演示
+核心实现：
 
-下图为仓库已有的本地合成订单审批界面：
+| 模块 | 职责 |
+| --- | --- |
+| [售后服务](agents/python/shared/after_sales/) | 资格判定、审批绑定、事务执行与结果查询 |
+| [审批管理](agents/python/shared/hitl.py) | 审批请求、决定与执行状态 |
+| [退货工作流](agents/python/workflows/return_replace.py) | 流程编排、检查点与暂停恢复 |
+| [编排器](agents/python/orchestrator/) | 请求路由、智能体协作与事件流 |
+| [Web 界面](web/src/) | 客户操作、审批队列与运行记录 |
 
-![合成订单的退货审批队列](docs/images/reliable-commerce-approval.png)
+## 快速开始
 
-离线演示使用独立 Compose 项目和合成数据，不需要模型账号。准备 Python 3.12、uv、Node.js 22、pnpm 10 和 Docker 后：
+本地演示使用合成订单和固定工作流，无需模型 API Key。准备 Python 3.12、uv、Node.js 22、pnpm 10 和 Docker，在 Linux、macOS 或 Windows WSL 中运行：
 
 ```bash
+git clone https://github.com/s1encisi/reliable-commerce-agents.git
+cd reliable-commerce-agents
 bash scripts/install-deps.sh --core --images
 bash scripts/demo.sh
 ```
 
-打开 `http://localhost:3010`。演示流程为客户提交申请、审批人批准、客户查询实际结果；缺少签收证据或超过期限的订单会分别进入核实或拒绝路径。完整账户与端口说明见 [演示指南](docs/portfolio-demo.md)。
+打开 **http://localhost:3010**：
 
-真实模型对话需单独配置提供方并使用 `scripts/dev.sh`，离线工作流不会被当作实时模型推理。配置模板为 [.env.example](.env.example)。
+| 角色 | 邮箱 | 密码 |
+| --- | --- | --- |
+| 客户 | customer@example.test | DemoPass123! |
+| 审批人 | admin@example.test | DemoPass123! |
 
-## 技术栈与工程取舍
+用客户账户提交申请，再用审批人账户批准，回到订单页查看处理结果。详细步骤见 [演示指南](docs/portfolio-demo.md)。
 
-Python 3.12、Microsoft Agent Framework、FastAPI、asyncpg、PostgreSQL/pgvector、Redis、OpenTelemetry；前端使用 Next.js、React、TypeScript 和 Tailwind CSS。Python 与前端分别由 `uv.lock` 和 `pnpm-lock.yaml` 固定依赖。
+接入真实模型对话时，按 [.env.example](.env.example) 配置模型提供方，并使用 `scripts/dev.sh` 启动；Windows PowerShell 使用 `scripts/dev.ps1`。配置说明见 [快速开始文档](docs/quick-start.md)。
 
-业务规则和执行结果由可信服务与数据库决定，LLM 负责理解和编排。操作回执解决同一数据库内的重试恢复；没有接入真实支付、物流或邮件，也不将本地事务描述为跨系统“恰好一次”。
+## 技术栈
 
-## 验证
+- **后端**：Python、Microsoft Agent Framework、FastAPI、asyncpg
+- **数据与缓存**：PostgreSQL、pgvector、Redis
+- **前端**：Next.js、React、TypeScript、Tailwind CSS
+- **工程工具**：Docker Compose、OpenTelemetry、pytest、Playwright
 
-2026-09-30 本地运行售后规则、入口、恢复和兼容预算相关的 69 项既有测试，全部通过：
+当前售后流程处理退货申请及其数据库状态，未接入真实支付、物流和邮件服务。
 
-```bash
-cd agents/python
-uv sync --frozen --all-packages --extra dev
-OPENAI_API_KEY= AZURE_OPENAI_KEY= AZURE_OPENAI_API_KEY= RECORD=false \
-  uv run --no-sync pytest tests/test_after_sales_policy.py tests/test_after_sales_entries.py \
-  tests/test_after_sales_recovery.py tests/test_legacy_jev_budget.py -q
-```
+## 文档
 
-仓库还提供 [售后故障评估器](agents/python/evals/after_sales.py)、固定对照和 [原始评估数据](docs/evaluation/after-sales-results.json)。这些是受控合成场景下的工程证据，不代表生产成功率。
+[售后架构](docs/after-sales-architecture.md) · [API 参考](docs/api-reference.md) · [配置说明](docs/configuration.md) · [部署指南](docs/deployment.md) · [中文文档](docs/zh-CN/README.md)
 
-## 进一步阅读
+## 致谢与许可
 
-[售后架构](docs/after-sales-architecture.md) · [快速开始](docs/quick-start.md) · [配置](docs/configuration.md) · [API](docs/api-reference.md) · [模型路由与预算](docs/agent-upgrade.md)
-
-本项目基于 [nitin27may/e-commerce-agents](https://github.com/nitin27may/e-commerce-agents) 演进；上游提供平台基础，本仓库的售后可靠性与决策评估实现可在对应模块和测试中核对。采用 [MIT 许可证](LICENSE)。
+基于 [nitin27may/e-commerce-agents](https://github.com/nitin27may/e-commerce-agents) 构建，采用 [MIT 许可证](LICENSE)。
