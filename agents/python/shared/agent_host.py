@@ -290,6 +290,12 @@ def create_agent_app(
             "version": "1.0",
         }
 
+    @app.post("/procurement:execute")
+    async def procurement_execute(request: Request):
+        from shared.procurement.service import handle_request
+
+        return await handle_request(request, agent_name)
+
     @app.post("/message:send")
     async def message_send(request: Request):
         try:

@@ -1,4 +1,5 @@
 """应用升级的增量迁移；只读取显式 DATABASE_URL，不加载私人 .env。"""
+
 import asyncio
 import os
 from pathlib import Path
@@ -11,7 +12,10 @@ async def main() -> None:
     if not url:
         raise SystemExit("请显式设置目标 DATABASE_URL；未连接任何数据库")
     migration_dir = Path(__file__).resolve().parents[1] / "docker/postgres/migrations"
-    migrations = [migration_dir / name for name in ("002_task_state.sql", "003_task_acceptance.sql")]
+    migrations = [
+        migration_dir / name
+        for name in ("002_task_state.sql", "003_task_acceptance.sql", "005_procurement_runtime.sql")
+    ]
     connection = await asyncpg.connect(url)
     try:
         async with connection.transaction():

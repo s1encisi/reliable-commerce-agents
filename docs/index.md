@@ -41,3 +41,7 @@ bash scripts/demo.sh
 当前和历史报告分别保留。检索数据及相关性标签由助手编写，尚待人工审核；离线哈希嵌入不是语义模型。真实模型质量、付费调用、公网体验部署和真实物流／支付不由本地回归代替。具体已执行结果、源码散列和限制以[验证说明](verification.md)及各报告为准，不从旧教程或旧计划推断当前能力。
 
 完整阅读顺序、贡献规范与本地隐私边界见[项目导览](README.md)。
+
+## 采购决策主线
+
+[运行与连续演示](procurement-demo.md) · [执行与恢复架构](procurement-architecture.md) · [评测方法与边界](procurement-evaluation.md)

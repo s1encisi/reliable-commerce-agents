@@ -161,6 +161,10 @@ class PaidTransport(httpx.AsyncBaseTransport):
         deadline = current_run_deadline.get() or time.time() + 60.0
         if deadline is not None and time.time() >= deadline:
             raise BudgetError("本次运行的总截止时间已到")
+        # 专业服务内的每轮SDK请求也计入同一采购任务；其他调用没有绑定时不访问任务库。
+        from shared.procurement.calls import reserve_procurement_call
+
+        await reserve_procurement_call(purpose)
         started = time.monotonic()
         attempt = await asyncio.to_thread(
             self.budget.reserve,

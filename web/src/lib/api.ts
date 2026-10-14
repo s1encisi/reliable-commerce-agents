@@ -229,7 +229,7 @@ class ApiClient {
     return this.inflightRefresh;
   }
 
-  private async request<T>(
+  async request<T>(
     path: string,
     options: RequestInit = {},
     { allowRefresh = true }: { allowRefresh?: boolean } = {}
@@ -922,6 +922,12 @@ class ApiClient {
 }
 
 export const api = new ApiClient();
+
+/** 复用统一认证、令牌刷新和错误映射，供分模块客户端调用。 */
+export function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+  return api.request<T>(path, options);
+}
+
 
 // 便于使用的具名函数导出（委托给单例）
 export function getConversations() {

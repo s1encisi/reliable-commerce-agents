@@ -18,4 +18,18 @@ async def runtime_capabilities(user: dict = Depends(require_auth)) -> dict:
         "context_explicit_edit": True,
         "fulfillment_simulation": settings.FULFILLMENT_SIMULATION_ENABLED,
         "payment_integration": False,
+        "procurement": {
+            "enabled": settings.PROCUREMENT_ENABLED
+            and not settings.MCP_ENABLED
+            and (
+                not settings.PROCUREMENT_ALLOWLIST.strip()
+                or user.get("sub", "") in {v.strip() for v in settings.PROCUREMENT_ALLOWLIST.split(",")}
+            ),
+            "mode": settings.PROCUREMENT_MODE,
+            "model_authorized": settings.PROCUREMENT_MODEL_AUTHORIZED,
+            "quote_policy": "single_coupon_v1",
+            "currency": "CNY",
+            "write_operations": False,
+            "demo_goal": "采购3副采购专用耳机，货款预算1500元，需要两个独立备选方案。",
+        },
     }

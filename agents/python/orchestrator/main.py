@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -31,10 +32,29 @@ async def lifespan(app: FastAPI):
     """启动：遥测 + DB 连接池。关闭：关闭连接池。"""
     setup_telemetry("ecommerce.orchestrator")
     await init_db_pool()
+    from shared.config import settings
+    from shared.db import get_pool
+
+    stop = asyncio.Event()
+    worker = None
+    if settings.PROCUREMENT_ENABLED:
+        from shared.procurement.runtime import make_runner
+
+        worker = asyncio.create_task(make_runner(get_pool()).serve(stop), name="procurement-worker")
+    app.state.procurement_worker = worker
     logger.info("orchestrator.started")
-    yield
-    await close_db_pool()
-    logger.info("orchestrator.stopped")
+    try:
+        yield
+    finally:
+        stop.set()
+        if worker is not None:
+            worker.cancel()
+            results = await asyncio.gather(worker, return_exceptions=True)
+            for result in results:
+                if isinstance(result, Exception):
+                    logger.error("procurement.worker_stopped_with_error error=%s", type(result).__name__)
+        await close_db_pool()
+        logger.info("orchestrator.stopped")
 
 
 app = FastAPI(
@@ -80,4 +100,9 @@ async def stale_user_handler(request: Request, exc: ForeignKeyViolationError) ->
 @app.get("/health")
 async def health() -> dict[str, str]:
     """健康检查端点。"""
+    worker = getattr(app.state, "procurement_worker", None)
+    if worker is not None and worker.done():
+        return JSONResponse(
+            {"status": "error", "service": "orchestrator", "reason": "procurement_worker_stopped"}, status_code=503
+        )
     return {"status": "ok", "service": "orchestrator"}

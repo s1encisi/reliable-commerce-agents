@@ -28,11 +28,7 @@ def demo_environment() -> dict[str, str]:
         path.write_text("\n".join(f"{k}={v}" for k, v in entries.items()) + "\n")
     path.chmod(0o600)
     # 这是生成的数据文件，不是 Shell 脚本，禁止 source 或 eval。
-    values = dict(
-        line.split("=", 1)
-        for line in path.read_text().splitlines()
-        if line and not line.startswith("#")
-    )
+    values = dict(line.split("=", 1) for line in path.read_text().splitlines() if line and not line.startswith("#"))
     env = {
         **os.environ,
         **values,
@@ -43,6 +39,10 @@ def demo_environment() -> dict[str, str]:
         "MOONSHOT_API_KEY": "",
         "TYPESAFE_API_KEY": "",
         "DECISION_ROUTING_MODE": "off",
+        "PROCUREMENT_ENABLED": "true",
+        "PROCUREMENT_MODE": "offline",
+        "PROCUREMENT_MODEL_AUTHORIZED": "false",
+        "PROCUREMENT_ALLOWLIST": "customer@example.test,admin@example.test",
         "RECORD": "false",
         "OPENAI_API_KEY": "",
         "AZURE_OPENAI_KEY": "",
@@ -63,23 +63,20 @@ def demo_environment() -> dict[str, str]:
         "review-sentiment",
         "inventory-fulfillment",
     ]
-    env["AGENT_REGISTRY"] = json.dumps(
-        {name: f"http://localhost:{8181 + i}" for i, name in enumerate(names)}
-    )
+    env["AGENT_REGISTRY"] = json.dumps({name: f"http://localhost:{8181 + i}" for i, name in enumerate(names)})
     env["NO_PROXY"] = env.get("NO_PROXY", "") + ",localhost,127.0.0.1,::1"
     return env
 
 
 async def initialize(reset: bool) -> None:
     import asyncpg
+
     from scripts.seed_portfolio import seed
 
     deadline = time.monotonic() + 45
     while True:
         try:
-            pool = await asyncpg.create_pool(
-                os.environ["DATABASE_URL"], min_size=1, max_size=3
-            )
+            pool = await asyncpg.create_pool(os.environ["DATABASE_URL"], min_size=1, max_size=3)
             break
         except (OSError, asyncpg.PostgresError):
             if time.monotonic() >= deadline:
@@ -93,9 +90,7 @@ async def initialize(reset: bool) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--reset", action="store_true", help="仅重置独立演示库中的合成数据"
-    )
+    parser.add_argument("--reset", action="store_true", help="仅重置独立演示库中的合成数据")
     parser.add_argument(
         "--seed-only",
         action="store_true",
@@ -122,12 +117,9 @@ def main() -> None:
         check=True,
     )
     asyncio.run(initialize(args.reset))
-    subprocess.run(
-        [os.sys.executable, "scripts/migrate_db.py"], cwd=ROOT, env=env, check=True
-    )
-    subprocess.run(
-        [os.sys.executable, "scripts/migrate_upgrade.py"], cwd=ROOT, env=env, check=True
-    )
+    subprocess.run([os.sys.executable, "scripts/migrate_db.py"], cwd=ROOT, env=env, check=True)
+    subprocess.run([os.sys.executable, "scripts/migrate_upgrade.py"], cwd=ROOT, env=env, check=True)
+    subprocess.run([os.sys.executable, "scripts/seed_procurement.py"], cwd=ROOT, env=env, check=True)
     if args.seed_only:
         print("合成演示数据和任务状态结构已就绪。")
         return
@@ -192,15 +184,14 @@ def main() -> None:
                 start_new_session=True,
             )
         )
-        print(
-            "演示地址: http://localhost:3010  | API: http://localhost:8180", flush=True
-        )
+        print("演示地址: http://localhost:3010  | API: http://localhost:8180", flush=True)
         print(
             "customer@example.test / DemoPass123!  | admin@example.test / DemoPass123!",
             flush=True,
         )
         print(
-            "未接入真实大模型：可体验订单 / 管理员审批，或 /tasks 的离线固定示例。Ctrl-C 停止应用进程。",
+            "未接入真实大模型：可体验订单 / 管理员审批，"
+            "或 /tasks 固定示例及 /procurement 采购工作台。Ctrl-C 停止应用进程。",
             flush=True,
         )
         while all(process.poll() is None for process in processes):

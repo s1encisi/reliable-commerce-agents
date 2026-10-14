@@ -11,6 +11,10 @@
 
 ## 增强能力
 
+- [采购决策工作台](procurement-demo.md)：中文需求确认、自动取证、预算修订与两个独立备选。
+- [采购执行与恢复架构](procurement-architecture.md)：MAF分层并行、步骤回执、版本隔离和有界修复。
+- [采购对照评测](procurement-evaluation.md)：共同任务、逻辑故障事件、顺序策略与消融，真实模型效果另计。
+
 - [任务工作台](task-workspace.md)：受控验收、自然语言人工复核、版本和恢复。
 - [中文检索评测](retrieval-evaluation.md)：候选召回、业务过滤、降级及保留的失败。
 - [外部履约模拟](fulfillment-simulation.md)：本机供应商、outbox和对账。

@@ -8,6 +8,10 @@ x-environment: &environment
   LLM_PROVIDER: replay
   RECORD: "false"
   DECISION_ROUTING_MODE: "off"
+  PROCUREMENT_ENABLED: "true"
+  PROCUREMENT_MODE: offline
+  PROCUREMENT_MODEL_AUTHORIZED: "false"
+  PROCUREMENT_ALLOWLIST: customer@example.test,admin@example.test
   OPENAI_API_KEY: ""
   AZURE_OPENAI_KEY: ""
   AZURE_OPENAI_API_KEY: ""

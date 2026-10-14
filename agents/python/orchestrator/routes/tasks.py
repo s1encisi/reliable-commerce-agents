@@ -13,6 +13,7 @@ from orchestrator.routes.legacy import require_auth
 from shared.config import settings
 from shared.db import get_pool
 from shared.paid_transport import current_root_run
+from shared.procurement.models import ProcurementSpec
 from shared.task_acceptance import TaskRequirements
 from shared.task_planner import DEMO_TASK_GOAL, generate_plan
 from shared.task_state import (
@@ -35,7 +36,8 @@ router = APIRouter()
 class NewTask(BaseModel):
     goal: str = Field(min_length=1, max_length=6000)
     constraints: list[str] = Field(default_factory=list, max_length=30)
-    requirements: TaskRequirements = Field(default_factory=TaskRequirements)
+    requirements: TaskRequirements | ProcurementSpec = Field(default_factory=TaskRequirements)
+    task_type: Literal["query", "procurement"] = "query"
 
 
 class Revision(BaseModel):
@@ -52,6 +54,34 @@ class ConfirmConstraints(Revision):
 
 @router.post("/api/tasks")
 async def new_task(body: NewTask, user: dict = Depends(require_auth)) -> dict:
+    if body.task_type == "procurement":
+        from orchestrator.routes.procurement import ensure_enabled, state_call
+        from shared.context import current_user_email
+        from shared.procurement import state
+        from shared.procurement.parsing import parse_offline
+
+        ensure_enabled(current_user_email.get(""))
+        if not isinstance(body.requirements, ProcurementSpec):
+            raise HTTPException(422, "采购任务必须提供完整结构化需求，或先调用解析入口")
+        proposal = parse_offline(body.goal)
+        draft = {
+            **body.requirements.model_dump(mode="json"),
+            "_parse": {
+                "source": "user_structured",
+                "questions": [],
+                "unsupported_conditions": proposal.unsupported_conditions,
+            },
+        }
+        return await state_call(
+            state.create_task,
+            get_pool(),
+            current_user_email.get(""),
+            body.goal,
+            draft_spec=draft,
+            execution_mode=settings.PROCUREMENT_MODE,
+        )
+    if not isinstance(body.requirements, TaskRequirements):
+        raise HTTPException(422, "查询任务的条件格式不匹配")
     return await create_task(body.goal, body.constraints, body.requirements)
 
 
@@ -60,12 +90,54 @@ async def get_task(task_id: UUID, user: dict = Depends(require_auth)) -> dict:
     task = await load_task(task_id)
     if task is None:
         raise HTTPException(404, "任务不存在")
+    if task.get("task_type") == "procurement":
+        from shared.context import current_user_email
+        from shared.procurement import state
+
+        return await state.get_task(get_pool(), task_id, current_user_email.get(""))
+    return task
+
+
+async def _require_query(task_id: UUID, user: dict) -> dict:
+    task = await get_task(task_id, user)
+    if task.get("task_type") == "procurement":
+        raise HTTPException(409, "采购任务由自动执行器推进，请使用采购控制接口")
     return task
 
 
 @router.patch("/api/tasks/{task_id}")
 async def update_task(task_id: UUID, body: TaskEdit, user: dict = Depends(require_auth)) -> dict:
-    await get_task(task_id, user)
+    task = await get_task(task_id, user)
+    if task.get("task_type") == "procurement":
+        from orchestrator.routes.procurement import ensure_enabled, state_call
+        from shared.procurement import state
+        from shared.procurement.parsing import parse_offline
+
+        ensure_enabled(task["owner_email"], mode=task["execution_mode"])
+        if not isinstance(body.requirements, ProcurementSpec):
+            raise HTTPException(422, "采购条件格式不匹配")
+        proposal = parse_offline(body.goal)
+        draft = {
+            **body.requirements.model_dump(mode="json"),
+            "_parse": {
+                "source": "user_revised",
+                "questions": proposal.unsupported_conditions,
+                "unsupported_conditions": proposal.unsupported_conditions,
+            },
+        }
+        return await state_call(
+            state.update_draft,
+            get_pool(),
+            task_id,
+            task["owner_email"],
+            body.revision,
+            draft,
+            goal=body.goal,
+            status="needs_input" if proposal.unsupported_conditions else "draft",
+            stop_reason="请确认修订后的采购需求；历史回执保留。",
+        )
+    if not isinstance(body.requirements, TaskRequirements):
+        raise HTTPException(422, "查询条件格式不匹配")
     async with task_operation_lock(task_id) as acquired:
         if not acquired:
             raise HTTPException(409, "任务仍在执行，不能修改")
@@ -76,7 +148,7 @@ async def update_task(task_id: UUID, body: TaskEdit, user: dict = Depends(requir
 
 @router.post("/api/tasks/{task_id}/plan")
 async def plan_task(task_id: UUID, body: Revision, user: dict = Depends(require_auth)) -> dict:
-    await get_task(task_id, user)
+    await _require_query(task_id, user)
     async with task_operation_lock(task_id) as acquired:
         if not acquired:
             raise HTTPException(409, "任务仍在执行，不能重新规划")
@@ -100,7 +172,7 @@ async def plan_task(task_id: UUID, body: Revision, user: dict = Depends(require_
 
 @router.post("/api/tasks/{task_id}/next")
 async def execute_next(task_id: UUID, body: Revision, user: dict = Depends(require_auth)) -> dict:
-    await get_task(task_id, user)
+    await _require_query(task_id, user)
     async with task_operation_lock(task_id) as acquired:
         if not acquired:
             raise HTTPException(409, "任务仍在执行，不能重复推进")
@@ -202,7 +274,7 @@ async def _execute_demo_step(task: dict, step) -> dict:
 
 @router.post("/api/tasks/{task_id}/recover")
 async def recover_task(task_id: UUID, body: Revision, user: dict = Depends(require_auth)) -> dict:
-    await get_task(task_id, user)
+    await _require_query(task_id, user)
     async with task_operation_lock(task_id) as acquired:
         if not acquired:
             raise HTTPException(409, "任务仍持有执行锁，不能接管活跃请求")
@@ -213,7 +285,7 @@ async def recover_task(task_id: UUID, body: Revision, user: dict = Depends(requi
 
 @router.post("/api/tasks/{task_id}/confirm")
 async def confirm_task(task_id: UUID, body: ConfirmConstraints, user: dict = Depends(require_auth)) -> dict:
-    await get_task(task_id, user)
+    await _require_query(task_id, user)
     async with task_operation_lock(task_id) as acquired:
         if not acquired:
             raise HTTPException(409, "任务仍在执行，不能确认")

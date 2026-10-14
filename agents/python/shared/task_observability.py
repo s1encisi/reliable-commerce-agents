@@ -39,7 +39,16 @@ class TaskObservabilityMiddleware:
             return await self.app(scope, receive, send)
         parts = path.strip("/").split("/")
         phase = "create" if len(parts) == 2 else "edit" if scope["method"] == "PATCH" else "read"
-        if len(parts) == 4 and parts[3] in {"plan", "next", "recover", "confirm"}:
+        if len(parts) == 4 and parts[3] in {
+            "plan",
+            "next",
+            "recover",
+            "confirm",
+            "start",
+            "pause",
+            "confirm-spec",
+            "events",
+        }:
             phase = parts[3]
         task_id = None
         if len(parts) >= 3:

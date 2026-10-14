@@ -117,6 +117,7 @@ class AgentAuthMiddleware(BaseHTTPMiddleware):
         current_root_run.set("")
         current_run_deadline.set(None)
         path = request.url.path
+        request.state.is_agent_request = False
 
         # 健康检查与智能体名片端点跳过认证。
         if path in PUBLIC_PATHS:
@@ -141,6 +142,7 @@ class AgentAuthMiddleware(BaseHTTPMiddleware):
             if rejection:
                 return JSONResponse({"error": rejection}, status_code=401)
 
+            request.state.is_agent_request = True
             logger.info(
                 "auth.agent agent=%s user=%s role=%s",
                 self.agent_name,
@@ -176,6 +178,7 @@ class AgentAuthMiddleware(BaseHTTPMiddleware):
             if rejection:
                 return JSONResponse({"error": rejection}, status_code=401)
 
+            request.state.is_agent_request = True
             logger.info(
                 "auth.agent agent=%s user=%s role=%s",
                 self.agent_name,

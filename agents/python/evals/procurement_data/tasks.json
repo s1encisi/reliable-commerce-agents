@@ -1,0 +1,3012 @@
+{
+  "version": "procurement-engineering-v1",
+  "created_at": "2026-10-14",
+  "scope": "30个独立合成场景，18dev/12holdout；未调用真实模型，非真实用户质量或生产收益评测。",
+  "human_review_status": "pending_user_review",
+  "cases": [
+    {
+      "id": "d01",
+      "split": "dev",
+      "description": "单件单备选无券",
+      "spec": {
+        "query": "taskd01",
+        "quantity": 1,
+        "alternative_count": 1,
+        "total_budget": "115",
+        "currency": "CNY",
+        "in_stock": true,
+        "min_rating": null,
+        "preferences": [
+          "保留评论原文和风险引用"
+        ],
+        "budget_scope": "goods",
+        "quote_policy": "single_coupon_v1"
+      },
+      "catalog": [
+        {
+          "key": "a",
+          "name": "taskd01 A 采购耳机",
+          "category": "Electronics",
+          "price": "100.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选A可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选A的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "b",
+          "name": "taskd01 B 采购耳机",
+          "category": "Home",
+          "price": "110.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选B可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选B的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "c",
+          "name": "taskd01 C 采购耳机",
+          "category": "Home",
+          "price": "90.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选C可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选C的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        }
+      ],
+      "coupons": [],
+      "events": [],
+      "expected": {
+        "feasible": true,
+        "acceptable_product_keys": [
+          "a",
+          "b",
+          "c"
+        ],
+        "notes": "允许任何满足已确认约束的备选组合，不按唯一调用轨迹评分；工程任务，不代表真实模型能力。"
+      }
+    },
+    {
+      "id": "d02",
+      "split": "dev",
+      "description": "两件两备选无券",
+      "spec": {
+        "query": "taskd02",
+        "quantity": 2,
+        "alternative_count": 2,
+        "total_budget": "230.00",
+        "currency": "CNY",
+        "in_stock": true,
+        "min_rating": null,
+        "preferences": [
+          "保留评论原文和风险引用"
+        ],
+        "budget_scope": "goods",
+        "quote_policy": "single_coupon_v1"
+      },
+      "catalog": [
+        {
+          "key": "a",
+          "name": "taskd02 A 采购耳机",
+          "category": "Electronics",
+          "price": "100.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选A可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选A的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "b",
+          "name": "taskd02 B 采购耳机",
+          "category": "Home",
+          "price": "110.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选B可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选B的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "c",
+          "name": "taskd02 C 采购耳机",
+          "category": "Home",
+          "price": "90.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选C可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选C的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        }
+      ],
+      "coupons": [],
+      "events": [],
+      "expected": {
+        "feasible": true,
+        "acceptable_product_keys": [
+          "a",
+          "b",
+          "c"
+        ],
+        "notes": "允许任何满足已确认约束的备选组合，不按唯一调用轨迹评分；工程任务，不代表真实模型能力。"
+      }
+    },
+    {
+      "id": "d03",
+      "split": "dev",
+      "description": "最大合法数量且库存充足",
+      "spec": {
+        "query": "taskd03",
+        "quantity": 100,
+        "alternative_count": 2,
+        "total_budget": "12000",
+        "currency": "CNY",
+        "in_stock": true,
+        "min_rating": null,
+        "preferences": [
+          "保留评论原文和风险引用"
+        ],
+        "budget_scope": "goods",
+        "quote_policy": "single_coupon_v1"
+      },
+      "catalog": [
+        {
+          "key": "a",
+          "name": "taskd03 A 采购耳机",
+          "category": "Electronics",
+          "price": "100.00",
+          "rating": "4.50",
+          "stock": 150,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选A可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选A的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "b",
+          "name": "taskd03 B 采购耳机",
+          "category": "Home",
+          "price": "110.00",
+          "rating": "4.50",
+          "stock": 150,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选B可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选B的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "c",
+          "name": "taskd03 C 采购耳机",
+          "category": "Home",
+          "price": "90.00",
+          "rating": "4.50",
+          "stock": 150,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选C可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选C的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        }
+      ],
+      "coupons": [],
+      "events": [],
+      "expected": {
+        "feasible": true,
+        "acceptable_product_keys": [
+          "a",
+          "b",
+          "c"
+        ],
+        "notes": "允许任何满足已确认约束的备选组合，不按唯一调用轨迹评分；工程任务，不代表真实模型能力。"
+      }
+    },
+    {
+      "id": "d04",
+      "split": "dev",
+      "description": "单张满减使折前超预算商品可行",
+      "spec": {
+        "query": "taskd04",
+        "quantity": 2,
+        "alternative_count": 2,
+        "total_budget": "280",
+        "currency": "CNY",
+        "in_stock": true,
+        "min_rating": null,
+        "preferences": [
+          "保留评论原文和风险引用"
+        ],
+        "budget_scope": "goods",
+        "quote_policy": "single_coupon_v1"
+      },
+      "catalog": [
+        {
+          "key": "a",
+          "name": "taskd04 A 采购耳机",
+          "category": "Electronics",
+          "price": "150",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选A可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选A的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "b",
+          "name": "taskd04 B 采购耳机",
+          "category": "Home",
+          "price": "110.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选B可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选B的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "c",
+          "name": "taskd04 C 采购耳机",
+          "category": "Home",
+          "price": "90.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选C可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选C的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        }
+      ],
+      "coupons": [
+        {
+          "key": "coupon0",
+          "discount_type": "fixed",
+          "discount_value": "40",
+          "min_spend": "300",
+          "max_discount": null,
+          "usage_limit": 100,
+          "times_used": 0,
+          "valid_from_seconds": -3600,
+          "valid_until_seconds": 3600,
+          "applicable_categories": [
+            "Electronics"
+          ],
+          "owner": "self",
+          "is_active": true
+        }
+      ],
+      "events": [],
+      "expected": {
+        "feasible": true,
+        "acceptable_product_keys": [
+          "a",
+          "b",
+          "c"
+        ],
+        "notes": "允许任何满足已确认约束的备选组合，不按唯一调用轨迹评分；工程任务，不代表真实模型能力。"
+      }
+    },
+    {
+      "id": "d05",
+      "split": "dev",
+      "description": "百分比优惠上限",
+      "spec": {
+        "query": "taskd05",
+        "quantity": 2,
+        "alternative_count": 2,
+        "total_budget": "280",
+        "currency": "CNY",
+        "in_stock": true,
+        "min_rating": null,
+        "preferences": [
+          "保留评论原文和风险引用"
+        ],
+        "budget_scope": "goods",
+        "quote_policy": "single_coupon_v1"
+      },
+      "catalog": [
+        {
+          "key": "a",
+          "name": "taskd05 A 采购耳机",
+          "category": "Electronics",
+          "price": "150",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选A可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选A的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "b",
+          "name": "taskd05 B 采购耳机",
+          "category": "Home",
+          "price": "110.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选B可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选B的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "c",
+          "name": "taskd05 C 采购耳机",
+          "category": "Home",
+          "price": "90.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选C可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选C的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        }
+      ],
+      "coupons": [
+        {
+          "key": "coupon0",
+          "discount_type": "percentage",
+          "discount_value": "20",
+          "min_spend": "0.00",
+          "max_discount": "25",
+          "usage_limit": 100,
+          "times_used": 0,
+          "valid_from_seconds": -3600,
+          "valid_until_seconds": 3600,
+          "applicable_categories": [
+            "Electronics"
+          ],
+          "owner": "self",
+          "is_active": true
+        }
+      ],
+      "events": [],
+      "expected": {
+        "feasible": true,
+        "acceptable_product_keys": [
+          "a",
+          "b",
+          "c"
+        ],
+        "notes": "允许任何满足已确认约束的备选组合，不按唯一调用轨迹评分；工程任务，不代表真实模型能力。"
+      }
+    },
+    {
+      "id": "d06",
+      "split": "dev",
+      "description": "他人专属券不可用",
+      "spec": {
+        "query": "taskd06",
+        "quantity": 2,
+        "alternative_count": 2,
+        "total_budget": "300",
+        "currency": "CNY",
+        "in_stock": true,
+        "min_rating": null,
+        "preferences": [
+          "保留评论原文和风险引用"
+        ],
+        "budget_scope": "goods",
+        "quote_policy": "single_coupon_v1"
+      },
+      "catalog": [
+        {
+          "key": "a",
+          "name": "taskd06 A 采购耳机",
+          "category": "Electronics",
+          "price": "160",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选A可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选A的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "b",
+          "name": "taskd06 B 采购耳机",
+          "category": "Home",
+          "price": "110.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选B可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选B的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "c",
+          "name": "taskd06 C 采购耳机",
+          "category": "Home",
+          "price": "90.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选C可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选C的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        }
+      ],
+      "coupons": [
+        {
+          "key": "coupon0",
+          "discount_type": "fixed",
+          "discount_value": "30.00",
+          "min_spend": "0.00",
+          "max_discount": null,
+          "usage_limit": 100,
+          "times_used": 0,
+          "valid_from_seconds": -3600,
+          "valid_until_seconds": 3600,
+          "applicable_categories": [
+            "Electronics"
+          ],
+          "owner": "other",
+          "is_active": true
+        }
+      ],
+      "events": [],
+      "expected": {
+        "feasible": true,
+        "acceptable_product_keys": [
+          "b",
+          "c"
+        ],
+        "notes": "允许任何满足已确认约束的备选组合，不按唯一调用轨迹评分；工程任务，不代表真实模型能力。"
+      }
+    },
+    {
+      "id": "d07",
+      "split": "dev",
+      "description": "过期券不可用",
+      "spec": {
+        "query": "taskd07",
+        "quantity": 2,
+        "alternative_count": 2,
+        "total_budget": "300",
+        "currency": "CNY",
+        "in_stock": true,
+        "min_rating": null,
+        "preferences": [
+          "保留评论原文和风险引用"
+        ],
+        "budget_scope": "goods",
+        "quote_policy": "single_coupon_v1"
+      },
+      "catalog": [
+        {
+          "key": "a",
+          "name": "taskd07 A 采购耳机",
+          "category": "Electronics",
+          "price": "160",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选A可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选A的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "b",
+          "name": "taskd07 B 采购耳机",
+          "category": "Home",
+          "price": "110.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选B可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选B的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "c",
+          "name": "taskd07 C 采购耳机",
+          "category": "Home",
+          "price": "90.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选C可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选C的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        }
+      ],
+      "coupons": [
+        {
+          "key": "coupon0",
+          "discount_type": "fixed",
+          "discount_value": "30.00",
+          "min_spend": "0.00",
+          "max_discount": null,
+          "usage_limit": 100,
+          "times_used": 0,
+          "valid_from_seconds": -3600,
+          "valid_until_seconds": -10,
+          "applicable_categories": [
+            "Electronics"
+          ],
+          "owner": "self",
+          "is_active": true
+        }
+      ],
+      "events": [],
+      "expected": {
+        "feasible": true,
+        "acceptable_product_keys": [
+          "b",
+          "c"
+        ],
+        "notes": "允许任何满足已确认约束的备选组合，不按唯一调用轨迹评分；工程任务，不代表真实模型能力。"
+      }
+    },
+    {
+      "id": "d08",
+      "split": "dev",
+      "description": "差一分未达用券门槛",
+      "spec": {
+        "query": "taskd08",
+        "quantity": 2,
+        "alternative_count": 2,
+        "total_budget": "280",
+        "currency": "CNY",
+        "in_stock": true,
+        "min_rating": null,
+        "preferences": [
+          "保留评论原文和风险引用"
+        ],
+        "budget_scope": "goods",
+        "quote_policy": "single_coupon_v1"
+      },
+      "catalog": [
+        {
+          "key": "a",
+          "name": "taskd08 A 采购耳机",
+          "category": "Electronics",
+          "price": "150",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选A可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选A的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "b",
+          "name": "taskd08 B 采购耳机",
+          "category": "Home",
+          "price": "110.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选B可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选B的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "c",
+          "name": "taskd08 C 采购耳机",
+          "category": "Home",
+          "price": "90.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选C可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选C的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        }
+      ],
+      "coupons": [
+        {
+          "key": "coupon0",
+          "discount_type": "fixed",
+          "discount_value": "30.00",
+          "min_spend": "300.01",
+          "max_discount": null,
+          "usage_limit": 100,
+          "times_used": 0,
+          "valid_from_seconds": -3600,
+          "valid_until_seconds": 3600,
+          "applicable_categories": [
+            "Electronics"
+          ],
+          "owner": "self",
+          "is_active": true
+        }
+      ],
+      "events": [],
+      "expected": {
+        "feasible": true,
+        "acceptable_product_keys": [
+          "b",
+          "c"
+        ],
+        "notes": "允许任何满足已确认约束的备选组合，不按唯一调用轨迹评分；工程任务，不代表真实模型能力。"
+      }
+    },
+    {
+      "id": "d09",
+      "split": "dev",
+      "description": "券已达到使用次数上限",
+      "spec": {
+        "query": "taskd09",
+        "quantity": 2,
+        "alternative_count": 2,
+        "total_budget": "300",
+        "currency": "CNY",
+        "in_stock": true,
+        "min_rating": null,
+        "preferences": [
+          "保留评论原文和风险引用"
+        ],
+        "budget_scope": "goods",
+        "quote_policy": "single_coupon_v1"
+      },
+      "catalog": [
+        {
+          "key": "a",
+          "name": "taskd09 A 采购耳机",
+          "category": "Electronics",
+          "price": "160",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选A可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选A的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "b",
+          "name": "taskd09 B 采购耳机",
+          "category": "Home",
+          "price": "110.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选B可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选B的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "c",
+          "name": "taskd09 C 采购耳机",
+          "category": "Home",
+          "price": "90.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选C可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选C的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        }
+      ],
+      "coupons": [
+        {
+          "key": "coupon0",
+          "discount_type": "fixed",
+          "discount_value": "30.00",
+          "min_spend": "0.00",
+          "max_discount": null,
+          "usage_limit": 2,
+          "times_used": 2,
+          "valid_from_seconds": -3600,
+          "valid_until_seconds": 3600,
+          "applicable_categories": [
+            "Electronics"
+          ],
+          "owner": "self",
+          "is_active": true
+        }
+      ],
+      "events": [],
+      "expected": {
+        "feasible": true,
+        "acceptable_product_keys": [
+          "b",
+          "c"
+        ],
+        "notes": "允许任何满足已确认约束的备选组合，不按唯一调用轨迹评分；工程任务，不代表真实模型能力。"
+      }
+    },
+    {
+      "id": "d10",
+      "split": "dev",
+      "description": "优惠券品类不符",
+      "spec": {
+        "query": "taskd10",
+        "quantity": 2,
+        "alternative_count": 2,
+        "total_budget": "300",
+        "currency": "CNY",
+        "in_stock": true,
+        "min_rating": null,
+        "preferences": [
+          "保留评论原文和风险引用"
+        ],
+        "budget_scope": "goods",
+        "quote_policy": "single_coupon_v1"
+      },
+      "catalog": [
+        {
+          "key": "a",
+          "name": "taskd10 A 采购耳机",
+          "category": "Electronics",
+          "price": "160",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选A可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选A的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "b",
+          "name": "taskd10 B 采购耳机",
+          "category": "Home",
+          "price": "110.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选B可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选B的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "c",
+          "name": "taskd10 C 采购耳机",
+          "category": "Home",
+          "price": "90.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选C可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选C的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        }
+      ],
+      "coupons": [
+        {
+          "key": "coupon0",
+          "discount_type": "fixed",
+          "discount_value": "30.00",
+          "min_spend": "0.00",
+          "max_discount": null,
+          "usage_limit": 100,
+          "times_used": 0,
+          "valid_from_seconds": -3600,
+          "valid_until_seconds": 3600,
+          "applicable_categories": [
+            "Books"
+          ],
+          "owner": "self",
+          "is_active": true
+        }
+      ],
+      "events": [],
+      "expected": {
+        "feasible": true,
+        "acceptable_product_keys": [
+          "b",
+          "c"
+        ],
+        "notes": "允许任何满足已确认约束的备选组合，不按唯一调用轨迹评分；工程任务，不代表真实模型能力。"
+      }
+    },
+    {
+      "id": "d11",
+      "split": "dev",
+      "description": "初始候选A库存数量不足",
+      "spec": {
+        "query": "taskd11",
+        "quantity": 2,
+        "alternative_count": 2,
+        "total_budget": "230.00",
+        "currency": "CNY",
+        "in_stock": true,
+        "min_rating": null,
+        "preferences": [
+          "保留评论原文和风险引用"
+        ],
+        "budget_scope": "goods",
+        "quote_policy": "single_coupon_v1"
+      },
+      "catalog": [
+        {
+          "key": "a",
+          "name": "taskd11 A 采购耳机",
+          "category": "Electronics",
+          "price": "100.00",
+          "rating": "4.50",
+          "stock": 1,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选A可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选A的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "b",
+          "name": "taskd11 B 采购耳机",
+          "category": "Home",
+          "price": "110.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选B可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选B的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "c",
+          "name": "taskd11 C 采购耳机",
+          "category": "Home",
+          "price": "90.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选C可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选C的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        }
+      ],
+      "coupons": [],
+      "events": [],
+      "expected": {
+        "feasible": true,
+        "acceptable_product_keys": [
+          "b",
+          "c"
+        ],
+        "notes": "允许任何满足已确认约束的备选组合，不按唯一调用轨迹评分；工程任务，不代表真实模型能力。"
+      }
+    },
+    {
+      "id": "d12",
+      "split": "dev",
+      "description": "候选A没有评论应明确证据不足",
+      "spec": {
+        "query": "taskd12",
+        "quantity": 2,
+        "alternative_count": 2,
+        "total_budget": "230.00",
+        "currency": "CNY",
+        "in_stock": true,
+        "min_rating": null,
+        "preferences": [
+          "保留评论原文和风险引用"
+        ],
+        "budget_scope": "goods",
+        "quote_policy": "single_coupon_v1"
+      },
+      "catalog": [
+        {
+          "key": "a",
+          "name": "taskd12 A 采购耳机",
+          "category": "Electronics",
+          "price": "100.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": []
+        },
+        {
+          "key": "b",
+          "name": "taskd12 B 采购耳机",
+          "category": "Home",
+          "price": "110.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选B可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选B的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "c",
+          "name": "taskd12 C 采购耳机",
+          "category": "Home",
+          "price": "90.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选C可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选C的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        }
+      ],
+      "coupons": [],
+      "events": [],
+      "expected": {
+        "feasible": true,
+        "acceptable_product_keys": [
+          "b",
+          "c"
+        ],
+        "notes": "允许任何满足已确认约束的备选组合，不按唯一调用轨迹评分；工程任务，不代表真实模型能力。"
+      }
+    },
+    {
+      "id": "d13",
+      "split": "dev",
+      "description": "全部库存不足且不可行",
+      "spec": {
+        "query": "taskd13",
+        "quantity": 2,
+        "alternative_count": 2,
+        "total_budget": "230.00",
+        "currency": "CNY",
+        "in_stock": true,
+        "min_rating": null,
+        "preferences": [
+          "保留评论原文和风险引用"
+        ],
+        "budget_scope": "goods",
+        "quote_policy": "single_coupon_v1"
+      },
+      "catalog": [
+        {
+          "key": "a",
+          "name": "taskd13 A 采购耳机",
+          "category": "Electronics",
+          "price": "100.00",
+          "rating": "4.50",
+          "stock": 0,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选A可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选A的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "b",
+          "name": "taskd13 B 采购耳机",
+          "category": "Home",
+          "price": "110.00",
+          "rating": "4.50",
+          "stock": 0,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选B可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选B的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "c",
+          "name": "taskd13 C 采购耳机",
+          "category": "Home",
+          "price": "90.00",
+          "rating": "4.50",
+          "stock": 0,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选C可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选C的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        }
+      ],
+      "coupons": [],
+      "events": [],
+      "expected": {
+        "feasible": false,
+        "acceptable_product_keys": [],
+        "notes": "允许任何满足已确认约束的备选组合，不按唯一调用轨迹评分；工程任务，不代表真实模型能力。"
+      }
+    },
+    {
+      "id": "d14",
+      "split": "dev",
+      "description": "已取得A报价后价格上涨",
+      "spec": {
+        "query": "taskd14",
+        "quantity": 2,
+        "alternative_count": 2,
+        "total_budget": "230.00",
+        "currency": "CNY",
+        "in_stock": true,
+        "min_rating": null,
+        "preferences": [
+          "保留评论原文和风险引用"
+        ],
+        "budget_scope": "goods",
+        "quote_policy": "single_coupon_v1"
+      },
+      "catalog": [
+        {
+          "key": "a",
+          "name": "taskd14 A 采购耳机",
+          "category": "Electronics",
+          "price": "100.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选A可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选A的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "b",
+          "name": "taskd14 B 采购耳机",
+          "category": "Home",
+          "price": "110.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选B可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选B的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "c",
+          "name": "taskd14 C 采购耳机",
+          "category": "Home",
+          "price": "90.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选C可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选C的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        }
+      ],
+      "coupons": [],
+      "events": [
+        {
+          "at": "after_capability",
+          "capability": "quote_options",
+          "product": "a",
+          "occurrence": 1,
+          "action": "price",
+          "value": "300"
+        }
+      ],
+      "expected": {
+        "feasible": true,
+        "acceptable_product_keys": [
+          "b",
+          "c"
+        ],
+        "notes": "允许任何满足已确认约束的备选组合，不按唯一调用轨迹评分；工程任务，不代表真实模型能力。"
+      }
+    },
+    {
+      "id": "d15",
+      "split": "dev",
+      "description": "最终核验前A库存耗尽",
+      "spec": {
+        "query": "taskd15",
+        "quantity": 2,
+        "alternative_count": 2,
+        "total_budget": "230.00",
+        "currency": "CNY",
+        "in_stock": true,
+        "min_rating": null,
+        "preferences": [
+          "保留评论原文和风险引用"
+        ],
+        "budget_scope": "goods",
+        "quote_policy": "single_coupon_v1"
+      },
+      "catalog": [
+        {
+          "key": "a",
+          "name": "taskd15 A 采购耳机",
+          "category": "Electronics",
+          "price": "100.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选A可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选A的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "b",
+          "name": "taskd15 B 采购耳机",
+          "category": "Home",
+          "price": "110.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选B可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选B的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "c",
+          "name": "taskd15 C 采购耳机",
+          "category": "Home",
+          "price": "90.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选C可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选C的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        }
+      ],
+      "coupons": [],
+      "events": [
+        {
+          "at": "before_finalize",
+          "occurrence": 1,
+          "product": "a",
+          "action": "stock",
+          "value": 0
+        }
+      ],
+      "expected": {
+        "feasible": true,
+        "acceptable_product_keys": [
+          "b",
+          "c"
+        ],
+        "notes": "允许任何满足已确认约束的备选组合，不按唯一调用轨迹评分；工程任务，不代表真实模型能力。"
+      }
+    },
+    {
+      "id": "d16",
+      "split": "dev",
+      "description": "最终核验前A评论删除",
+      "spec": {
+        "query": "taskd16",
+        "quantity": 2,
+        "alternative_count": 2,
+        "total_budget": "230.00",
+        "currency": "CNY",
+        "in_stock": true,
+        "min_rating": null,
+        "preferences": [
+          "保留评论原文和风险引用"
+        ],
+        "budget_scope": "goods",
+        "quote_policy": "single_coupon_v1"
+      },
+      "catalog": [
+        {
+          "key": "a",
+          "name": "taskd16 A 采购耳机",
+          "category": "Electronics",
+          "price": "100.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选A可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选A的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "b",
+          "name": "taskd16 B 采购耳机",
+          "category": "Home",
+          "price": "110.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选B可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选B的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "c",
+          "name": "taskd16 C 采购耳机",
+          "category": "Home",
+          "price": "90.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选C可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选C的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        }
+      ],
+      "coupons": [],
+      "events": [
+        {
+          "at": "before_finalize",
+          "occurrence": 1,
+          "product": "a",
+          "action": "delete_reviews"
+        }
+      ],
+      "expected": {
+        "feasible": true,
+        "acceptable_product_keys": [
+          "b",
+          "c"
+        ],
+        "notes": "允许任何满足已确认约束的备选组合，不按唯一调用轨迹评分；工程任务，不代表真实模型能力。"
+      }
+    },
+    {
+      "id": "d17",
+      "split": "dev",
+      "description": "已报价的本人券在最终核验前过期",
+      "spec": {
+        "query": "taskd17",
+        "quantity": 2,
+        "alternative_count": 2,
+        "total_budget": "300",
+        "currency": "CNY",
+        "in_stock": true,
+        "min_rating": null,
+        "preferences": [
+          "保留评论原文和风险引用"
+        ],
+        "budget_scope": "goods",
+        "quote_policy": "single_coupon_v1"
+      },
+      "catalog": [
+        {
+          "key": "a",
+          "name": "taskd17 A 采购耳机",
+          "category": "Electronics",
+          "price": "160",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选A可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选A的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "b",
+          "name": "taskd17 B 采购耳机",
+          "category": "Home",
+          "price": "110.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选B可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选B的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "c",
+          "name": "taskd17 C 采购耳机",
+          "category": "Home",
+          "price": "90.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选C可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选C的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        }
+      ],
+      "coupons": [
+        {
+          "key": "coupon0",
+          "discount_type": "fixed",
+          "discount_value": "30.00",
+          "min_spend": "0.00",
+          "max_discount": null,
+          "usage_limit": 100,
+          "times_used": 0,
+          "valid_from_seconds": -3600,
+          "valid_until_seconds": 3600,
+          "applicable_categories": [
+            "Electronics"
+          ],
+          "owner": "self",
+          "is_active": true
+        }
+      ],
+      "events": [
+        {
+          "at": "before_finalize",
+          "occurrence": 1,
+          "coupon": "coupon0",
+          "action": "expire_coupon"
+        }
+      ],
+      "expected": {
+        "feasible": true,
+        "acceptable_product_keys": [
+          "b",
+          "c"
+        ],
+        "notes": "允许任何满足已确认约束的备选组合，不按唯一调用轨迹评分；工程任务，不代表真实模型能力。"
+      }
+    },
+    {
+      "id": "d18",
+      "split": "dev",
+      "description": "两张有效券择一而非叠加",
+      "spec": {
+        "query": "taskd18",
+        "quantity": 2,
+        "alternative_count": 2,
+        "total_budget": "280",
+        "currency": "CNY",
+        "in_stock": true,
+        "min_rating": null,
+        "preferences": [
+          "保留评论原文和风险引用"
+        ],
+        "budget_scope": "goods",
+        "quote_policy": "single_coupon_v1"
+      },
+      "catalog": [
+        {
+          "key": "a",
+          "name": "taskd18 A 采购耳机",
+          "category": "Electronics",
+          "price": "150",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选A可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选A的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "b",
+          "name": "taskd18 B 采购耳机",
+          "category": "Home",
+          "price": "110.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选B可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选B的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "c",
+          "name": "taskd18 C 采购耳机",
+          "category": "Home",
+          "price": "90.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选C可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选C的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        }
+      ],
+      "coupons": [
+        {
+          "key": "coupon0",
+          "discount_type": "fixed",
+          "discount_value": "30",
+          "min_spend": "0.00",
+          "max_discount": null,
+          "usage_limit": 100,
+          "times_used": 0,
+          "valid_from_seconds": -3600,
+          "valid_until_seconds": 3600,
+          "applicable_categories": [
+            "Electronics"
+          ],
+          "owner": "self",
+          "is_active": true
+        },
+        {
+          "key": "coupon1",
+          "discount_type": "percentage",
+          "discount_value": "20",
+          "min_spend": "0.00",
+          "max_discount": "35",
+          "usage_limit": 100,
+          "times_used": 0,
+          "valid_from_seconds": -3600,
+          "valid_until_seconds": 3600,
+          "applicable_categories": [
+            "Electronics"
+          ],
+          "owner": "self",
+          "is_active": true
+        }
+      ],
+      "events": [],
+      "expected": {
+        "feasible": true,
+        "acceptable_product_keys": [
+          "a",
+          "b",
+          "c"
+        ],
+        "notes": "允许任何满足已确认约束的备选组合，不按唯一调用轨迹评分；工程任务，不代表真实模型能力。"
+      }
+    },
+    {
+      "id": "h01",
+      "split": "holdout",
+      "description": "小数价格乘数量精度",
+      "spec": {
+        "query": "taskh01",
+        "quantity": 3,
+        "alternative_count": 2,
+        "total_budget": "200",
+        "currency": "CNY",
+        "in_stock": true,
+        "min_rating": null,
+        "preferences": [
+          "保留评论原文和风险引用"
+        ],
+        "budget_scope": "goods",
+        "quote_policy": "single_coupon_v1"
+      },
+      "catalog": [
+        {
+          "key": "a",
+          "name": "taskh01 A 采购耳机",
+          "category": "Electronics",
+          "price": "61.15",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选A可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选A的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "b",
+          "name": "taskh01 B 采购耳机",
+          "category": "Home",
+          "price": "62.05",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选B可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选B的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "c",
+          "name": "taskh01 C 采购耳机",
+          "category": "Home",
+          "price": "49.95",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选C可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选C的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        }
+      ],
+      "coupons": [],
+      "events": [],
+      "expected": {
+        "feasible": true,
+        "acceptable_product_keys": [
+          "a",
+          "b",
+          "c"
+        ],
+        "notes": "允许任何满足已确认约束的备选组合，不按唯一调用轨迹评分；工程任务，不代表真实模型能力。"
+      }
+    },
+    {
+      "id": "h02",
+      "split": "holdout",
+      "description": "非整数百分比单券",
+      "spec": {
+        "query": "taskh02",
+        "quantity": 2,
+        "alternative_count": 2,
+        "total_budget": "290",
+        "currency": "CNY",
+        "in_stock": true,
+        "min_rating": null,
+        "preferences": [
+          "保留评论原文和风险引用"
+        ],
+        "budget_scope": "goods",
+        "quote_policy": "single_coupon_v1"
+      },
+      "catalog": [
+        {
+          "key": "a",
+          "name": "taskh02 A 采购耳机",
+          "category": "Electronics",
+          "price": "160",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选A可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选A的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "b",
+          "name": "taskh02 B 采购耳机",
+          "category": "Home",
+          "price": "110.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选B可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选B的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "c",
+          "name": "taskh02 C 采购耳机",
+          "category": "Home",
+          "price": "90.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选C可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选C的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        }
+      ],
+      "coupons": [
+        {
+          "key": "coupon0",
+          "discount_type": "percentage",
+          "discount_value": "12.50",
+          "min_spend": "0.00",
+          "max_discount": null,
+          "usage_limit": 100,
+          "times_used": 0,
+          "valid_from_seconds": -3600,
+          "valid_until_seconds": 3600,
+          "applicable_categories": [
+            "Electronics"
+          ],
+          "owner": "self",
+          "is_active": true
+        }
+      ],
+      "events": [],
+      "expected": {
+        "feasible": true,
+        "acceptable_product_keys": [
+          "a",
+          "b",
+          "c"
+        ],
+        "notes": "允许任何满足已确认约束的备选组合，不按唯一调用轨迹评分；工程任务，不代表真实模型能力。"
+      }
+    },
+    {
+      "id": "h03",
+      "split": "holdout",
+      "description": "固定券金额超过商品总价时归零",
+      "spec": {
+        "query": "taskh03",
+        "quantity": 2,
+        "alternative_count": 2,
+        "total_budget": "230.00",
+        "currency": "CNY",
+        "in_stock": true,
+        "min_rating": null,
+        "preferences": [
+          "保留评论原文和风险引用"
+        ],
+        "budget_scope": "goods",
+        "quote_policy": "single_coupon_v1"
+      },
+      "catalog": [
+        {
+          "key": "a",
+          "name": "taskh03 A 采购耳机",
+          "category": "Electronics",
+          "price": "160",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选A可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选A的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "b",
+          "name": "taskh03 B 采购耳机",
+          "category": "Home",
+          "price": "110.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选B可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选B的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "c",
+          "name": "taskh03 C 采购耳机",
+          "category": "Home",
+          "price": "90.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选C可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选C的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        }
+      ],
+      "coupons": [
+        {
+          "key": "coupon0",
+          "discount_type": "fixed",
+          "discount_value": "500",
+          "min_spend": "0.00",
+          "max_discount": null,
+          "usage_limit": 100,
+          "times_used": 0,
+          "valid_from_seconds": -3600,
+          "valid_until_seconds": 3600,
+          "applicable_categories": [
+            "Electronics"
+          ],
+          "owner": "self",
+          "is_active": true
+        }
+      ],
+      "events": [],
+      "expected": {
+        "feasible": true,
+        "acceptable_product_keys": [
+          "a",
+          "b",
+          "c"
+        ],
+        "notes": "允许任何满足已确认约束的备选组合，不按唯一调用轨迹评分；工程任务，不代表真实模型能力。"
+      }
+    },
+    {
+      "id": "h04",
+      "split": "holdout",
+      "description": "已停用优惠券不参与报价",
+      "spec": {
+        "query": "taskh04",
+        "quantity": 2,
+        "alternative_count": 2,
+        "total_budget": "300",
+        "currency": "CNY",
+        "in_stock": true,
+        "min_rating": null,
+        "preferences": [
+          "保留评论原文和风险引用"
+        ],
+        "budget_scope": "goods",
+        "quote_policy": "single_coupon_v1"
+      },
+      "catalog": [
+        {
+          "key": "a",
+          "name": "taskh04 A 采购耳机",
+          "category": "Electronics",
+          "price": "160",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选A可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选A的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "b",
+          "name": "taskh04 B 采购耳机",
+          "category": "Home",
+          "price": "110.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选B可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选B的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "c",
+          "name": "taskh04 C 采购耳机",
+          "category": "Home",
+          "price": "90.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选C可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选C的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        }
+      ],
+      "coupons": [
+        {
+          "key": "coupon0",
+          "discount_type": "fixed",
+          "discount_value": "30.00",
+          "min_spend": "0.00",
+          "max_discount": null,
+          "usage_limit": 100,
+          "times_used": 0,
+          "valid_from_seconds": -3600,
+          "valid_until_seconds": 3600,
+          "applicable_categories": [
+            "Electronics"
+          ],
+          "owner": "self",
+          "is_active": false
+        }
+      ],
+      "events": [],
+      "expected": {
+        "feasible": true,
+        "acceptable_product_keys": [
+          "b",
+          "c"
+        ],
+        "notes": "允许任何满足已确认约束的备选组合，不按唯一调用轨迹评分；工程任务，不代表真实模型能力。"
+      }
+    },
+    {
+      "id": "h05",
+      "split": "holdout",
+      "description": "尚未生效优惠券不参与报价",
+      "spec": {
+        "query": "taskh05",
+        "quantity": 2,
+        "alternative_count": 2,
+        "total_budget": "300",
+        "currency": "CNY",
+        "in_stock": true,
+        "min_rating": null,
+        "preferences": [
+          "保留评论原文和风险引用"
+        ],
+        "budget_scope": "goods",
+        "quote_policy": "single_coupon_v1"
+      },
+      "catalog": [
+        {
+          "key": "a",
+          "name": "taskh05 A 采购耳机",
+          "category": "Electronics",
+          "price": "160",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选A可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选A的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "b",
+          "name": "taskh05 B 采购耳机",
+          "category": "Home",
+          "price": "110.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选B可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选B的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "c",
+          "name": "taskh05 C 采购耳机",
+          "category": "Home",
+          "price": "90.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选C可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选C的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        }
+      ],
+      "coupons": [
+        {
+          "key": "coupon0",
+          "discount_type": "fixed",
+          "discount_value": "30.00",
+          "min_spend": "0.00",
+          "max_discount": null,
+          "usage_limit": 100,
+          "times_used": 0,
+          "valid_from_seconds": 3600,
+          "valid_until_seconds": 7200,
+          "applicable_categories": [
+            "Electronics"
+          ],
+          "owner": "self",
+          "is_active": true
+        }
+      ],
+      "events": [],
+      "expected": {
+        "feasible": true,
+        "acceptable_product_keys": [
+          "b",
+          "c"
+        ],
+        "notes": "允许任何满足已确认约束的备选组合，不按唯一调用轨迹评分；工程任务，不代表真实模型能力。"
+      }
+    },
+    {
+      "id": "h06",
+      "split": "holdout",
+      "description": "三件需求不能以仅有一件当有货",
+      "spec": {
+        "query": "taskh06",
+        "quantity": 3,
+        "alternative_count": 2,
+        "total_budget": "350",
+        "currency": "CNY",
+        "in_stock": true,
+        "min_rating": null,
+        "preferences": [
+          "保留评论原文和风险引用"
+        ],
+        "budget_scope": "goods",
+        "quote_policy": "single_coupon_v1"
+      },
+      "catalog": [
+        {
+          "key": "a",
+          "name": "taskh06 A 采购耳机",
+          "category": "Electronics",
+          "price": "100.00",
+          "rating": "4.50",
+          "stock": 1,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选A可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选A的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "b",
+          "name": "taskh06 B 采购耳机",
+          "category": "Home",
+          "price": "110.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选B可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选B的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "c",
+          "name": "taskh06 C 采购耳机",
+          "category": "Home",
+          "price": "90.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选C可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选C的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        }
+      ],
+      "coupons": [],
+      "events": [],
+      "expected": {
+        "feasible": true,
+        "acceptable_product_keys": [
+          "b",
+          "c"
+        ],
+        "notes": "允许任何满足已确认约束的备选组合，不按唯一调用轨迹评分；工程任务，不代表真实模型能力。"
+      }
+    },
+    {
+      "id": "h07",
+      "split": "holdout",
+      "description": "最低评分硬约束在检索和终审共同生效",
+      "spec": {
+        "query": "taskh07",
+        "quantity": 2,
+        "alternative_count": 2,
+        "total_budget": "230.00",
+        "currency": "CNY",
+        "in_stock": true,
+        "min_rating": 4,
+        "preferences": [
+          "保留评论原文和风险引用"
+        ],
+        "budget_scope": "goods",
+        "quote_policy": "single_coupon_v1"
+      },
+      "catalog": [
+        {
+          "key": "a",
+          "name": "taskh07 A 采购耳机",
+          "category": "Electronics",
+          "price": "100.00",
+          "rating": "3.80",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选A可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选A的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "b",
+          "name": "taskh07 B 采购耳机",
+          "category": "Home",
+          "price": "110.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选B可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选B的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "c",
+          "name": "taskh07 C 采购耳机",
+          "category": "Home",
+          "price": "90.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选C可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选C的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        }
+      ],
+      "coupons": [],
+      "events": [],
+      "expected": {
+        "feasible": true,
+        "acceptable_product_keys": [
+          "b",
+          "c"
+        ],
+        "notes": "允许任何满足已确认约束的备选组合，不按唯一调用轨迹评分；工程任务，不代表真实模型能力。"
+      }
+    },
+    {
+      "id": "h08",
+      "split": "holdout",
+      "description": "全部缺评论不能冒充核验充分",
+      "spec": {
+        "query": "taskh08",
+        "quantity": 2,
+        "alternative_count": 2,
+        "total_budget": "230.00",
+        "currency": "CNY",
+        "in_stock": true,
+        "min_rating": null,
+        "preferences": [
+          "保留评论原文和风险引用"
+        ],
+        "budget_scope": "goods",
+        "quote_policy": "single_coupon_v1"
+      },
+      "catalog": [
+        {
+          "key": "a",
+          "name": "taskh08 A 采购耳机",
+          "category": "Electronics",
+          "price": "100.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": []
+        },
+        {
+          "key": "b",
+          "name": "taskh08 B 采购耳机",
+          "category": "Home",
+          "price": "110.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": []
+        },
+        {
+          "key": "c",
+          "name": "taskh08 C 采购耳机",
+          "category": "Home",
+          "price": "90.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": []
+        }
+      ],
+      "coupons": [],
+      "events": [],
+      "expected": {
+        "feasible": false,
+        "acceptable_product_keys": [],
+        "notes": "允许任何满足已确认约束的备选组合，不按唯一调用轨迹评分；工程任务，不代表真实模型能力。"
+      }
+    },
+    {
+      "id": "h09",
+      "split": "holdout",
+      "description": "两个候选同时变化仅剩一个可行不足两备选",
+      "spec": {
+        "query": "taskh09",
+        "quantity": 2,
+        "alternative_count": 2,
+        "total_budget": "230.00",
+        "currency": "CNY",
+        "in_stock": true,
+        "min_rating": null,
+        "preferences": [
+          "保留评论原文和风险引用"
+        ],
+        "budget_scope": "goods",
+        "quote_policy": "single_coupon_v1"
+      },
+      "catalog": [
+        {
+          "key": "a",
+          "name": "taskh09 A 采购耳机",
+          "category": "Electronics",
+          "price": "100.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选A可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选A的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "b",
+          "name": "taskh09 B 采购耳机",
+          "category": "Home",
+          "price": "110.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选B可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选B的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "c",
+          "name": "taskh09 C 采购耳机",
+          "category": "Home",
+          "price": "90.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选C可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选C的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        }
+      ],
+      "coupons": [],
+      "events": [
+        {
+          "at": "before_finalize",
+          "occurrence": 1,
+          "product": "a",
+          "action": "stock",
+          "value": 0
+        },
+        {
+          "at": "before_finalize",
+          "occurrence": 1,
+          "product": "b",
+          "action": "price",
+          "value": "500"
+        }
+      ],
+      "expected": {
+        "feasible": false,
+        "acceptable_product_keys": [
+          "c"
+        ],
+        "notes": "允许任何满足已确认约束的备选组合，不按唯一调用轨迹评分；工程任务，不代表真实模型能力。"
+      }
+    },
+    {
+      "id": "h10",
+      "split": "holdout",
+      "description": "价格下降也必须更新过时报价",
+      "spec": {
+        "query": "taskh10",
+        "quantity": 2,
+        "alternative_count": 2,
+        "total_budget": "230.00",
+        "currency": "CNY",
+        "in_stock": true,
+        "min_rating": null,
+        "preferences": [
+          "保留评论原文和风险引用"
+        ],
+        "budget_scope": "goods",
+        "quote_policy": "single_coupon_v1"
+      },
+      "catalog": [
+        {
+          "key": "a",
+          "name": "taskh10 A 采购耳机",
+          "category": "Electronics",
+          "price": "100.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选A可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选A的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "b",
+          "name": "taskh10 B 采购耳机",
+          "category": "Home",
+          "price": "110.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选B可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选B的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "c",
+          "name": "taskh10 C 采购耳机",
+          "category": "Home",
+          "price": "90.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选C可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选C的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        }
+      ],
+      "coupons": [],
+      "events": [
+        {
+          "at": "before_finalize",
+          "occurrence": 1,
+          "product": "a",
+          "action": "price",
+          "value": "80"
+        }
+      ],
+      "expected": {
+        "feasible": true,
+        "acceptable_product_keys": [
+          "a",
+          "b",
+          "c"
+        ],
+        "notes": "允许任何满足已确认约束的备选组合，不按唯一调用轨迹评分；工程任务，不代表真实模型能力。"
+      }
+    },
+    {
+      "id": "h11",
+      "split": "holdout",
+      "description": "单备选故障后的替代商品修复",
+      "spec": {
+        "query": "taskh11",
+        "quantity": 1,
+        "alternative_count": 1,
+        "total_budget": "120",
+        "currency": "CNY",
+        "in_stock": true,
+        "min_rating": null,
+        "preferences": [
+          "保留评论原文和风险引用"
+        ],
+        "budget_scope": "goods",
+        "quote_policy": "single_coupon_v1"
+      },
+      "catalog": [
+        {
+          "key": "a",
+          "name": "taskh11 A 采购耳机",
+          "category": "Electronics",
+          "price": "100.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选A可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选A的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "b",
+          "name": "taskh11 B 采购耳机",
+          "category": "Home",
+          "price": "110.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选B可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选B的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "c",
+          "name": "taskh11 C 采购耳机",
+          "category": "Home",
+          "price": "90.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选C可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选C的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        }
+      ],
+      "coupons": [],
+      "events": [
+        {
+          "at": "after_capability",
+          "capability": "quote_options",
+          "product": "a",
+          "occurrence": 1,
+          "action": "stock",
+          "value": 0
+        }
+      ],
+      "expected": {
+        "feasible": true,
+        "acceptable_product_keys": [
+          "b",
+          "c"
+        ],
+        "notes": "允许任何满足已确认约束的备选组合，不按唯一调用轨迹评分；工程任务，不代表真实模型能力。"
+      }
+    },
+    {
+      "id": "h12",
+      "split": "holdout",
+      "description": "修复后再次变化必须停止不能无限修复",
+      "spec": {
+        "query": "taskh12",
+        "quantity": 2,
+        "alternative_count": 2,
+        "total_budget": "230.00",
+        "currency": "CNY",
+        "in_stock": true,
+        "min_rating": null,
+        "preferences": [
+          "保留评论原文和风险引用"
+        ],
+        "budget_scope": "goods",
+        "quote_policy": "single_coupon_v1"
+      },
+      "catalog": [
+        {
+          "key": "a",
+          "name": "taskh12 A 采购耳机",
+          "category": "Electronics",
+          "price": "100.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选A可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选A的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "b",
+          "name": "taskh12 B 采购耳机",
+          "category": "Home",
+          "price": "110.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选B可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选B的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        },
+        {
+          "key": "c",
+          "name": "taskh12 C 采购耳机",
+          "category": "Home",
+          "price": "90.00",
+          "rating": "4.50",
+          "stock": 10,
+          "reviews": [
+            {
+              "rating": 4,
+              "title": "合成原文",
+              "body": "候选C可正常使用；佩戴体验需自行确认。"
+            },
+            {
+              "rating": 2,
+              "title": "可追溯风险",
+              "body": "候选C的合成低评分评论：包装说明较简略。"
+            }
+          ]
+        }
+      ],
+      "coupons": [],
+      "events": [
+        {
+          "at": "before_finalize",
+          "occurrence": 1,
+          "product": "a",
+          "action": "stock",
+          "value": 0
+        },
+        {
+          "at": "before_finalize",
+          "occurrence": 2,
+          "product": "b",
+          "action": "stock",
+          "value": 0
+        }
+      ],
+      "expected": {
+        "feasible": false,
+        "acceptable_product_keys": [
+          "c"
+        ],
+        "notes": "允许任何满足已确认约束的备选组合，不按唯一调用轨迹评分；工程任务，不代表真实模型能力。"
+      }
+    }
+  ]
+}
+

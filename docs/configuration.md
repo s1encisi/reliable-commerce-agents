@@ -164,3 +164,20 @@ API 地址。`web/src/lib/api.ts` 仍然尊重 `NEXT_PUBLIC_API_URL`，作为直
 - [部署](deployment.md) —— 按服务划分的完整环境变量表
 - [安全指南](security-guide.md) —— 密钥处理与威胁模型
 - [发布流程](releasing.md) —— 版本与镜像如何产出
+
+
+## 采购运行时
+
+| 配置 | 默认值 | 含义 |
+|---|---|---|
+| `PROCUREMENT_ENABLED` | `false` | 是否启用采购控制面和后台执行器 |
+| `PROCUREMENT_MODE` | `offline` | 创建任务时固定为`offline`或`model`，之后不随配置切换 |
+| `PROCUREMENT_MODEL_AUTHORIZED` | `false` | 真实模型调用的显式部署许可，不能代替有效价格和预算配置 |
+| `PROCUREMENT_ALLOWLIST` | 空 | 启用后允许的账号邮箱，逗号分隔；空表示全部已认证账号 |
+| `PROCUREMENT_PLANNER_PROVIDER` | `moonshot` | 复用项目已计费的规划客户端 |
+| `PROCUREMENT_EXECUTOR_PROVIDER` | `deepseek` | 复用项目已计费的执行客户端 |
+| `PROCUREMENT_RUN_TIMEOUT_SECONDS` | `180` | 一次自动运行的总时限 |
+
+同一任务最多24次模型尝试，解析、规划和各专业服务内的模型循环均在真实HTTP边界累计；修改需求、暂停和服务重启不清零。费用仍使用既有共享卷账本，未知费用保留预留。历史价目文件已经过期，不能直接启用真实调用；先取得新的费用许可并核实当前模型及价格。
+
+本机demo/showcase显式启用offline和合成账号白名单，并关闭模型许可。固定离线计划调用真实专业HTTP服务和数据库。采购一期使用原生工具；`MCP_ENABLED=true`时采购入口明确拒绝未经验证的能力配置，不静默退回另一数据通道。

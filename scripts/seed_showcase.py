@@ -7,6 +7,7 @@ import asyncpg
 
 from scripts.migrate_db import migrate
 from scripts.seed_portfolio import seed
+from scripts.seed_procurement import seed as seed_procurement
 
 
 async def main() -> None:
@@ -16,6 +17,7 @@ async def main() -> None:
             raise RuntimeError("展示初始化只接受专用 reliable_commerce_demo 数据库")
         await migrate()
         await seed(pool, reset=False)
+        await seed_procurement(pool)
     finally:
         await pool.close()
     print("展示数据库迁移与合成数据已就绪；已有记录保留。")

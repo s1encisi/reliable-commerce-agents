@@ -72,6 +72,15 @@ class Settings(BaseSettings):
     # 仅用于本地合成履约实验：入队不是供应商已受理，更不是退款成功。
     FULFILLMENT_SIMULATION_ENABLED: bool = False
 
+    # 采购任务默认关闭；本机展示显式启用离线模式，不继承付费许可。
+    PROCUREMENT_ENABLED: bool = False
+    PROCUREMENT_MODE: str = "offline"
+    PROCUREMENT_PLANNER_PROVIDER: str = "moonshot"
+    PROCUREMENT_EXECUTOR_PROVIDER: str = "deepseek"
+    PROCUREMENT_MODEL_AUTHORIZED: bool = False
+    PROCUREMENT_ALLOWLIST: str = ""
+    PROCUREMENT_RUN_TIMEOUT_SECONDS: float = Field(default=180, gt=0, le=900)
+
     # Redis 配置
     REDIS_URL: str = "redis://localhost:6379"
 
@@ -461,6 +470,16 @@ class Settings(BaseSettings):
                 f"OUTPUT_MODERATION_MODE={self.OUTPUT_MODERATION_MODE!r} is not a recognized value. "
                 f"Supported values: {sorted(_SUPPORTED_OUTPUT_MODERATION_MODES)!r}."
             )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_procurement_mode(self) -> "Settings":
+        if self.PROCUREMENT_MODE not in {"offline", "model"}:
+            raise ValueError("PROCUREMENT_MODE 必须为 offline 或 model")
+        if self.PROCUREMENT_PLANNER_PROVIDER not in {"moonshot", "deepseek"}:
+            raise ValueError("采购规划必须使用项目已有计费边界支持的提供方")
+        if self.PROCUREMENT_EXECUTOR_PROVIDER != "deepseek":
+            raise ValueError("采购专业执行仅使用已有受计费保护的执行提供方")
         return self
 
 

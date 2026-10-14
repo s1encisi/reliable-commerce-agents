@@ -940,3 +940,25 @@ Authorization: Bearer <access_token>
 `GET /api/conversations/{id}/context` 读取本人会话当前目标、约束、来源和版本；`PATCH`携带`revision`及实际变更的`goal`/`constraints`。约束列表是明确提交的新列表，移除旧项表示撤销。版本冲突返回409，客户端需重新读取并审阅，不自动重发。目标编辑采用新epoch，专业智能体不得把模型生成的A2A消息当成人类新要求写回。
 
 `GET /api/runtime/capabilities` 需要认证，仅返回非敏感运行能力，例如是否为不录制的离线演示、固定任务示例是否可用；不返回密钥、数据库连接地址或登录状态。
+
+
+## 采购任务运行时（新增）
+
+所有控制面接口复用用户认证和任务所有者隔离。旧查询任务的 `plan/next/recover/confirm` 不推进采购任务。
+
+| 方法与路径 | 请求与行为 |
+|---|---|
+| `POST /api/tasks/parse` | `{goal}`；创建持久草案并提出结构化需求。解析也属于同一任务的模型调用预算 |
+| `POST /api/tasks` | 可指定 `task_type=procurement` 和结构化 `requirements`，仍创建未确认草案 |
+| `POST /api/tasks/{id}/confirm-spec` | `{revision, requirements}`；确认需求版本。未处理的不支持条件不能被静默确认 |
+| `POST /api/tasks/{id}/start` | `{revision}`；202接收，后台自动执行；也用于已暂停任务继续 |
+| `POST /api/tasks/{id}/pause` | `{revision}`；停止派发新节点，活动节点归档后暂停。终态可进入修订流程 |
+| `PATCH /api/tasks/{id}` | `{revision, goal, constraints:[], requirements}`；同步修订目标与草案，保留历史；之后重新确认 |
+| `GET /api/tasks/{id}` | 返回需求/计划版本、状态序号、步骤、证据、方案及累计计数 |
+| `GET /api/tasks/{id}/events` | SSE只读事件；支持 `after_seq` 或 `Last-Event-ID` 续接，不重放控制操作 |
+
+需求字段为 `query`、`quantity`、`alternative_count`、`total_budget`、`currency=CNY`、`in_stock=true`、`min_rating`、`preferences`、`budget_scope=goods`、`quote_policy=single_coupon_v1`。金额以十进制字符串传输。每个方案独立核实，不把备选方案合并成购物车。
+
+`revision`用于用户控制面的CAS；后台事件通过`state_seq`递增。客户端按二者单调接收快照，409后应重新读取并让用户核对，不自动重试变更操作。
+
+专业服务新增 `POST /procurement:execute`，只接受现有服务间认证，用户JWT不能直接调用。服务根据数据库冻结计划核对能力、对象和执行代次，真实工具结果独立于模型正文返回。这是项目内部协议，不声称新增标准A2A协议能力。

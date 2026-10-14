@@ -43,6 +43,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "购物车", href: "/cart", icon: ShoppingCart, cartBadge: true },
       { label: "订单", href: "/orders", icon: Package },
       { label: "任务工作台", href: "/tasks", icon: CheckCircle },
+      { label: "采购决策", href: "/procurement", icon: ShoppingBag },
       { label: "运行记录", href: "/runs", icon: Activity },
     ],
   },
