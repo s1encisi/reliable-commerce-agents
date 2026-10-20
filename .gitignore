@@ -184,3 +184,6 @@ cookies.txt
 *.tar.gz
 *.tgz
 *.bundle
+
+# Local study notes
+/面试学习系列/
