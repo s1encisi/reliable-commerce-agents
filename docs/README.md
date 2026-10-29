@@ -24,6 +24,8 @@
 
 ## 协作与本地数据
 
+[目录与维护说明](project-maintenance.md)：当前资产用途、历史证据保留及本地清理规则。
+
 [贡献与复验规范](../CONTRIBUTING.md) · [本地隐私与数据边界](local-privacy.md)
 
 ## 深入参考

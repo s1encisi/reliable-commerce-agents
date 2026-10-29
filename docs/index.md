@@ -1,24 +1,24 @@
-# 可靠电商 Agent：售后执行与只读任务
+# 可靠电商 Agent：采购决策与售后可靠执行
 
 项目以 Python、Microsoft Agent Framework、FastAPI、PostgreSQL 和 Next.js 构建电商助手，重点是把自然语言入口接到可审批、可核实的业务执行上。运行单元为**一个编排器与五个专业智能体**；退货能力位于订单领域和共享售后服务，不是额外的第六个专业服务。
 
 ## 先运行一条完整路径
 
-推荐使用独立的本地合成演示。准备 Python 3.12、uv、Node.js 22、pnpm 10 和 Docker 后，在仓库根目录运行：
+推荐使用独立容器演示。准备 Docker Engine / Compose 与 Python 3，在仓库根目录运行：
 
 ```bash
-bash scripts/install-deps.sh --core --images
-bash scripts/demo.sh
+bash scripts/showcase.sh serve
 ```
 
-打开 **http://localhost:3010**。客户 `customer@example.test` 提交退货，管理员 `admin@example.test` 审批；公开演示密码均为 `DemoPass123!`。客户再查询同一操作标识，核实申请是否创建。演示只用合成数据，不代表退款已到账，也不需要真实模型账号。
+保持终端打开，访问 **http://localhost:3020**。客户账号 `customer@example.test`，管理员账号 `admin@example.test`，合成演示密码均为 `DemoPass123!`。默认离线计划调用真实服务和数据库，不需要模型密钥。
 
-完整步骤、专用端口和停止方法见[本地演示](portfolio-demo.md)。只使用 Docker 的独立容器方案见[本地容器作品展示](local-showcase.md)；真实模型开发配置见[快速开始](quick-start.md)。不同环境的端口与数据卷不能混用。
+从采购工作台体验需求确认、方案比较与预算修订；售后路径可体验客户申请、管理员审批和结果查询。详见[容器运行指南](local-showcase.md)和[采购演示](procurement-demo.md)。需要开发环境时另看[3010 本机演示](portfolio-demo.md)，两种环境使用不同数据卷。
 
 ## 当前可追踪的能力
 
 | 能力 | 实现与证据入口 |
 | --- | --- |
+| 采购需求确认、分层执行、证据复用与局部修复 | [采购架构](procurement-architecture.md)、[采购评测](procurement-evaluation.md) |
 | 客户发起、管理员审批、原申请人身份执行 | [售后架构](after-sales-architecture.md)、[API](api-reference.md) |
 | 幂等操作与中断后核实实际结果 | [当前验证记录](verification.md) |
 | 只读任务规划、事实验收、显式恢复与人工确认 | [任务工作台](task-workspace.md) |

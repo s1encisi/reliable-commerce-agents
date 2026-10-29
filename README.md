@@ -86,6 +86,8 @@ bash scripts/showcase.sh serve
 
 ## 项目文档
 
+[目录与维护说明](docs/project-maintenance.md) · [验证记录](docs/verification.md)
+
 [采购演示](docs/procurement-demo.md) · [采购架构](docs/procurement-architecture.md) · [售后架构](docs/after-sales-architecture.md) · [API 参考](docs/api-reference.md) · [配置说明](docs/configuration.md)
 
 ## 致谢与许可

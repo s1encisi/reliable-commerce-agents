@@ -78,6 +78,7 @@ SECTIONS: tuple[Section, ...] = (
             "docs/local-telemetry-verification.md",
             "docs/portfolio-interview.md",
             "docs/local-privacy.md",
+            "docs/project-maintenance.md",
             "CONTRIBUTING.md",
         ),
         index_source="docs/README.md",
